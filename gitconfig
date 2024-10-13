@@ -1,0 +1,18 @@
+[user]
+	name = A-PachecoT
+	email = andre.pacheco.t@uni.pe
+[init]
+	defaultBranch = main
+[merge]
+	tool = vimdiff
+[diff]
+	tool = vimdiff
+[core]
+	editor = vim
+[push]
+	autoSetupRemote = true
+[alias]
+	co = checkout
+	br = branch
+	ci = commit
+	st = status
