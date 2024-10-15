@@ -9,6 +9,7 @@
 	tool = vimdiff
 [core]
 	editor = vim
+	fileMode = false
 [push]
 	autoSetupRemote = true
 [alias]
