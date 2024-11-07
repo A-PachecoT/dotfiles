@@ -12,6 +12,11 @@
 	fileMode = false
 [push]
 	autoSetupRemote = true
+	default = current
+
+[pull]
+	default = current
+	rebase = true
 
 [alias]
     st = status -s
