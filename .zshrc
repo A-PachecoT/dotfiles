@@ -18,6 +18,9 @@ zinit light zsh-users/zsh-autosuggestions
 zinit light zdharma-continuum/fast-syntax-highlighting
 zinit light zsh-users/zsh-completions
 
+# Disable paste highlighting
+zle_highlight+=(paste:none)
+
 # History configuration
 HISTFILE=~/.zsh_history
 HISTSIZE=10000
