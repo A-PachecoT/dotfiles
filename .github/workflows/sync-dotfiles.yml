@@ -22,18 +22,18 @@ jobs:
           KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa      # Write the private key to the file
+          chmod 600 ~/.ssh/id_rsa                      # Set the correct permissions for the private key
+          echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts     # Write the known hosts to the file
 
       - name: Sync dotfiles
         env:
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
         run: |
-          for file in .zshrc .gitconfig; do
-            if [ -f "$file" ]; then
-              echo "Syncing $file..."
-              scp "$file" "$REMOTE_USER@$REMOTE_HOST:~/$file"
+          for file in .zshrc .gitconfig; do                      # Iterate over the files
+            if [ -f "$file" ]; then                              # Check if the file exists
+              echo "Syncing $file..."                            # Print the file name
+              scp "$file" "$REMOTE_USER@$REMOTE_HOST:~/$file"    # Sync the file to the remote host
             fi
-          done 
+          done
