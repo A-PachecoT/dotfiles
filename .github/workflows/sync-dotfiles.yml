@@ -1,1 +1,39 @@
- 
+name: Sync Dotfiles
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.zshrc'
+      - '.gitconfig'
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly sync on Sunday midnight
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Sync dotfiles
+        env:
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+        run: |
+          for file in .zshrc .gitconfig; do
+            if [ -f "$file" ]; then
+              echo "Syncing $file..."
+              scp "$file" "$REMOTE_USER@$REMOTE_HOST:~/$file"
+            fi
+          done 
