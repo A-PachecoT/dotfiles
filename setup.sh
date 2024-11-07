@@ -271,39 +271,33 @@ change_shell() {
         fi
     fi
     
-    # Check if zsh is in /etc/shells
-    if ! grep -q "$zsh_path" /etc/shells; then
-        if [ "$HAS_SUDO" = true ]; then
-            print_status "Adding zsh to /etc/shells..."
-            echo "$zsh_path" | sudo tee -a /etc/shells
-        else
-            print_warning "Cannot add zsh to /etc/shells - insufficient permissions"
-            return 1
-        fi
+    # Instead of changing shell system-wide, add to .bashrc
+    print_status "Adding zsh launch to .bashrc..."
+    
+    # Check if entry already exists
+    if ! grep -q "exec zsh" ~/.bashrc; then
+        cat >> ~/.bashrc << 'EOF'
+
+# Launch Zsh
+if [ -x "$(command -v zsh)" ]; then
+    export SHELL=$(which zsh)
+    exec zsh
+fi
+EOF
+        print_success "Added zsh launch to .bashrc"
+    else
+        print_warning "zsh launch already configured in .bashrc"
     fi
     
-    # Change shell using chsh, but keep backup shell reference
-    if [ "$SHELL" != "$zsh_path" ]; then
-        print_status "Backing up current shell settings..."
-        echo "export BACKUP_SHELL=$SHELL" >> "$HOME/.zshrc"
-        
-        if ! chsh -s "$zsh_path"; then
-            print_error "Failed to change shell. Current shell preserved."
-            return 1
-        fi
-        
-        # Add safety switch back to backup shell
-        echo "# Safety switch back to backup shell" >> "$HOME/.zshrc"
-        echo "switch_to_backup_shell() {" >> "$HOME/.zshrc"
-        echo "    if [ -x \"\$BACKUP_SHELL\" ]; then" >> "$HOME/.zshrc"
-        echo "        exec \"\$BACKUP_SHELL\"" >> "$HOME/.zshrc"
-        echo "    fi" >> "$HOME/.zshrc"
-        echo "}" >> "$HOME/.zshrc"
-        
-        print_success "Default shell changed to zsh with safety backup"
-    else
-        print_status "Shell is already zsh"
-    fi
+    # Add safety switch back to backup shell
+    echo "# Safety switch back to backup shell" >> "$HOME/.zshrc"
+    echo "switch_to_backup_shell() {" >> "$HOME/.zshrc"
+    echo "    if [ -x \"\$BACKUP_SHELL\" ]; then" >> "$HOME/.zshrc"
+    echo "        exec \"\$BACKUP_SHELL\"" >> "$HOME/.zshrc"
+    echo "    fi" >> "$HOME/.zshrc"
+    echo "}" >> "$HOME/.zshrc"
+    
+    print_success "Shell configuration completed"
 }
 
 # Function to cleanup
