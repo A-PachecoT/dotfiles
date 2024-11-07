@@ -47,8 +47,10 @@ alias ...='cd ../..'
 alias ....='cd ../../..'
 
 # Shell integrations
-eval "$(fzf --zsh)"
-eval "$(zoxide init --cmd cd zsh)"
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+if command -v zoxide > /dev/null; then
+    eval "$(zoxide init zsh)"
+fi
 
 # Key bindings
 bindkey "^[[H" beginning-of-line       # Home
@@ -74,4 +76,11 @@ export KEYTIMEOUT=1
 setopt correct
 
 # Load Powerlevel10k configuration
-[[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
+if [[ -f ~/.p10k.zsh ]]; then
+    source ~/.p10k.zsh
+else
+    # Run configuration wizard if file doesn't exist
+    if command -v p10k > /dev/null; then
+        p10k configure
+    fi
+fi
