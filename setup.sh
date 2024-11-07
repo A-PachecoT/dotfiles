@@ -121,12 +121,13 @@ install_dependencies() {
 install_zinit() {
     print_status "Installing Zinit..."
     
+    ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
+    
     if [ -d "${ZINIT_HOME}" ]; then
-        print_warning "Zinit is already installed"
-        return
+        print_warning "Removing existing Zinit installation..."
+        rm -rf "${ZINIT_HOME}"
     fi
     
-    ZINIT_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}/zinit/zinit.git"
     mkdir -p "$(dirname $ZINIT_HOME)"
     if ! git clone https://github.com/zdharma-continuum/zinit.git "$ZINIT_HOME"; then
         print_error "Failed to install Zinit"
@@ -322,9 +323,10 @@ CLEAN_INSTALL=false
 
 # Function to print usage
 print_usage() {
-    echo "Usage: $0 [-c|--clean]"
+    echo "Usage: $0 [-c|--clean] [-h|--help]"
+    echo "Options:"
     echo "  -c, --clean    Clean install (removes existing configurations)"
-    exit 1
+    echo "  -h, --help     Show this help message"
 }
 
 # Function to clean existing installations
@@ -401,10 +403,12 @@ main() {
                 ;;
             -h|--help)
                 print_usage
+                exit 0  # Exit after showing help
                 ;;
             *)
                 print_error "Unknown option: $1"
                 print_usage
+                exit 1
                 ;;
         esac
     done
