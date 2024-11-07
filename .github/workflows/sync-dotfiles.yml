@@ -13,6 +13,9 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    env:
+      FILES_TO_SYNC: ".zshrc .gitconfig"
+
     steps:
       - uses: actions/checkout@v3
 
@@ -31,7 +34,7 @@ jobs:
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
         run: |
-          for file in .zshrc .gitconfig; do                      # Iterate over the files
+          for file in $FILES_TO_SYNC; do                         # Iterate over the files
             if [ -f "$file" ]; then                              # Check if the file exists
               echo "Syncing $file..."                            # Print the file name
               scp "$file" "$REMOTE_USER@$REMOTE_HOST:~/$file"    # Sync the file to the remote host
