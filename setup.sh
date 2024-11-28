@@ -16,6 +16,10 @@ trap 'catch $? $LINENO' ERR
 
 # Function to handle errors
 catch() {
+    # Ignore specific expected "errors"
+    if [[ $1 == 1 && ($2 == 1 || $2 == 10) ]]; then
+        return 0
+    fi
     print_error "Error $1 occurred on line $2"
     exit 1
 }
@@ -249,7 +253,8 @@ backup_configs() {
     
     mkdir -p "$backup_dir"
     
-    local files=(".zshrc" ".gitconfig" ".p10k.zsh")
+    # Only backup .zshrc and .gitconfig, preserve p10k config
+    local files=(".zshrc" ".gitconfig")
     
     for file in "${files[@]}"; do
         if [ -f "$HOME/$file" ]; then
