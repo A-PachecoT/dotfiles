@@ -287,16 +287,27 @@ deploy_configs() {
     # Copy appropriate .zshrc based on environment
     if is_wsl; then
         if [ -f "$SCRIPT_DIR/.zshrc.windows" ]; then
-            cp "$SCRIPT_DIR/.zshrc.windows" ~/.zshrc
-            print_success "Deployed .zshrc.windows as .zshrc"
+            # Check if .zshrc is already linked correctly
+            if [ -L "$HOME/.zshrc" ] && [ "$(readlink -f "$HOME/.zshrc")" = "$(readlink -f "$SCRIPT_DIR/.zshrc.windows")" ]; then
+                print_warning ".zshrc already linked to dotfiles"
+            else
+                [ -f "$HOME/.zshrc" ] && mv "$HOME/.zshrc" "$HOME/.zshrc.backup"
+                ln -sf "$SCRIPT_DIR/.zshrc.windows" "$HOME/.zshrc"
+                print_success "Deployed .zshrc.windows as .zshrc symlink"
+            fi
         else
             print_error "Missing .zshrc.windows file"
             exit 1
         fi
     else
         if [ -f "$SCRIPT_DIR/.zshrc" ]; then
-            cp "$SCRIPT_DIR/.zshrc" ~/.zshrc
-            print_success "Deployed .zshrc"
+            if [ -L "$HOME/.zshrc" ] && [ "$(readlink -f "$HOME/.zshrc")" = "$(readlink -f "$SCRIPT_DIR/.zshrc")" ]; then
+                print_warning ".zshrc already linked to dotfiles"
+            else
+                [ -f "$HOME/.zshrc" ] && mv "$HOME/.zshrc" "$HOME/.zshrc.backup"
+                ln -sf "$SCRIPT_DIR/.zshrc" "$HOME/.zshrc"
+                print_success "Deployed .zshrc symlink"
+            fi
         else
             print_error "Missing .zshrc file"
             exit 1
