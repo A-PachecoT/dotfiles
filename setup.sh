@@ -81,38 +81,85 @@ verify_download() {
     return 0
 }
 
+# Function to detect package manager
+detect_package_manager() {
+    if command -v pacman &> /dev/null; then
+        echo "pacman"
+    elif command -v apt-get &> /dev/null; then
+        echo "apt"
+    else
+        print_error "No supported package manager found"
+        exit 1
+    fi
+}
+
 # Function to install common dependencies
 install_dependencies() {
     print_status "Installing dependencies..."
     
-    # Update package list
-    if ! sudo apt-get update; then
-        print_error "Failed to update package list"
-        exit 1
-    fi
-
-    # List of packages to install
-    local packages=(
-        zsh
-        git
-        curl
-        fzf
-        vim
-        python3
-        python3-pip
-        fonts-powerline
-    )
-
-    # Install required packages
-    for package in "${packages[@]}"; do
-        if ! check_existing "$package"; then
-            print_status "Installing $package..."
-            if ! sudo apt-get install -y "$package"; then
-                print_error "Failed to install $package"
+    local pkg_manager=$(detect_package_manager)
+    
+    case $pkg_manager in
+        "pacman")
+            # Update package list
+            if ! sudo pacman -Syu --noconfirm; then
+                print_error "Failed to update package list"
                 exit 1
             fi
-        fi
-    done
+
+            # List of packages for Arch
+            local packages=(
+                zsh
+                git
+                curl
+                fzf
+                vim
+                python
+                python-pip
+                powerline-fonts
+            )
+
+            # Install required packages
+            for package in "${packages[@]}"; do
+                if ! check_existing "$package"; then
+                    print_status "Installing $package..."
+                    if ! sudo pacman -S --noconfirm "$package"; then
+                        print_error "Failed to install $package"
+                        exit 1
+                    fi
+                fi
+            done
+            ;;
+            
+        "apt")
+            # Original Ubuntu/Debian installation logic
+            if ! sudo apt-get update; then
+                print_error "Failed to update package list"
+                exit 1
+            fi
+
+            local packages=(
+                zsh
+                git
+                curl
+                fzf
+                vim
+                python3
+                python3-pip
+                fonts-powerline
+            )
+
+            for package in "${packages[@]}"; do
+                if ! check_existing "$package"; then
+                    print_status "Installing $package..."
+                    if ! sudo apt-get install -y "$package"; then
+                        print_error "Failed to install $package"
+                        exit 1
+                    fi
+                fi
+            done
+            ;;
+    esac
 
     print_success "Dependencies installed"
 }
@@ -224,10 +271,17 @@ deploy_configs() {
         fi
     done
     
-    # Copy .gitconfig
+    # Handle .gitconfig
     if [ -f "$SCRIPT_DIR/.gitconfig" ]; then
-        cp "$SCRIPT_DIR/.gitconfig" ~/.gitconfig
-        print_success "Deployed .gitconfig"
+        # Check if .gitconfig is already a symlink to our dotfiles
+        if [ -L "$HOME/.gitconfig" ] && [ "$(readlink -f "$HOME/.gitconfig")" = "$(readlink -f "$SCRIPT_DIR/.gitconfig")" ]; then
+            print_warning ".gitconfig already linked to dotfiles"
+        else
+            # Backup and create new symlink
+            [ -f "$HOME/.gitconfig" ] && mv "$HOME/.gitconfig" "$HOME/.gitconfig.backup"
+            ln -sf "$SCRIPT_DIR/.gitconfig" "$HOME/.gitconfig"
+            print_success "Deployed .gitconfig"
+        fi
     fi
     
     # Copy appropriate .zshrc based on environment

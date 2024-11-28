@@ -49,11 +49,49 @@ alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 
+# WSL-specific aliases
+if uname -r | grep -q "WSL"; then
+    # Windows path-related aliases
+    alias cdco='cd /mnt/d/code'
+    alias cddo='cd /mnt/c/Users/Andre/Downloads'
+    alias cduni='cd /mnt/c/Users/AndreP/OneDrive\ -\ UNIVERSIDAD\ NACIONAL\ DE\ INGENIERIA/UNI-HUB/UNI\ 2024-2/'
+    
+    # Windows integration aliases
+    alias cu='cursor .'
+    alias ex='explorer.exe .'
+
+    # YaVendio utils
+    alias yavgatestg='cd ~/yav/message-gateway && git pull --rebase && vim config/stg.yaml'
+    alias yavgateprd='cd ~/yav/message-gateway && git pull --rebase && vim config/prd.yaml'
+    alias cdya='cd /mnt/d/yavendio/clients_backends'
+fi
+
+# Keep cdh as it's useful in both WSL and Linux
+alias cdh='cd /home/andre'
+
 # Shell integrations
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 if command -v zoxide > /dev/null; then
     eval "$(zoxide init zsh)"
 fi
+
+# Conda configuration
+export CRYPTOGRAPHY_OPENSSL_NO_LEGACY=1
+
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/opt/miniconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/opt/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/opt/miniconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="/opt/miniconda3/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+# <<< conda initialize <<<
 
 # Key bindings
 bindkey "^[[H" beginning-of-line       # Home
@@ -64,8 +102,6 @@ bindkey "^[[3~" delete-char            # Delete
 bindkey "^H" backward-delete-char      # Backspace
 bindkey "^[[3;5~" delete-word          # Ctrl + Delete
 bindkey "^W" backward-kill-word        # Ctrl + W
-bindkey "^[[A" history-beginning-search-backward  # Up arrow
-bindkey "^[[B" history-beginning-search-forward   # Down arrow
 
 # Load custom completions
 autoload -Uz compinit
