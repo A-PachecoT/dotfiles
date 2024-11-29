@@ -122,4 +122,9 @@ else
     if command -v p10k > /dev/null; then
         p10k configure
     fi
-fi
+fi# Safety switch back to backup shell
+switch_to_backup_shell() {
+    if [ -x "$BACKUP_SHELL" ]; then
+        exec "$BACKUP_SHELL"
+    fi
+}

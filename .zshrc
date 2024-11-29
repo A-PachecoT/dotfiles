@@ -17,6 +17,7 @@ zinit light romkatv/powerlevel10k
 zinit light zsh-users/zsh-autosuggestions
 zinit light zdharma-continuum/fast-syntax-highlighting
 zinit light zsh-users/zsh-completions
+zinit light zsh-users/zsh-history-substring-search
 
 # Disable paste highlighting
 zle_highlight+=(paste:none)
