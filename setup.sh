@@ -195,6 +195,9 @@ install_p10k_fonts() {
     local fonts_dir="$HOME/.local/share/fonts"
     mkdir -p "$fonts_dir"
     
+    # Store current directory
+    local current_dir=$(pwd)
+    
     local font_files=(
         "MesloLGS NF Regular.ttf"
         "MesloLGS NF Bold.ttf"
@@ -202,21 +205,35 @@ install_p10k_fonts() {
         "MesloLGS NF Bold Italic.ttf"
     )
 
-    cd "$fonts_dir"
+    # Change directory safely
+    cd "$fonts_dir" || {
+        print_error "Could not access fonts directory"
+        return 1
+    }
     
     for font in "${font_files[@]}"; do
         if [ ! -f "$font" ]; then
             print_status "Downloading $font..."
-            if ! curl -fLo "$font" "https://github.com/romkatv/powerlevel10k-media/raw/master/${font// /%20}"; then
+            curl -fLo "$font" "https://github.com/romkatv/powerlevel10k-media/raw/master/${font// /%20}" || {
                 print_error "Failed to download $font"
-                exit 1
-            fi
+                cd "$current_dir"
+                return 1
+            }
         else
             print_warning "$font already exists"
         fi
     done
     
-    fc-cache -f -v
+    # Return to original directory
+    cd "$current_dir"
+    
+    # Update font cache if fc-cache exists
+    if command -v fc-cache >/dev/null 2>&1; then
+        fc-cache -f || print_warning "Font cache update failed"
+    else
+        print_warning "fc-cache not found, skipping font cache update"
+    fi
+    
     print_success "Powerlevel10k fonts installed"
 }
 
