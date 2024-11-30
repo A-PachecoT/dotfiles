@@ -60,14 +60,48 @@ backup_configs() {
     rm -f "$latest_link" 2>/dev/null
     ln -sf "$backup_dir" "$latest_link"
     print_success "Created link to latest backup at ~/.dotfiles_backups/latest"
+
+    # Add .zsh directory backup
+    if [ -d "$HOME/.zsh" ]; then
+        cp -r "$HOME/.zsh" "$backup_dir/"
+        print_success "Backed up .zsh directory to $backup_dir"
+    fi
 }
 
 # Function to deploy configurations
 deploy_configs() {
     print_status "Deploying configurations..."
     
+    # Create .zsh directory if it doesn't exist
+    mkdir -p "$HOME/.zsh"
+    
+    # Deploy .zsh modules
+    for file in "$SCRIPT_DIR"/.zsh/*.zsh; do
+        if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            if [ -L "$HOME/.zsh/$filename" ] && [ "$(readlink -f "$HOME/.zsh/$filename")" = "$(readlink -f "$file")" ]; then
+                print_warning "$filename already linked to dotfiles"
+            else
+                ln -sf "$file" "$HOME/.zsh/$filename"
+                print_success "Deployed $filename"
+            fi
+        fi
+    done
+    
     # Remove .zshrc.windows from required files
-    local required_files=(".gitconfig" ".zshrc" ".p10k.zsh")
+    local required_files=(
+        ".gitconfig" 
+        ".zshrc" 
+        ".p10k.zsh"
+        ".zsh/aliases.zsh"
+        ".zsh/bindings.zsh"
+        ".zsh/completion.zsh"
+        ".zsh/exports.zsh"
+        ".zsh/functions.zsh"
+        ".zsh/history.zsh"
+        ".zsh/plugins.zsh"
+        ".zsh/wsl.zsh"
+    )
     
     for file in "${required_files[@]}"; do
         if [ ! -f "$SCRIPT_DIR/$file" ]; then
