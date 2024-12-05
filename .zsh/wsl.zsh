@@ -12,8 +12,8 @@ alias cu='cursor .'
 alias ex='explorer.exe .'
 
 # YaVendio utils
-alias yavgatestg='cd ~/yav/message-gateway && git checkout main && git pull --rebase && vim config/stg.yaml'
-alias yavgateprd='cd ~/yav/message-gateway && git checkout main && git pull --rebase && vim config/prd.yaml'
+alias yavgatestg='cd ~/yav/message-gateway && git checkout main && git pull --rebase && conda activate yav-gateway && vim config/stg.yaml'
+alias yavgateprd='cd ~/yav/message-gateway && git checkout main && git pull --rebase && conda activate yav-gateway && vim config/prd.yaml'
 alias cdya='cd /mnt/d/yavendio/clients_backends' 
 
 # Setup Vagrant variables
