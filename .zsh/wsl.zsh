@@ -20,3 +20,7 @@ alias cdya='cd /mnt/d/yavendio/clients_backends'
 export VAGRANT_WSL_ENABLE_WINDOWS_ACCESS="1"
 export VAGRANT_WSL_WINDOWS_ACCESS_USER_HOME_PATH="/mnt/c/Users/Andre/"
 export PATH="$PATH:/mnt/c/Program Files/Oracle/VirtualBox"
+
+# Mobile Development (Android)
+export ANDROID_HOME=/mnt/c/Users/Andre/AppData/Local/Android/Sdk
+export PATH=$PATH:$ANDROID_HOME/platform-tools
