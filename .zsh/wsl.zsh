@@ -6,6 +6,7 @@ alias cdco='cd /mnt/d/code'
 alias cddo='cd /mnt/c/Users/Andre/Downloads'
 alias cduni='cd /mnt/c/Users/AndreP/OneDrive\ -\ UNIVERSIDAD\ NACIONAL\ DE\ INGENIERIA/UNI-HUB/UNI\ 2024-2/'
 alias cdbr='cd /mnt/c/Brainflow'
+alias cdcp='cd /mnt/c/projects'
 
 # Windows integration aliases
 alias cu='cursor .'
