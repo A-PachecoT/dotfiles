@@ -9,7 +9,6 @@ alias cdbr='cd /mnt/c/Brainflow'
 alias cdcp='cd /mnt/c/projects'
 
 # Windows integration aliases
-alias cu='cursor .'
 alias ex='explorer.exe .'
 
 # YaVendio utils

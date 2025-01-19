@@ -32,3 +32,8 @@ fi
 
 # Load Powerlevel10k theme
 [[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
+
+fpath+=~/.zfunc; autoload -Uz compinit; compinit
+
+zstyle ':completion:*' menu select
+export PATH="$HOME/bin:$PATH"

@@ -15,6 +15,10 @@ alias venv='source venv/bin/activate'
 alias py='python3'
 alias pip='pip3'
 
+# IDEs
+alias ws = 'windsurf .'
+alias cu='cursor .'
+
 #==============================================================================
 # DIRECTORY NAVIGATION
 #==============================================================================
@@ -22,3 +26,4 @@ alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 alias cdh='cd /home/andre' 
+

@@ -1,154 +1,180 @@
 # Dotfiles Setup Guide
 
-This repository contains configuration files for Git, Zsh (with Zinit), and terminal customization with support for both standard Linux and WSL environments.
+This repository contains configuration files for Git, Zsh (with Zinit), and terminal customization with support for Linux, WSL, and VM environments.
 
-## Overview
+## Installation Methods
 
-This repository uses two scripts:
-- `setup.sh`: First-time installation script that sets up the complete environment
-- `sync.sh`: Lightweight script for syncing and maintaining dotfiles
-
-## Prerequisites
-
-- Git
-- Internet connection
-- Writable home directory
-- Basic packages (will be installed by setup.sh if missing):
-  - zsh
-  - curl
-  - vim/neovim
-  - python3
-  - fzf
-  - fonts-powerline
-
-## Installation
-
-### First-Time Setup
+### 1. Local Installation
 ```bash
-# Clone the repository
-git clone <repository-url> ~/.dotfiles
+git clone https://github.com/A-PachecoT/dotfiles.git ~/.dotfiles
 cd ~/.dotfiles
-
-# Run the setup script
 ./setup.sh
 ```
 
-### Setup Script Options
+### 2. VM Installation
+
+#### A. Manual VM Setup
 ```bash
-./setup.sh [-c|--clean] [-h|--help]
-  -c, --clean    Clean install (removes existing configurations)
-  -h, --help     Show this help message
+# 1. Clone repository
+git clone https://github.com/A-PachecoT/dotfiles.git ~/.dotfiles
+cd ~/.dotfiles
+
+# 2. Run setup with safety checks
+./setup.sh --clean  # Clean installation recommended for VMs
 ```
 
-### Syncing Dotfiles
-```bash
-./sync.sh [-f|--force] [--save-p10k] [-h|--help]
-  -f, --force    Force sync without backup
-  --save-p10k    Save current p10k configuration to dotfiles
-  -h, --help     Show this help message
-```
+#### B. Automated VM Sync (Using GitHub Actions)
+1. **Setup GitHub Secrets**:
+   ```bash
+   # Generate SSH key pair on your local machine
+   ssh-keygen -t rsa -b 4096 -C "github-actions"
+   
+   # Add these secrets to your GitHub repository:
+   - SSH_PRIVATE_KEY: Your private key content
+   - KNOWN_HOSTS: Output of `ssh-keyscan your-vm-host`
+   - REMOTE_USER: VM username
+   - REMOTE_HOST: VM hostname/IP
+   ```
 
-## Features
+2. **Configure VM**:
+   ```bash
+   # On your VM
+   mkdir -p ~/.dotfiles
+   cd ~/.dotfiles
+   
+   # Add public key to authorized_keys
+   echo "your-public-key" >> ~/.ssh/authorized_keys
+   chmod 600 ~/.ssh/authorized_keys
+   
+   # Initial setup
+   git clone <your-repo-url> .
+   chmod +x sync.sh
+   ./sync.sh
+   ```
 
-### Shell Features
-- Powerlevel10k theme
-- Syntax highlighting
-- Auto-suggestions
-- FZF integration
-- Command history search
-- Custom key bindings
-- Directory navigation with zoxide
-
-### Safety Features
-- Automatic backup of existing configurations
-- Remote session detection
-- Permission checks
-- Sudo access detection
-- Installation verification
-
-### Git Integration
-- Custom Git configuration
-- Useful Git aliases
-- Global Git settings
+3. **Automatic Updates**:
+   - Push changes to main branch
+   - GitHub Actions will automatically sync to VM
+   - Weekly sync runs every Sunday at midnight
 
 ## Directory Structure
 ```
 .
-├── setup.sh           # First-time installation script
-├── sync.sh           # Dotfiles sync script
-├── .gitconfig        # Git configuration
-├── .zshrc           # Zsh configuration
-└── .p10k.zsh        # Powerlevel10k configuration
+├── .github/
+│   └── workflows/
+│       └── sync-dotfiles.yml    # GitHub Actions workflow
+├── .zsh/
+│   ├── aliases.zsh             # Shell aliases
+│   ├── bindings.zsh           # Key bindings
+│   ├── completion.zsh         # Completion settings
+│   ├── exports.zsh           # Environment variables
+│   ├── functions.zsh         # Custom functions
+│   ├── history.zsh          # History settings
+│   ├── plugins.zsh         # Plugin configurations
+│   └── wsl.zsh            # WSL-specific settings
+├── setup.sh               # First-time installation
+├── sync.sh               # Dotfiles sync
+├── .gitconfig           # Git configuration
+├── .zshrc              # Main Zsh configuration
+└── .p10k.zsh          # Powerlevel10k theme
 ```
 
-## Backup System
+## VM-Specific Features
 
-The sync script automatically backs up your existing configurations before making changes:
-- Backups are stored in `~/.dotfiles_backups/YYYYMMDD_HHMMSS/`
-- Each backup includes `.zshrc`, `.gitconfig`, and `.p10k.zsh`
-- A `latest` symlink points to the most recent backup
-- Use the `-f` flag to skip backup creation
+### Safety Measures
+- Remote session detection
+- Backup shell fallback
+- Permission checks
+- Automatic backups
+- Force flag for CI/CD
 
-## Post-Installation
+### Sync Options
+```bash
+# Force sync (useful for CI/CD)
+./sync.sh --force
 
-1. Log out and log back in for changes to take effect
-2. Run `p10k configure` to set up your Powerlevel10k theme
-3. Verify your backup files in `~/.dotfiles_backups/`
+# Save p10k changes
+./sync.sh --save-p10k
 
-## Customization
+# Clean installation
+./setup.sh --clean
+```
 
-You can customize your setup by:
-1. Editing `.zshrc` for shell settings
-2. Modifying `.gitconfig` for Git configurations
-3. Running `sync.sh --save-p10k` after modifying p10k settings
+### Backup System
+- Location: `~/.dotfiles_backups/YYYYMMDD_HHMMSS/`
+- Latest symlink: `~/.dotfiles_backups/latest`
+- Includes all configuration files
+- Automatic backup before changes
 
-## Troubleshooting
+## Troubleshooting VM Installation
 
 ### Common Issues
-1. **Font Issues**
-   - Fonts are installed in `~/.local/share/fonts`
-   - Run `fc-cache -f -v` to rebuild font cache
+1. **SSH Connection**:
+   ```bash
+   # Test SSH connection
+   ssh -i path/to/key REMOTE_USER@REMOTE_HOST
+   ```
 
-2. **Permission Issues**
-   - Script will warn about limited permissions
-   - Some features may be restricted without sudo
-   - All user-level configurations will still work
+2. **Permission Issues**:
+   ```bash
+   # Fix permissions
+   chmod 700 ~/.ssh
+   chmod 600 ~/.ssh/authorized_keys
+   ```
 
-### Getting Help
-- Check the backup directory for original configs
-- Review script output for error messages
-- Restore from backups in `~/.dotfiles_backups/`
+3. **GitHub Actions**:
+   - Check Actions tab for logs
+   - Verify secrets are set correctly
+   - Test manual workflow dispatch
+
+### Recovery Options
+```bash
+# Restore from latest backup
+cp -r ~/.dotfiles_backups/latest/* ~/
+
+# Force clean installation
+./setup.sh --clean
+
+# Manual sync
+./sync.sh --force
+```
 
 ## Maintenance
 
 ### Regular Updates
-Syncs the dotfiles repository with the latest changes from the remote repository
 ```bash
+# Pull latest changes
 cd ~/.dotfiles
 git pull
+
+# Sync configurations
 ./sync.sh
 ```
 
-### Saving P10k Changes
-Saves the current p10k configuration to the dotfiles repository
-```bash
-./sync.sh --save-p10k
-```
-
-### Forced Update
-Forces an update without creating a backup
-```bash
-./sync.sh --force
-```
+### CI/CD Pipeline
+- Automatic sync on push to main
+- Weekly sync for updates
+- Manual trigger available
+- Backup creation on sync
 
 ## Security Notes
 
-- Scripts run with user permissions by default
-- Sudo is only used for package installation (setup.sh only)
-- No system-wide changes without explicit permission
-- All configurations are user-specific
-- Automatic backups before changes
+### VM Considerations
+- Uses SSH key authentication
+- Separate keys for GitHub Actions
+- Limited sudo usage
+- User-level configurations only
+- Automatic backup system
+
+### Best Practices
+1. Use separate SSH keys for different VMs
+2. Regular backup verification
+3. Test changes locally before push
+4. Monitor GitHub Actions logs
+5. Keep SSH keys secure
 
 ## Contributing
-
-Feel free to submit issues and enhancement requests!
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
