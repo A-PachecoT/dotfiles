@@ -16,7 +16,7 @@ alias py='python3'
 alias pip='pip3'
 
 # IDEs
-alias ws = 'windsurf .'
+alias ws='windsurf .'
 alias cu='cursor .'
 
 #==============================================================================
