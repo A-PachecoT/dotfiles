@@ -35,5 +35,13 @@ fi
 
 fpath+=~/.zfunc; autoload -Uz compinit; compinit
 
-zstyle ':completion:*' menu select
+# AUTOCOMPLETE
+# Zsh:
+#zstyle ':completion:*' menu select
 export PATH="$HOME/bin:$PATH"
+
+. "$HOME/.local/bin/env"
+
+# The fuck autocomplete (https://github.com/nvbn/thefuck )
+# eval $(thefuck --alias)
+eval $(thefuck --alias --enable-experimental-instant-mode)
