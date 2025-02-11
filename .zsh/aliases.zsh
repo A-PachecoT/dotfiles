@@ -27,3 +27,14 @@ alias ...='cd ../..'
 alias ....='cd ../../..'
 alias cdh='cd /home/andre' 
 
+#==============================================================================
+# WINDOWS EXECUTABLES ALIASES
+#==============================================================================
+# Development Tools
+alias code='"/mnt/c/Users/andre/AppData/Local/Programs/Microsoft VS Code/bin/code"'
+alias cursor='"/mnt/c/Users/andre/AppData/Local/Programs/cursor/resources/app/bin/cursor"'
+
+# System Tools
+alias explorer="/mnt/c/Windows/explorer.exe"
+alias notepad="/mnt/c/Windows/System32/notepad.exe"
+
