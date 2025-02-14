@@ -37,4 +37,5 @@ alias cursor='"/mnt/c/Users/andre/AppData/Local/Programs/cursor/resources/app/bi
 # System Tools
 alias explorer="/mnt/c/Windows/explorer.exe"
 alias notepad="/mnt/c/Windows/System32/notepad.exe"
+alias clip="/mnt/c/Windows/System32/clip.exe"
 
