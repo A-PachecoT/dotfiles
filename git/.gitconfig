@@ -1,0 +1,36 @@
+[user]
+    name = A-PachecoT
+    email = andre.pacheco.t@uni.pe
+[init]
+    defaultBranch = main
+[merge]
+    tool = vimdiff
+[diff]
+    tool = vimdiff
+[core]
+    editor = vim
+    fileMode = false
+[push]
+    autoSetupRemote = true
+    default = current
+
+[pull]
+    default = current
+    rebase = true
+
+[alias]
+    st = status -s
+    sta = status
+    conf = config --global --edit
+    cge = config --global --edit
+    ci = commit
+    co = checkout
+    cod = checkout .
+    rh = reset HEAD
+    aa = add -A
+    cdf = clean -df
+    br = branch
+    bra = branch -a
+    pr = pull --rebase
+    amend = commit -a --amend --no-edit
+    ciam = commit -a --amend --no-edit
