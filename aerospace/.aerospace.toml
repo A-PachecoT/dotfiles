@@ -1,0 +1,142 @@
+# AeroSpace Configuration - Hyprland-like setup
+# Place at ~/.aerospace.toml
+
+# Auto-start at login
+start-at-login = true
+
+# Run commands after startup
+after-startup-command = [
+    'exec-and-forget sketchybar'
+]
+
+# Normalizations for better tiling
+enable-normalization-flatten-containers = true
+enable-normalization-opposite-orientation-for-nested-containers = true
+
+# Default layout settings
+accordion-padding = 30
+default-root-container-layout = 'tiles'
+default-root-container-orientation = 'auto'
+
+on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+on-focus-changed = ['move-mouse window-lazy-center']
+
+# Automatically unhide hidden apps
+automatically-unhide-macos-hidden-apps = true
+
+# Notify SketchyBar about workspace changes
+exec-on-workspace-change = ['/bin/bash', '-c', 
+    'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE'
+]
+
+# Gaps configuration (Hyprland-like aesthetics)
+[gaps]
+    inner.horizontal = 8
+    inner.vertical = 8
+    outer.left = 10
+    outer.bottom = 10
+    outer.top = 10
+    outer.right = 10
+
+[key-mapping]
+    preset = 'qwerty'
+
+# Main keybindings - Hyprland inspired
+[mode.main.binding]
+    # Focus windows (vim-like, with monitor wrapping)
+    alt-h = ['focus left', 'focus-monitor prev --wrap-around']
+    alt-j = ['focus down', 'focus-monitor next --wrap-around']
+    alt-k = ['focus up', 'focus-monitor prev --wrap-around']
+    alt-l = ['focus right', 'focus-monitor next --wrap-around']
+    
+    # Move windows
+    alt-shift-h = 'move left'
+    alt-shift-j = 'move down'
+    alt-shift-k = 'move up'
+    alt-shift-l = 'move right'
+    
+    # Resize windows (more intuitive)
+    ctrl-alt-h = 'resize width -50'
+    ctrl-alt-l = 'resize width +50'
+    ctrl-alt-j = 'resize height +50'
+    ctrl-alt-k = 'resize height -50'
+    alt-minus = 'resize smart -50'
+    alt-equal = 'resize smart +50'
+    
+    # Workspaces
+    alt-1 = 'workspace 1'
+    alt-2 = 'workspace 2'
+    alt-3 = 'workspace 3'
+    alt-4 = 'workspace 4'
+    alt-5 = 'workspace 5'
+    alt-6 = 'workspace 6'
+    alt-7 = 'workspace 7'
+    alt-8 = 'workspace 8'
+    alt-9 = 'workspace 9'
+    alt-0 = 'workspace 10'
+    
+    # Move window to workspace and follow
+    alt-shift-1 = ['move-node-to-workspace 1', 'workspace 1']
+    alt-shift-2 = ['move-node-to-workspace 2', 'workspace 2']
+    alt-shift-3 = ['move-node-to-workspace 3', 'workspace 3']
+    alt-shift-4 = ['move-node-to-workspace 4', 'workspace 4']
+    alt-shift-5 = ['move-node-to-workspace 5', 'workspace 5']
+    alt-shift-6 = ['move-node-to-workspace 6', 'workspace 6']
+    alt-shift-7 = ['move-node-to-workspace 7', 'workspace 7']
+    alt-shift-8 = ['move-node-to-workspace 8', 'workspace 8']
+    alt-shift-9 = ['move-node-to-workspace 9', 'workspace 9']
+    alt-shift-0 = ['move-node-to-workspace 10', 'workspace 10']
+    
+    # Layout management
+    #alt-space = 'layout tiles accordion'  # Toggle layouts
+    alt-f = 'fullscreen'  # Toggle fullscreen
+    alt-shift-space = 'layout floating tiling'  # Toggle floating
+    
+    # Balance windows
+    alt-shift-equal = 'balance-sizes'
+    
+    # Close window
+    alt-shift-q = 'close'
+    
+    # Reload config
+    alt-shift-r = 'reload-config'
+    
+    # Terminal launch (using Warp)
+    alt-enter = 'exec-and-forget open -a "Warp"'
+    
+    # Quick app launches
+    alt-d = 'exec-and-forget open -a "Raycast"'  # App launcher
+    
+    # Workspace navigation
+    alt-tab = 'workspace-back-and-forth'
+    ctrl-left = 'workspace prev'
+    ctrl-right = 'workspace next'
+    
+    # Monitor focus
+    alt-period = 'focus-monitor next'
+    alt-comma = 'focus-monitor prev'
+    
+    # Move to monitor
+    alt-shift-period = 'move-node-to-monitor next'
+    alt-shift-comma = 'move-node-to-monitor prev'
+    
+    # Move workspace to monitor
+    alt-shift-m = 'move-workspace-to-monitor next'
+    ctrl-alt-shift-left = 'move-workspace-to-monitor prev'
+    ctrl-alt-shift-right = 'move-workspace-to-monitor next'
+    
+    # Service mode for advanced operations
+    alt-shift-semicolon = 'mode service'
+
+# Service mode bindings
+[mode.service.binding]
+    esc = ['reload-config', 'mode main']
+    r = ['flatten-workspace-tree', 'mode main']  # Reset layout
+    f = ['layout floating tiling', 'mode main']  # Toggle float
+    backspace = ['close-all-windows-but-current', 'mode main']
+    
+    # Join with direction (like i3/Hyprland containers)
+    h = ['join-with left', 'mode main']
+    j = ['join-with down', 'mode main']
+    k = ['join-with up', 'mode main']
+    l = ['join-with right', 'mode main']
