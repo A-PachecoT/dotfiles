@@ -1,0 +1,27 @@
+# Stow ignore file
+# Files and directories to ignore when creating symlinks
+
+# Version control
+\.git
+\.gitignore
+\.gitmodules
+
+# Documentation
+README.*
+readme.*
+docs/
+backup/
+
+# Scripts
+install\.sh
+setup\.sh
+
+# macOS
+\.DS_Store
+\.AppleDouble
+\.LSOverride
+
+# Temporary files
+.*~
+\#.*\#
+\.#.*
