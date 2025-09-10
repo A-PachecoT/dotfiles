@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Tokyo Night Theme Colors for HyDE-like aesthetic
+
+# Bar Colors
+export BAR_COLOR=0x80000000
+export TRANSPARENT=0x00000000
+
+# Text Colors  
+export WHITE=0xffc9d1d9
+export BLACK=0xff24283b
+export RED=0xfff7768e
+export GREEN=0xff9ece6a
+export BLUE=0xff7aa2f7
+export YELLOW=0xffe0af68
+export ORANGE=0xffff9e64
+export MAGENTA=0xffbb9af7
+export GREY=0xff565f89
+export PURPLE=0xff7c3aed
+
+# Workspace Colors
+export WORKSPACE_ACTIVE=$PURPLE
+export WORKSPACE_INACTIVE=$GREY
+export WORKSPACE_BACKGROUND_ACTIVE=0x40ffffff
+export WORKSPACE_BACKGROUND_INACTIVE=$TRANSPARENT
