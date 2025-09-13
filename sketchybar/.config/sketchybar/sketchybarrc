@@ -13,8 +13,8 @@ sketchybar --bar position=top height=32 blur_radius=50 color=$BAR_COLOR \
 default=(
   padding_left=8
   padding_right=8
-  icon.font="MonoLisa:Bold:14.0"
-  label.font="MonoLisa:Medium:12.0" 
+  icon.font="MonoLisaNerdFont-Regular:Regular:14.0"
+  label.font="MonoLisaNerdFont-Regular:Regular:12.0" 
   icon.color=$WHITE
   label.color=$WHITE
   icon.padding_left=4
@@ -30,34 +30,30 @@ sketchybar --default "${default[@]}"
 # Add the aerospace workspace change event
 sketchybar --add event aerospace_workspace_change
 
-# Add workspace items for occupied workspaces only (Hyprland-style)
-# Shows only workspaces with windows + current focused workspace (no duplicates)
-for sid in $((aerospace list-workspaces --monitor focused --empty no; aerospace list-workspaces --focused) | sort -u); do
-    sketchybar --add item space.$sid left \
-        --subscribe space.$sid aerospace_workspace_change \
-        --set space.$sid \
-        icon.drawing=off \
-        label="$sid" \
-        label.font="MonoLisa:Bold:14.0" \
-        label.color=$WORKSPACE_INACTIVE \
-        label.padding_left=8 \
-        label.padding_right=8 \
-        click_script="aerospace workspace $sid" \
-        script="$PLUGIN_DIR/aerospace.sh $sid"
-done
+# Add workspace manager that rebuilds workspace list on changes (Hyprland-style)
+sketchybar --add item workspace_manager left \
+           --set workspace_manager drawing=off \
+           script="$PLUGIN_DIR/aerospace_workspaces.sh" \
+           --subscribe workspace_manager aerospace_workspace_change
 
-# Add spacer after workspaces
-sketchybar --add item spacer left \
-           --set spacer icon="│" icon.color=$GREY label.drawing=off
-
-# Add current app
+# Add current app first (will be repositioned after workspaces)
 sketchybar --add item current_app left \
            --set current_app icon.drawing=off script="$PLUGIN_DIR/front_app.sh" \
            --subscribe current_app front_app_switched
 
+# Initialize workspaces on startup
+"$PLUGIN_DIR/aerospace_workspaces.sh"
+
 ##### Right Side Items #####
 sketchybar --add item clock right \
-           --set clock icon="󰃰" update_freq=30 script="$PLUGIN_DIR/clock.sh"
+           --set clock icon="" update_freq=30 script="$PLUGIN_DIR/clock.sh"
+
+# Nerd Font emoji test with MonoLisa
+sketchybar --add item nerd_font_test right \
+           --set nerd_font_test icon="     " \
+                label="NerdFont Test" \
+                icon.font="MonoLisa Nerd Font:Regular:14.0" \
+                label.font="MonoLisa Nerd Font:Regular:10.0"
 
 ##### Initialize #####
 sketchybar --update

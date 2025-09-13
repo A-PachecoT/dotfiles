@@ -35,7 +35,7 @@ exec-on-workspace-change = ['/bin/bash', '-c',
     inner.vertical = 8
     outer.left = 10
     outer.bottom = 10
-    outer.top = 10
+    outer.top = [{ monitor."VG27VQ" = 45 }, { monitor."Built-in" = 10 }, 10]
     outer.right = 10
 
 [key-mapping]
@@ -43,11 +43,11 @@ exec-on-workspace-change = ['/bin/bash', '-c',
 
 # Main keybindings - Hyprland inspired
 [mode.main.binding]
-    # Focus windows (vim-like, with monitor wrapping)
-    alt-h = ['focus left', 'focus-monitor prev --wrap-around']
-    alt-j = ['focus down', 'focus-monitor next --wrap-around']
-    alt-k = ['focus up', 'focus-monitor prev --wrap-around']
-    alt-l = ['focus right', 'focus-monitor next --wrap-around']
+    # Focus windows (vim-like navigation with cross-monitor support)
+    alt-h = 'focus --boundaries all-monitors-outer-frame --boundaries-action wrap-around-all-monitors left'
+    alt-j = 'focus --boundaries all-monitors-outer-frame --boundaries-action wrap-around-all-monitors down'
+    alt-k = 'focus --boundaries all-monitors-outer-frame --boundaries-action wrap-around-all-monitors up'
+    alt-l = 'focus --boundaries all-monitors-outer-frame --boundaries-action wrap-around-all-monitors right'
     
     # Move windows
     alt-shift-h = 'move left'
@@ -103,6 +103,7 @@ exec-on-workspace-change = ['/bin/bash', '-c',
     
     # Terminal launch (using Warp)
     alt-enter = 'exec-and-forget open -a "Warp"'
+    ctrl-alt-enter = 'exec-and-forget open -na "Warp"'
     
     # Quick app launches
     alt-d = 'exec-and-forget open -a "Raycast"'  # App launcher
