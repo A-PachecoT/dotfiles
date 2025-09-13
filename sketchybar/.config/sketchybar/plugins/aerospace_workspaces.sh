@@ -24,11 +24,24 @@ fi
 
 ALL_WORKSPACES="$MONITOR1_WS $MONITOR2_WS"
 
+# Ensure we always have at least the focused workspace visible
+if [ -z "$ALL_WORKSPACES" ] || [ "$ALL_WORKSPACES" = " " ]; then
+    echo "Warning: No workspaces found, adding focused workspace"
+    if [ "$FOCUSED_MONITOR" = "1" ]; then
+        MONITOR1_WS="$FOCUSED_WS"
+    else
+        MONITOR2_WS="$FOCUSED_WS"
+    fi
+    ALL_WORKSPACES="$MONITOR1_WS $MONITOR2_WS"
+fi
+
 # Check if we need a full rebuild (workspace list changed)
 CACHE_FILE="/tmp/sketchybar_workspaces"
 CURRENT_STATE="$MONITOR1_WS|$MONITOR2_WS"
 
-if [ ! -f "$CACHE_FILE" ] || [ "$(cat "$CACHE_FILE")" != "$CURRENT_STATE" ]; then
+# Force rebuild if no workspaces are visible or if state changed
+EXISTING_SPACES=$(sketchybar --query | grep '"name": "space\.' | wc -l)
+if [ ! -f "$CACHE_FILE" ] || [ "$(cat "$CACHE_FILE" 2>/dev/null)" != "$CURRENT_STATE" ] || [ "$EXISTING_SPACES" -eq 0 ]; then
     # Full rebuild needed
     echo "$CURRENT_STATE" > "$CACHE_FILE"
     
@@ -55,7 +68,7 @@ if [ ! -f "$CACHE_FILE" ] || [ "$(cat "$CACHE_FILE")" != "$CURRENT_STATE" ]; the
     # Add monitor separator if both monitors have workspaces
     if [ -n "$MONITOR1_WS" ] && [ -n "$MONITOR2_WS" ]; then
         sketchybar --add item monitor_separator left \
-                   --set monitor_separator icon="│" icon.color=$GREY label.drawing=off
+                   --set monitor_separator icon="|" icon.color=$GREY icon.font="Hack Nerd Font:Regular:14.0" label.drawing=off
     fi
 
     # Create workspace items for Monitor 2
@@ -75,7 +88,7 @@ if [ ! -f "$CACHE_FILE" ] || [ "$(cat "$CACHE_FILE")" != "$CURRENT_STATE" ]; the
 
     # Add final spacer
     sketchybar --add item spacer left \
-               --set spacer icon="│" icon.color=$GREY label.drawing=off
+               --set spacer icon="|" icon.color=$GREY icon.font="Hack Nerd Font:Regular:14.0" label.drawing=off
 
     # Move current_app to the end
     sketchybar --move current_app after spacer 2>/dev/null

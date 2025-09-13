@@ -31,7 +31,7 @@ if ! command -v stow &> /dev/null; then
 fi
 
 # Available packages
-PACKAGES=("aerospace" "sketchybar" "git" "zsh")
+PACKAGES=("aerospace" "sketchybar" "git" "zsh" "skhd")
 
 # Function to backup existing configs
 backup_configs() {
@@ -51,6 +51,9 @@ backup_configs() {
                 ;;
             "zsh")
                 [[ -f ~/.zshrc ]] && cp ~/.zshrc backup/ && info "Backed up .zshrc"
+                ;;
+            "skhd")
+                [[ -f ~/.skhdrc ]] && cp ~/.skhdrc backup/ && info "Backed up .skhdrc"
                 ;;
         esac
     done
@@ -74,6 +77,9 @@ stow_package() {
                 ;;
             "zsh")
                 [[ -f ~/.zshrc ]] && mv ~/.zshrc ~/.zshrc.bak
+                ;;
+            "skhd")
+                [[ -f ~/.skhdrc ]] && mv ~/.skhdrc ~/.skhdrc.bak
                 ;;
         esac
         

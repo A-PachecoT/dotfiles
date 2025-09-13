@@ -124,6 +124,8 @@ exec-on-workspace-change = ['/bin/bash', '-c',
     # Move workspace to monitor
     alt-shift-m = 'move-workspace-to-monitor next'
     ctrl-alt-shift-left = 'move-workspace-to-monitor prev'
+    ctrl-alt-shift-h= 'move-workspace-to-monitor prev'
+    ctrl-alt-shift-l= 'move-workspace-to-monitor next'
     ctrl-alt-shift-right = 'move-workspace-to-monitor next'
     
     # Service mode for advanced operations

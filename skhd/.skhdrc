@@ -1,0 +1,10 @@
+# skhd configuration
+# Simple hotkey daemon for macOS
+
+# Alt + _ : Launch/Focus app
+alt - a : open -a "Obsidian"
+alt - q : open -a "Dia"
+alt - w : open -a "WhatsApp"
+alt - g : open -a "GatherV2"
+alt - s : open -a "Warp"
+alt - c : open -a "Cursor"

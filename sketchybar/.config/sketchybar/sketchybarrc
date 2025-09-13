@@ -48,11 +48,11 @@ sketchybar --add item current_app left \
 sketchybar --add item clock right \
            --set clock icon="" update_freq=30 script="$PLUGIN_DIR/clock.sh"
 
-# Nerd Font emoji test with MonoLisa
+# Nerd Font emoji test with Hack Nerd Font
 sketchybar --add item nerd_font_test right \
-           --set nerd_font_test icon="     " \
+           --set nerd_font_test icon="󰊠 󰊢 󰊤 󰊦 󰊨" \
                 label="NerdFont Test" \
-                icon.font="MonoLisa Nerd Font:Regular:14.0" \
+                icon.font="Hack Nerd Font:Regular:18.0" \
                 label.font="MonoLisa Nerd Font:Regular:10.0"
 
 ##### Initialize #####

@@ -12,3 +12,11 @@ alias proj="cd ~/projects"
 alias cl="claude --dangerously-skip-permissions"
 alias cu="cursor ."
 export PATH="$HOME/Library/TinyTeX/bin/universal-darwin:$PATH"
+
+# pnpm
+export PNPM_HOME="/Users/styreep/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+# pnpm end
