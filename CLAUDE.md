@@ -29,6 +29,19 @@ SketchyBar shows only **occupied workspaces** using:
 for sid in $((aerospace list-workspaces --monitor focused --empty no; aerospace list-workspaces --focused) | sort -u); do
 ```
 
+### Audio Priority System
+HammerSpoon automatically manages audio device switching with two modes:
+
+**HEADPHONE MODE** (default):
+- **Output**: WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
+- **Input**: fifine Microphone > MacBook Pro Microphone (never WH-1000XM4)
+
+**SPEAKER MODE** (toggle with Cmd+Alt+0):
+- **Output**: MacBook Pro Speakers only (skips fifine/headphones/Echo Dot)
+- **Input**: Same as headphone mode
+
+Uses HammerSpoon's audio device watcher for instant response to device connect/disconnect events
+
 ## Essential Commands
 
 ### Dotfiles Management
@@ -69,6 +82,24 @@ aerospace list-workspaces --monitor focused --empty no
 
 # Manual SketchyBar trigger
 sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=1
+```
+
+### Audio Management
+```bash
+# Reload HammerSpoon configuration
+hs -c "hs.reload()"
+
+# Check HammerSpoon console for audio logs
+hs -c "hs.console.show()"
+
+# Manual audio switching hotkey
+Ctrl+Alt+A
+
+# Toggle between HEADPHONE/SPEAKER modes
+Cmd+Alt+0
+
+# Run original audio priority script manually (backup)
+./scripts/audio-priority.sh
 ```
 
 ## Configuration Flow
