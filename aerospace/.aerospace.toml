@@ -89,6 +89,7 @@ exec-on-workspace-change = ['/bin/bash', '-c',
     
     # Layout management
     #alt-space = 'layout tiles accordion'  # Toggle layouts
+    cmd-alt-space = 'layout tiles accordion'  # Toggle accordion/tiles
     alt-f = 'fullscreen'  # Toggle fullscreen
     alt-shift-space = 'layout floating tiling'  # Toggle floating
     
