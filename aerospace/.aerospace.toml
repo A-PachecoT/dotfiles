@@ -113,6 +113,9 @@ exec-on-workspace-change = ['/bin/bash', '-c',
     alt-tab = 'workspace-back-and-forth'
     ctrl-left = 'workspace prev'
     ctrl-right = 'workspace next'
+
+    # Switch to next empty workspace (Hyprland-like)
+    alt-backtick = 'exec-and-forget /Users/styreep/dotfiles/scripts/switch-to-empty-workspace.sh'
     
     # Monitor focus
     alt-period = 'focus-monitor next'
