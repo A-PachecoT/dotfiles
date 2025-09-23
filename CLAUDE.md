@@ -116,6 +116,10 @@ Each package directory must mirror the home directory structure:
 - `sketchybar/.config/sketchybar/` → `~/.config/sketchybar/`
 - `git/.gitconfig` → `~/.gitconfig`
 
+## Deprecated Packages
+
+- **skhd/**: DEPRECATED - App launch shortcuts now handled directly by AeroSpace for better integration and consistency across empty/occupied workspaces. The skhd service has been disabled from startup.
+
 ## SketchyBar Theme System
 
 Colors and styling are centralized in `sketchybar/.config/sketchybar/themes/tokyo-night`. The theme is sourced by the main config and plugins, creating a consistent HyDE-inspired aesthetic across all status bar elements.

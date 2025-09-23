@@ -25,9 +25,30 @@ on-focus-changed = ['move-mouse window-lazy-center']
 automatically-unhide-macos-hidden-apps = true
 
 # Notify SketchyBar about workspace changes
-exec-on-workspace-change = ['/bin/bash', '-c', 
+exec-on-workspace-change = ['/bin/bash', '-c',
     'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE'
 ]
+
+# Window detection rules - auto-float certain apps
+[[on-window-detected]]
+if.app-name-regex-substring = 'finder'
+run = 'layout floating'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'whatsapp'
+run = 'layout floating'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'telegram'
+run = 'layout floating'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'mail'
+run = 'layout floating'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'spotify'
+run = 'layout floating'
 
 # Gaps configuration (Hyprland-like aesthetics)
 [gaps]
@@ -108,6 +129,14 @@ exec-on-workspace-change = ['/bin/bash', '-c',
     
     # Quick app launches
     alt-d = 'exec-and-forget open -a "Raycast"'  # App launcher
+    alt-a = 'exec-and-forget open -a "Obsidian"'
+    alt-q = 'exec-and-forget open -a "Dia"'
+    alt-w = 'exec-and-forget open -a "WhatsApp"'
+    alt-g = 'exec-and-forget open -a "GatherV2"'
+    alt-s = 'exec-and-forget open -a "Warp"'
+    alt-c = 'exec-and-forget open -a "Cursor"'
+    cmd-alt-c = 'exec-and-forget open -n -a "Cursor" --args --new-window'
+    cmd-alt-s = 'exec-and-forget open -n -a "Warp"'
     
     # Workspace navigation
     alt-tab = 'workspace-back-and-forth'
@@ -116,6 +145,9 @@ exec-on-workspace-change = ['/bin/bash', '-c',
 
     # Switch to next empty workspace (Hyprland-like)
     alt-backtick = 'exec-and-forget /Users/styreep/dotfiles/scripts/switch-to-empty-workspace.sh'
+
+    # Start work session (lock screen + prevent sleep for 9 hours)
+    alt-shift-w = 'exec-and-forget /Users/styreep/dotfiles/scripts/work-session.sh'
     
     # Monitor focus
     alt-period = 'focus-monitor next'
