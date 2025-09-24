@@ -1,0 +1,66 @@
+#!/bin/bash
+# HyDE-inspired SketchyBar Configuration - Modular Architecture
+# Using official AeroSpace integration with Tokyo Night theme
+
+# Directory configuration
+PLUGIN_DIR="$CONFIG_DIR/plugins"
+ITEM_DIR="$CONFIG_DIR/items"
+
+# Load theme and icons
+source "$HOME/.config/sketchybar/themes/tokyo-night"
+source "$HOME/.config/sketchybar/icons.sh"
+
+# Font configuration
+FONT="MonoLisa Nerd Font"  # Using MonoLisa patched with Nerd Font icons
+
+##### Bar Appearance #####
+sketchybar --bar position=top height=30 blur_radius=50 color=0x99000000 \
+                 shadow=on y_offset=4 margin=10 corner_radius=12 \
+                 border_width=0 padding_left=4 padding_right=4 topmost=window
+
+##### Default Item Properties #####
+default=(
+  padding_left=6
+  padding_right=6
+  icon.font="$FONT:Bold:14.0"
+  label.font="$FONT:Regular:12.0"
+  icon.color=0xFFFFFFFF
+  label.color=0xFFBBBBBB
+  icon.padding_left=4
+  icon.padding_right=2
+  label.padding_left=4
+  label.padding_right=4
+  background.height=20
+  background.corner_radius=6
+  background.color=0x00000000
+  background.border_width=0
+  popup.background.border_width=2
+  popup.background.corner_radius=11
+  popup.background.border_color=$WHITE
+  popup.background.color=0xDD000000
+  popup.background.shadow.drawing=on
+)
+sketchybar --default "${default[@]}"
+
+##### Left Side Items #####
+source "$ITEM_DIR/apple.sh"
+source "$ITEM_DIR/workspaces.sh"
+source "$ITEM_DIR/front_app.sh"
+
+##### Center Items #####
+source "$ITEM_DIR/spotify.sh"  # Spotify now playing display
+
+##### Right Side Items #####
+source "$ITEM_DIR/github.sh"
+source "$ITEM_DIR/cpu.sh"
+source "$ITEM_DIR/work_session.sh"
+source "$ITEM_DIR/clock.sh"
+source "$ITEM_DIR/mic_status.sh"
+
+##### Initialize #####
+# Startup animation - slide down from top
+sketchybar --bar y_offset=-30
+sketchybar --animate tanh 20 --bar y_offset=4
+sketchybar --update
+
+echo "SketchyBar configuration loaded..."

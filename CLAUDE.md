@@ -127,3 +127,4 @@ Colors and styling are centralized in `sketchybar/.config/sketchybar/themes/toky
 ## Conflict Resolution
 
 The install script handles conflicts by backing up existing files to `backup/` before creating symlinks. If stow conflicts occur, use `stow --adopt` or manually resolve by moving existing files.
+- in references/ folder we have others dotfiles. a notable one is from the creator of sketchbar, which has a beautiful design

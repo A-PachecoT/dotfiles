@@ -21,3 +21,4 @@ case ":$PATH:" in
 esac
 # pnpm end
 export PATH=$HOME/google-cloud-sdk/bin:$PATH
+export LESSUTFCHARDEF="e000-e09f:w,e0a0-e0bf:p,e0c0-f8ff:w,f0001-fffff:w"

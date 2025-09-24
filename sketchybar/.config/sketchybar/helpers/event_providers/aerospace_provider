@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+# AeroSpace event provider for SketchyBar
+# Provides workspace and app window information similar to yabai
+
+CONFIG_DIR="$HOME/.config/sketchybar"
+
+# Function to get apps in a workspace
+get_workspace_apps() {
+    local workspace=$1
+    aerospace list-windows --workspace "$workspace" --format '%{app-name}' 2>/dev/null | sort -u
+}
+
+# Function to trigger space change events
+update_spaces() {
+    # Get current focused workspace
+    FOCUSED=$(aerospace list-workspaces --focused)
+
+    # Trigger space_change for each workspace
+    for ws in $(aerospace list-workspaces --all); do
+        if [ "$ws" = "$FOCUSED" ]; then
+            sketchybar --trigger space_change SELECTED=true SID="$ws"
+        else
+            sketchybar --trigger space_change SELECTED=false SID="$ws"
+        fi
+    done
+}
+
+# Function to update window information for each space
+update_windows() {
+    for ws in $(aerospace list-workspaces --all); do
+        apps=""
+        app_count=0
+
+        # Build JSON-like structure for apps
+        apps_json="{"
+        for app in $(get_workspace_apps "$ws"); do
+            if [ -n "$app" ]; then
+                [ $app_count -gt 0 ] && apps_json="${apps_json},"
+                apps_json="${apps_json}\"${app}\":1"
+                ((app_count++))
+            fi
+        done
+        apps_json="${apps_json}}"
+
+        # Trigger space_windows_change event
+        sketchybar --trigger space_windows_change INFO="{\"space\":\"$ws\",\"apps\":$apps_json}"
+    done
+}
+
+# Initial update
+update_spaces
+update_windows
+
+# Monitor for changes
+while true; do
+    sleep 1
+    update_spaces
+    update_windows
+done

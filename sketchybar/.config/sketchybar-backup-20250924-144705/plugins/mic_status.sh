@@ -5,8 +5,9 @@
 MUTE_STATUS=$(hs -c "hs.audiodevice.defaultInputDevice():inputMuted()" 2>/dev/null || echo "false")
 
 if [[ "$MUTE_STATUS" == "true" ]]; then
-    # Microphone is muted
-    sketchybar --set $NAME icon="󰍭" \
+    # Microphone is muted - animate transition
+    sketchybar --animate tanh 12 \
+               --set $NAME icon="󰍭" \
                           icon.color=0xffe06c75 \
                           icon.padding_right=0 \
                           label="" \
@@ -16,8 +17,9 @@ if [[ "$MUTE_STATUS" == "true" ]]; then
                           background.padding_left=0 \
                           background.padding_right=0
 else
-    # Microphone is active
-    sketchybar --set $NAME icon="󰍬" \
+    # Microphone is active - animate transition
+    sketchybar --animate tanh 12 \
+               --set $NAME icon="󰍬" \
                           icon.color=0xff73daca \
                           icon.padding_right=0 \
                           label="" \
