@@ -16,7 +16,9 @@ require("default")
 require("items")
 
 -- Load shell-based Spotify plugin from community
-sbar.exec("source ~/.config/sketchybar/items/spotify.sh")
+sbar.exec("sketchybar --add event spotify_init")
+sbar.exec("bash ~/.config/sketchybar/items/spotify.sh")
+sbar.exec("sketchybar --trigger spotify_init")
 
 sbar.end_config()
 
