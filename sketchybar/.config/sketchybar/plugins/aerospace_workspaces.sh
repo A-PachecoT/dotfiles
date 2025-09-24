@@ -57,10 +57,17 @@ if [ ! -f "$CACHE_FILE" ] || [ "$(cat "$CACHE_FILE" 2>/dev/null)" != "$CURRENT_S
             --set space.$sid \
             icon.drawing=off \
             label="$sid" \
-            label.font="MonoLisa Nerd Font:Regular:14.0" \
-            label.color=$WORKSPACE_INACTIVE \
-            label.padding_left=8 \
-            label.padding_right=8 \
+            label.font="Hack Nerd Font:Bold:14.0" \
+            label.color=0xFF888888 \
+            label.padding_left=10 \
+            label.padding_right=10 \
+            padding_left=2 \
+            padding_right=2 \
+            background.color=0x33ffffff \
+            background.corner_radius=8 \
+            background.height=22 \
+            background.padding_left=0 \
+            background.padding_right=0 \
             click_script="aerospace workspace $sid" \
             script="$HOME/.config/sketchybar/plugins/aerospace.sh $sid"
     done
@@ -78,10 +85,17 @@ if [ ! -f "$CACHE_FILE" ] || [ "$(cat "$CACHE_FILE" 2>/dev/null)" != "$CURRENT_S
             --set space.$sid \
             icon.drawing=off \
             label="$sid" \
-            label.font="MonoLisa Nerd Font:Regular:14.0" \
-            label.color=$WORKSPACE_INACTIVE \
-            label.padding_left=8 \
-            label.padding_right=8 \
+            label.font="Hack Nerd Font:Bold:14.0" \
+            label.color=0xFF888888 \
+            label.padding_left=10 \
+            label.padding_right=10 \
+            padding_left=2 \
+            padding_right=2 \
+            background.color=0x33ffffff \
+            background.corner_radius=8 \
+            background.height=22 \
+            background.padding_left=0 \
+            background.padding_right=0 \
             click_script="aerospace workspace $sid" \
             script="$HOME/.config/sketchybar/plugins/aerospace.sh $sid"
     done
@@ -97,8 +111,8 @@ fi
 # Always update workspace colors (fast operation, no flickering)
 for sid in $ALL_WORKSPACES; do
     if [ "$sid" = "$FOCUSED_WS" ]; then
-        sketchybar --set space.$sid label.color=$WHITE
+        sketchybar --set space.$sid label.color=0xFFFFFFFF background.color=0xFF3d59a1
     else
-        sketchybar --set space.$sid label.color=$WORKSPACE_INACTIVE
+        sketchybar --set space.$sid label.color=0xFF888888 background.color=0x33ffffff
     fi
 done
