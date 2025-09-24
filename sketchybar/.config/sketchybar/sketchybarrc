@@ -6,23 +6,26 @@ PLUGIN_DIR="$CONFIG_DIR/plugins"
 source "$HOME/.config/sketchybar/themes/tokyo-night"
 
 ##### Bar Appearance #####
-sketchybar --bar position=top height=32 blur_radius=50 color=$BAR_COLOR \
-                 border_width=0 margin=10 corner_radius=12
+sketchybar --bar position=top height=30 blur_radius=50 color=0x99000000 \
+                 shadow=on y_offset=4 margin=10 corner_radius=12 \
+                 border_width=0 padding_left=4 padding_right=4 topmost=window
 
 ##### Default Item Properties #####
 default=(
-  padding_left=8
-  padding_right=8
-  icon.font="MonoLisaNerdFont-Regular:Regular:14.0"
-  label.font="MonoLisaNerdFont-Regular:Regular:12.0" 
-  icon.color=$WHITE
-  label.color=$WHITE
+  padding_left=6
+  padding_right=6
+  icon.font="Hack Nerd Font:Bold:14.0"
+  label.font="Hack Nerd Font:Regular:12.0"
+  icon.color=0xFFFFFFFF
+  label.color=0xFFBBBBBB
   icon.padding_left=4
-  icon.padding_right=4
+  icon.padding_right=2
   label.padding_left=4
   label.padding_right=4
-  background.height=22
-  background.corner_radius=8
+  background.height=20
+  background.corner_radius=6
+  background.color=0x00000000
+  background.border_width=0
 )
 sketchybar --default "${default[@]}"
 
