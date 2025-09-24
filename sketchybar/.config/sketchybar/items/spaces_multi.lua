@@ -164,32 +164,47 @@ local function update_workspaces()
 
   -- Update workspaces for each display
   for display = 1, 2 do
-    local occupied = {}
+    local workspace_states = {}
 
-    -- Get occupied workspaces on this specific monitor
+    -- Get all workspaces that exist on this monitor
     os.execute("aerospace list-workspaces --monitor " .. display .. " > /tmp/occupied_ws_" .. display .. ".txt")
     local f = io.open("/tmp/occupied_ws_" .. display .. ".txt", "r")
     if f then
       for line in f:lines() do
         local ws_num = tonumber(line)
         if ws_num then
-          occupied[ws_num] = true
+          workspace_states[ws_num] = { exists = true, has_windows = false }
         end
       end
       f:close()
     end
 
+    -- Check which workspaces actually have windows
+    for ws_num, _ in pairs(workspace_states) do
+      os.execute("aerospace list-windows --workspace " .. ws_num .. " --format '%{app-name}' > /tmp/ws_check_" .. ws_num .. ".txt 2>/dev/null")
+      local check = io.open("/tmp/ws_check_" .. ws_num .. ".txt", "r")
+      if check then
+        local content = check:read("*a")
+        if content and content:match("%S") then  -- Has non-whitespace content
+          workspace_states[ws_num].has_windows = true
+        end
+        check:close()
+      end
+    end
+
     -- Update each space for this display
     for i = 1, max_spaces do
-      local is_occupied = occupied[i] ~= nil
+      local state = workspace_states[i]
       local is_focused = (i == focused_ws)
+      -- Show if: has windows OR is currently focused
+      local should_show = (state and state.has_windows) or is_focused
 
-      -- Show/hide based on occupancy
+      -- Show/hide based on whether it should be shown
       if spaces[display] and spaces[display][i] then
-        spaces[display][i]:set({ drawing = is_occupied })
-        space_brackets[display][i]:set({ drawing = is_occupied })
+        spaces[display][i]:set({ drawing = should_show })
+        space_brackets[display][i]:set({ drawing = should_show })
 
-        if is_occupied then
+        if should_show then
           -- Update selection state with animation
           sbar.animate("tanh", 10, function()
             spaces[display][i]:set({
@@ -202,14 +217,13 @@ local function update_workspaces()
             })
           end)
 
-          -- Get apps for this specific workspace
-          os.execute("aerospace list-windows --workspace " .. i .. " --format '%{app-name}' > /tmp/apps_ws_" .. i .. ".txt 2>/dev/null")
+          -- Get apps for this specific workspace (reuse the file we already created)
           local icon_line = ""
           local has_apps = false
 
           -- Count each app
           local app_count = {}
-          local apps_file = io.open("/tmp/apps_ws_" .. i .. ".txt", "r")
+          local apps_file = io.open("/tmp/ws_check_" .. i .. ".txt", "r")
           if apps_file then
             for app in apps_file:lines() do
               if app and app ~= "" then
@@ -227,7 +241,8 @@ local function update_workspaces()
             icon_line = icon_line .. icon .. " "
           end
 
-          if not has_apps then
+          -- Only show dash for focused empty workspace
+          if not has_apps and is_focused then
             icon_line = " —"
           end
 
