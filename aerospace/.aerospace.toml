@@ -6,7 +6,10 @@ start-at-login = true
 
 # Run commands after startup
 after-startup-command = [
-    'exec-and-forget sketchybar'
+    'exec-and-forget sketchybar',
+    'exec-and-forget open -a "Obsidian"',
+    'exec-and-forget open -a "Dia"',
+    'exec-and-forget open -a "Cursor"'
 ]
 
 # Normalizations for better tiling
@@ -50,6 +53,18 @@ run = 'layout floating'
 if.app-name-regex-substring = 'spotify'
 run = 'layout floating'
 
+[[on-window-detected]]
+if.app-name-regex-substring = 'obsidian'
+run = 'move-node-to-workspace 9'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'dia'
+run = 'move-node-to-workspace 1'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'cursor'
+run = 'move-node-to-workspace 2'
+
 # Gaps configuration (Hyprland-like aesthetics)
 [gaps]
     inner.horizontal = 8
@@ -75,6 +90,12 @@ run = 'layout floating'
     alt-shift-j = 'move down'
     alt-shift-k = 'move up'
     alt-shift-l = 'move right'
+
+    # Join with direction (container management)
+    alt-shift-left = 'join-with left'
+    alt-shift-down = 'join-with down'
+    alt-shift-up = 'join-with up'
+    alt-shift-right = 'join-with right'
     
     # Resize windows (more intuitive)
     ctrl-alt-h = 'resize width -50'
@@ -111,8 +132,9 @@ run = 'layout floating'
     # Layout management
     #alt-space = 'layout tiles accordion'  # Toggle layouts
     cmd-alt-space = 'layout tiles accordion'  # Toggle accordion/tiles
-    alt-f = 'fullscreen'  # Toggle fullscreen
-    alt-shift-space = 'layout floating tiling'  # Toggle floating
+    alt-ctrl-shift-f = 'fullscreen'  # Toggle fullscreen
+    alt-ctrl-f = 'layout floating tiling'  # Toggle floating
+    alt-shift-space = 'layout floating tiling'  # Toggle floating (keeping both shortcuts)
     
     # Balance windows
     alt-shift-equal = 'balance-sizes'
@@ -173,9 +195,3 @@ run = 'layout floating'
     r = ['flatten-workspace-tree', 'mode main']  # Reset layout
     f = ['layout floating tiling', 'mode main']  # Toggle float
     backspace = ['close-all-windows-but-current', 'mode main']
-    
-    # Join with direction (like i3/Hyprland containers)
-    h = ['join-with left', 'mode main']
-    j = ['join-with down', 'mode main']
-    k = ['join-with up', 'mode main']
-    l = ['join-with right', 'mode main']
