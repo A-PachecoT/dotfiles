@@ -148,6 +148,10 @@ for display = 1, 2 do
       })
     end)
   end)
+
+  spaces_indicators[display]:subscribe("mouse.clicked", function(env)
+    sbar.trigger("swap_menus_and_spaces")
+  end)
 end
 
 -- Function to update workspace visibility and app icons
