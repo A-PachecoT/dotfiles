@@ -4,7 +4,7 @@ local colors = require("colors")
 local whitelist = { ["Spotify"] = true,
                     ["Music"] = true    };
 
-local media_cover = sbar.add("item", {
+local media_cover = sbar.add("item", "media.cover", {
   position = "right",
   background = {
     image = {
@@ -23,7 +23,7 @@ local media_cover = sbar.add("item", {
   }
 })
 
-local media_artist = sbar.add("item", {
+local media_artist = sbar.add("item", "media.artist", {
   position = "right",
   drawing = false,
   padding_left = 3,
@@ -39,7 +39,7 @@ local media_artist = sbar.add("item", {
   },
 })
 
-local media_title = sbar.add("item", {
+local media_title = sbar.add("item", "media.title", {
   position = "right",
   drawing = false,
   padding_left = 3,
@@ -83,7 +83,8 @@ local function animate_detail(detail)
   end)
 end
 
-media_cover:subscribe("media_change", function(env)
+-- Subscribe to Spotify's native notification
+media_cover:subscribe("com.spotify.client.PlaybackStateChanged", function(env)
   if whitelist[env.INFO.app] then
     local drawing = (env.INFO.state == "playing")
     media_artist:set({ drawing = drawing, label = env.INFO.artist, })

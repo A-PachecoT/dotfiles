@@ -8,9 +8,16 @@ sbar = require("sketchybar")
 sbar.begin_config()
 -- Force drawing to be on
 sbar.exec("sketchybar --bar drawing=on")
+
+-- No need for custom providers - Spotify sends native notifications
+
 require("bar")
 require("default")
 require("items")
+
+-- Load shell-based Spotify plugin from community
+sbar.exec("source ~/.config/sketchybar/items/spotify.sh")
+
 sbar.end_config()
 
 -- Run the event loop of the sketchybar module (without this there will be no
