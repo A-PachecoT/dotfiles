@@ -19,6 +19,9 @@ require("items")
 sbar.exec("sketchybar --add event spotify_init")
 sbar.exec("bash ~/.config/sketchybar/items/spotify.sh")
 
+-- Load shell-based audio mode indicator
+sbar.exec("bash ~/.config/sketchybar/items/audio_mode.sh")
+
 -- Load shell-based mic status indicator
 sbar.exec("bash ~/.config/sketchybar/items/mic_status.sh")
 -- Force initialization after short delay to ensure items are created

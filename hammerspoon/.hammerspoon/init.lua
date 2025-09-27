@@ -148,10 +148,14 @@ local function handleAudioDeviceChange(event)
         setOutputDevice()
         setInputDevice()
         showCurrentDevices()
+        -- Update SketchyBar audio mode indicator
+        hs.task.new("/opt/homebrew/bin/sketchybar", function() end, {"--trigger", "audio_mode_change"}):start()
     elseif event == "dOut" then
         -- Default output changed - might need to override if wrong priority
         hs.timer.doAfter(0.5, function()
             setOutputDevice()
+            -- Update SketchyBar audio mode indicator
+            hs.task.new("/opt/homebrew/bin/sketchybar", function() end, {"--trigger", "audio_mode_change"}):start()
         end)
     elseif event == "dIn" then
         -- Default input changed - might need to override if wrong priority
@@ -176,6 +180,9 @@ local function toggleAudioMode()
     setOutputDevice()
     setInputDevice()
     showCurrentDevices()
+
+    -- Update SketchyBar audio mode indicator
+    hs.task.new("/opt/homebrew/bin/sketchybar", function() end, {"--trigger", "audio_mode_change"}):start()
 end
 
 -- Add manual hotkey for testing (Ctrl+Alt+A)
