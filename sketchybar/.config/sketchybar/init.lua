@@ -18,6 +18,9 @@ require("items")
 -- Load shell-based Spotify plugin from community
 sbar.exec("sketchybar --add event spotify_init")
 sbar.exec("bash ~/.config/sketchybar/items/spotify.sh")
+
+-- Load shell-based mic status indicator
+sbar.exec("bash ~/.config/sketchybar/items/mic_status.sh")
 -- Force initialization after short delay to ensure items are created
 sbar.exec("bash -c 'sleep 1 && sketchybar --trigger spotify_init && sketchybar --set spotify.anchor drawing=on && bash ~/.config/sketchybar/plugins/spotify.sh' &")
 
