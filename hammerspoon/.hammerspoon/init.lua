@@ -211,6 +211,12 @@ end
 -- Add hotkey for microphone mute toggle (Cmd+Shift+M)
 hs.hotkey.bind({"cmd", "shift"}, "m", toggleMicMute)
 
+-- Add hotkey to reload SketchyBar (Cmd+Shift+R)
+hs.hotkey.bind({"cmd", "shift"}, "r", function()
+    hs.execute("/opt/homebrew/bin/sketchybar --reload", true)
+    hs.alert.show("SketchyBar reloaded", 0.5)
+end)
+
 -- Set initial devices on load
 setOutputDevice()
 setInputDevice()
