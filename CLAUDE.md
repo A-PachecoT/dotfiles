@@ -4,12 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Architecture
 
-This is a **GNU Stow-managed dotfiles repository** that uses symlinks to create a Single Source of Truth (SSOT) for macOS configuration files. The architecture centers around:
+This is a **GNU Stow-managed dotfiles repository** that uses symlinks to create a Single Source of Truth (SSOT) for cross-platform configuration files. The architecture centers around:
 
-- **Package-based organization**: Each application/tool has its own directory (aerospace/, sketchybar/, git/, zsh/)
+- **Package-based organization**: Each application/tool has its own directory (aerospace/, sketchybar/, hyprland/, git/, zsh/)
 - **Symlink management**: GNU Stow creates symlinks from `~/.config/` to the repository
 - **Live configuration**: Changes in the repo are immediately reflected in the system via symlinks
-- **AeroSpace + SketchyBar integration**: Window manager with custom status bar showing occupied workspaces
+- **Platform-specific packages**:
+  - **macOS**: AeroSpace + SketchyBar (window manager with custom status bar)
+  - **Linux**: Hyprland + Waybar (HyDE-based Wayland compositor)
 
 ## Critical Integration Points
 
@@ -116,9 +118,28 @@ Each package directory must mirror the home directory structure:
 - `sketchybar/.config/sketchybar/` → `~/.config/sketchybar/`
 - `git/.gitconfig` → `~/.gitconfig`
 
+## Platform-Specific Packages
+
+### macOS Packages
+- **aerospace/**: AeroSpace window manager configuration
+- **sketchybar/**: Status bar with dynamic workspace indicators
+- **hammerspoon/**: Audio device automation and window management
+- **skhd/**: DEPRECATED - Now handled by AeroSpace
+
+### Linux Packages
+- **hyprland/**: User-customizable HyDE (Hyprland) configurations
+  - Only includes user-editable files (`userprefs.conf`, `monitors.conf`, custom scripts)
+  - Excludes HyDE-managed files (see `hyprland/.stow-local-ignore`)
+  - See `hyprland/README.md` for HyDE integration details
+
+### Shared Packages
+- **git/**: Git configuration
+- **zsh/**: Zsh shell configuration
+
 ## Deprecated Packages
 
 - **skhd/**: DEPRECATED - App launch shortcuts now handled directly by AeroSpace for better integration and consistency across empty/occupied workspaces. The skhd service has been disabled from startup.
+- **deprecated-hyde/**: Archived pre-macOS Linux/WSL dotfiles (2025-09-02). See `deprecated-hyde/README_DEPRECATED_PLAN.md` for migration plan.
 
 ## SketchyBar Theme System
 

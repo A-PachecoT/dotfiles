@@ -1,0 +1,18 @@
+# HyDE-managed files (DO NOT STOW - managed by HyDE framework)
+^/\.config/hypr/hyprland\.conf$
+^/\.config/hypr/animations\.conf$
+^/\.config/hypr/shaders\.conf$
+^/\.config/hypr/workflows\.conf$
+^/\.config/hypr/windowrules\.conf$
+^/\.config/hypr/keybindings\.conf$
+
+# HyDE-managed directories
+^/\.config/hypr/animations/
+^/\.config/hypr/hyprlock/
+^/\.config/hypr/shaders/
+^/\.config/hypr/workflows/
+
+# Ignore README and docs
+^/README\.md$
+^/\.claude/
+^/CLAUDE\.md$

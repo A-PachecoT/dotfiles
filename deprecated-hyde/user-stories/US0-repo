@@ -1,0 +1,5 @@
+# User Story 0
+I need ALL my configurations (terminal, app configs if possible) to be persisted thorough time in a github repository called dotfiles (this current repo)
+So that I can clone my configurations everywhere everytime.
+ALL the specific subsystems configurations should be documented in this repository and when doing changes they should be updated. 
+If the info doesn't has a specific place to be written in, propose to the user the folder name and location.

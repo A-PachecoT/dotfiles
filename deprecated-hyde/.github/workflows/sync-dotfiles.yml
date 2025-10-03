@@ -1,0 +1,60 @@
+name: Sync Dotfiles
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".zshrc"
+      - ".gitconfig"
+      - ".zsh/**" # Monitor changes in .zsh directory
+      - ".p10k.zsh"
+  schedule:
+    - cron: "0 0 * * 0" # Weekly sync on Sunday midnight
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3 # Checkout the repository
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.KNOWN_HOSTS }}
+
+        run: |
+          mkdir -p ~/.ssh
+          # Write the private key to the file
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          # Set the correct permissions for the private key
+          chmod 600 ~/.ssh/id_rsa
+          # Write the known hosts to the file
+          echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Sync dotfiles
+        env:
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+        run: |
+          # Create remote .zsh directory
+          ssh $REMOTE_USER@$REMOTE_HOST "mkdir -p ~/.zsh"
+
+          # Sync main config files
+          for file in .zshrc .gitconfig .p10k.zsh; do
+            if [ -f "$file" ]; then
+              echo "Syncing $file..."
+              scp "$file" "$REMOTE_USER@$REMOTE_HOST:~/$file"
+            fi
+          done
+
+          # Sync .zsh directory
+          for file in .zsh/*.zsh; do
+            if [ -f "$file" ]; then
+              echo "Syncing $file..."
+              scp "$file" "$REMOTE_USER@$REMOTE_HOST:~/$file"
+            fi
+          done
+
+          # Run remote sync script
+          ssh $REMOTE_USER@$REMOTE_HOST "cd ~/.dotfiles && ./sync.sh --force"

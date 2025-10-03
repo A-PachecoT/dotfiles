@@ -1,0 +1,3 @@
+As a python developer I want as default python package manager UV when opening the terminal.
+I want it to have most libraries so that an AI coder assistant just runs python <file.py> and it works.
+I need the implementation of this story written and always updated in PYTHON_SETUP.md

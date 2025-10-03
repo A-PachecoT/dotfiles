@@ -1,0 +1,8 @@
+I need my configurations to be fully synchronized with the Operative System ones.
+Either if it is Linux, MacOS or Windows.
+Priority:
+1. Linux: Arch Linux, then Ubuntu
+2. MacOS
+3. Windows (consider we will use WSL anyways)
+If I change something in this repository, it should reflect in the OS / kernel.
+These changes should be executed via the .install.sh
