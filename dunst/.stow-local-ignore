@@ -1,0 +1,5 @@
+# HyDE-managed files (DO NOT STOW)
+^/\.config/dunst/dunstrc$
+
+# Ignore README
+^/README\.md$

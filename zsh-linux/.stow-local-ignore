@@ -1,0 +1,17 @@
+# HyDE-managed files (DO NOT STOW)
+^/\.config/zsh/\.zshenv$
+^/\.config/zsh/\.zshrc$
+^/\.config/zsh/prompt\.zsh$
+
+# HyDE-managed directories
+^/\.config/zsh/conf\.d/00-hyde\.zsh$
+^/\.config/zsh/conf\.d/hyde/
+^/\.config/zsh/completions/
+^/\.config/zsh/functions/
+
+# Generated files
+^/\.config/zsh/\.zcompdump.*$
+^/\.config/zsh/\.zsh_history$
+
+# Ignore README
+^/README\.md$
