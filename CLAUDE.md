@@ -36,11 +36,15 @@ HammerSpoon automatically manages audio device switching with two modes:
 - **Output**: WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
 - **Input**: fifine Microphone > MacBook Pro Microphone (never WH-1000XM4)
 
-**SPEAKER MODE** (toggle with Cmd+Alt+0):
-- **Output**: MacBook Pro Speakers only (skips fifine/headphones/Echo Dot)
+**SPEAKER MODE** (toggle with Cmd+Alt+0 or click SketchyBar indicator):
+- **Output**: Echo Dot > MacBook Pro Speakers (skips fifine/headphones)
 - **Input**: Same as headphone mode
 
-Uses HammerSpoon's audio device watcher for instant response to device connect/disconnect events
+Features:
+- HammerSpoon audio device watcher for instant response to device connect/disconnect events
+- Mode persists across HammerSpoon restarts using `hs.settings`
+- SketchyBar shows current mode with icon (󰋋 headphone / 󰓃 speaker) and device name on hover
+- Click the SketchyBar icon to toggle modes
 
 ## Essential Commands
 
@@ -118,7 +122,58 @@ Each package directory must mirror the home directory structure:
 
 ## Deprecated Packages
 
-- **skhd/**: DEPRECATED - App launch shortcuts now handled directly by AeroSpace for better integration and consistency across empty/occupied workspaces. The skhd service has been disabled from startup.
+- **skhd/**: DEPRECATED - App launch shortcuts now handled directly by AeroSpace for better integration and consistency across empty/occupied workspaces. The skhd service has been disabled from startup (LaunchAgent renamed to `.disabled`).
+- **yabai/**: NOT IN USE - AeroSpace has replaced yabai as the window manager. The yabai service has been disabled from startup (LaunchAgent renamed to `.disabled`).
+
+## Startup Configuration
+
+### AeroSpace-Managed Startup (aerospace/.aerospace.toml)
+
+These apps launch automatically via `after-startup-command` and move to assigned workspaces:
+
+```toml
+after-startup-command = [
+    'exec-and-forget sketchybar',
+    'exec-and-forget open -a "Obsidian"',    # → workspace 9
+    'exec-and-forget open -a "Dia"',         # → workspace 1
+    'exec-and-forget open -a "Cursor"'       # → workspace 2
+]
+```
+
+### macOS Login Items (System Settings)
+
+Apps that auto-start via macOS (not controlled by AeroSpace):
+
+**Active:**
+- **Docker** - Launches hidden in background via `~/Library/LaunchAgents/com.docker.autostart.plist` (uses `--hide` flag)
+- **AeroSpace** - Window manager
+- **Flux** - Screen color temperature
+- **Hammerspoon** - Automation engine (audio switching, hotkeys)
+- **Warp** - Terminal
+- **Raycast** - App launcher
+- **1Password** - Password manager (Browser Helper + Launcher)
+- **SketchyBar** - Status bar (via `~/Library/LaunchAgents/homebrew.mxcl.sketchybar.plist`)
+
+**Disabled/Removed:**
+- **Gather/GatherV2** - Removed from Login Items (use `alt-g` to launch manually)
+- **skhd** - LaunchAgent disabled (see Deprecated Packages)
+- **yabai** - LaunchAgent disabled (see Deprecated Packages)
+
+### Managing Startup Apps
+
+```bash
+# View current Login Items
+osascript -e 'tell application "System Events" to get the name of every login item'
+
+# Remove an app from Login Items
+osascript -e 'tell application "System Events" to delete login item "AppName"'
+
+# List all LaunchAgents
+ls -la ~/Library/LaunchAgents/
+
+# Disable a LaunchAgent
+mv ~/Library/LaunchAgents/com.example.plist ~/Library/LaunchAgents/com.example.plist.disabled
+```
 
 ## SketchyBar Theme System
 
