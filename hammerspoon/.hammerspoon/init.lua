@@ -7,8 +7,8 @@
 -- Enable IPC for command line control
 hs.ipc.cliInstall()
 
--- Mode state
-local speakerMode = false
+-- Mode state - load from persistent storage
+local speakerMode = hs.settings.get("audioMode.speakerMode") or false
 
 local function log(message)
     print("🎧 Audio Priority: " .. message)
@@ -25,27 +25,6 @@ local function deviceExists(deviceName, isInput)
     return nil
 end
 
-local function isBluetoothDeviceConnected(deviceName)
-    local handle = io.popen("system_profiler SPBluetoothDataType")
-    local result = handle:read("*a")
-    handle:close()
-
-    -- Debug: log the bluetooth output
-    log("Bluetooth scan result contains: " .. (result:find(deviceName) and "FOUND " .. deviceName or "NOT FOUND " .. deviceName))
-    log("Connected section found: " .. (result:find("Connected:") and "YES" or "NO"))
-    log("Not Connected section found: " .. (result:find("Not Connected:") and "YES" or "NO"))
-
-    -- Simple check: is device name found AND "Connected:" section exists AND device is not in "Not Connected" section
-    local deviceFound = result:find(deviceName)
-    local hasConnectedSection = result:find("Connected:")
-    local inNotConnectedSection = result:find("Not Connected:[^}]*" .. deviceName)
-
-    log("Device found in bluetooth: " .. (deviceFound and "YES" or "NO"))
-    log("In Not Connected section: " .. (inNotConnectedSection and "YES" or "NO"))
-
-    return deviceFound and hasConnectedSection and not inNotConnectedSection
-end
-
 local function setOutputDevice()
     log("Setting output device...")
 
@@ -59,11 +38,6 @@ local function setOutputDevice()
     log("Found fifine: " .. (fifine and "YES" or "NO"))
     log("Found Echo Dot-1DH: " .. (echo and "YES" or "NO"))
     log("Found MacBook: " .. (macbook and "YES" or "NO"))
-
-    -- Check if WH-1000XM4 is actually connected via Bluetooth
-    local wh1000xm4Connected = wh1000xm4 and isBluetoothDeviceConnected("WH-1000XM4")
-    log("WH-1000XM4 Bluetooth connected: " .. (wh1000xm4Connected and "YES" or "NO"))
-
     log("Current mode: " .. (speakerMode and "SPEAKER MODE" or "HEADPHONE MODE"))
 
     if speakerMode then
@@ -132,6 +106,12 @@ local function showCurrentDevices()
     log("Input: " .. (currentInput and currentInput:name() or "Unknown"))
 end
 
+local function updateSketchyBarMode()
+    local mode = speakerMode and "SPEAKER" or "HEADPHONE"
+    hs.task.new("/opt/homebrew/bin/sketchybar", function() end,
+        {"--trigger", "audio_mode_change", "AUDIO_MODE=" .. mode}):start()
+end
+
 local function handleAudioDeviceChange(event)
     log("Audio device event: " .. event)
 
@@ -149,13 +129,13 @@ local function handleAudioDeviceChange(event)
         setInputDevice()
         showCurrentDevices()
         -- Update SketchyBar audio mode indicator
-        hs.task.new("/opt/homebrew/bin/sketchybar", function() end, {"--trigger", "audio_mode_change"}):start()
+        updateSketchyBarMode()
     elseif event == "dOut" then
         -- Default output changed - might need to override if wrong priority
         hs.timer.doAfter(0.5, function()
             setOutputDevice()
             -- Update SketchyBar audio mode indicator
-            hs.task.new("/opt/homebrew/bin/sketchybar", function() end, {"--trigger", "audio_mode_change"}):start()
+            updateSketchyBarMode()
         end)
     elseif event == "dIn" then
         -- Default input changed - might need to override if wrong priority
@@ -169,9 +149,13 @@ end
 hs.audiodevice.watcher.setCallback(handleAudioDeviceChange)
 hs.audiodevice.watcher.start()
 
--- Function to toggle between modes
-local function toggleAudioMode()
+-- Function to toggle between modes (global for SketchyBar click handler)
+function toggleAudioMode()
     speakerMode = not speakerMode
+
+    -- Persist mode across restarts
+    hs.settings.set("audioMode.speakerMode", speakerMode)
+
     local modeText = speakerMode and "SPEAKER MODE" or "HEADPHONE MODE"
     log("🔄 Switched to " .. modeText)
     hs.notify.new({title="Audio Priority", informativeText="Switched to " .. modeText}):send()
@@ -182,7 +166,7 @@ local function toggleAudioMode()
     showCurrentDevices()
 
     -- Update SketchyBar audio mode indicator
-    hs.task.new("/opt/homebrew/bin/sketchybar", function() end, {"--trigger", "audio_mode_change"}):start()
+    updateSketchyBarMode()
 end
 
 -- Add manual hotkey for testing (Ctrl+Alt+A)
@@ -228,6 +212,7 @@ end)
 setOutputDevice()
 setInputDevice()
 showCurrentDevices()
+updateSketchyBarMode()
 
 log("HammerSpoon Audio Priority Manager started! 🎵")
 log("Press Ctrl+Alt+A to manually trigger audio switching")
@@ -237,14 +222,21 @@ log("Press Cmd+Shift+M to toggle microphone mute")-- Configuración de Hammerspo
 
 -- Función para capturar la ventana activa
 function captureActiveWindow()
-    -- Ruta del script de captura
-    local scriptPath = "/Users/styreep/uni/52/infra/lab3/capture_screen.sh"
+    -- Ruta del script de captura flexible
+    local scriptPath = "/Users/styreep/uni/52/infra/capture_screen_flexible.sh"
 
     -- Ejecutar el script
     local task = hs.task.new("/bin/bash", function(exitCode, stdOut, stdErr)
         if exitCode == 0 then
-            -- Mostrar alerta de éxito
-            hs.alert.show("📸 Captura guardada", 1)
+            -- Leer la carpeta activa para mostrar en la alerta
+            local configFile = io.open("/Users/styreep/uni/52/infra/capture_config.txt", "r")
+            local folder = "lab3"  -- default
+            if configFile then
+                folder = configFile:read("*l") or "lab3"
+                configFile:close()
+            end
+            -- Mostrar alerta de éxito con la carpeta activa
+            hs.alert.show("📸 Guardada en " .. folder .. "/recursos", 1)
         else
             hs.alert.show("❌ Error en captura", 1)
         end
