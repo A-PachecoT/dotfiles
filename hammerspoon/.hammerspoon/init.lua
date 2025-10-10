@@ -1,7 +1,7 @@
 -- HammerSpoon Audio Device Priority Manager
 -- Two Priority Modes:
--- HEADPHONE MODE: WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
--- SPEAKER MODE: MacBook Pro Speakers only (skips fifine/headphones/Echo Dot)
+-- HEADPHONE MODE: fifine > Philips TAT1215 > WH-1000XM4 > Echo Dot > MacBook Pro Speakers
+-- SPEAKER MODE: Echo Dot > MacBook Pro Speakers (skips fifine/headphones)
 -- Input Priority: fifine Microphone > MacBook Pro Microphone (never WH-1000XM4)
 
 -- Enable IPC for command line control
@@ -28,14 +28,16 @@ end
 local function setOutputDevice()
     log("Setting output device...")
 
-    local wh1000xm4 = deviceExists("WH-1000XM4", false)
     local fifine = deviceExists("fifine", false)
+    local philips = deviceExists("Philips TAT1215", false)
+    local wh1000xm4 = deviceExists("WH-1000XM4", false)
     local echo = deviceExists("Echo Dot-1DH", false)
     local macbook = deviceExists("MacBook Pro Speakers", false)
 
     -- Debug output
-    log("Found WH-1000XM4: " .. (wh1000xm4 and "YES" or "NO"))
     log("Found fifine: " .. (fifine and "YES" or "NO"))
+    log("Found Philips TAT1215: " .. (philips and "YES" or "NO"))
+    log("Found WH-1000XM4: " .. (wh1000xm4 and "YES" or "NO"))
     log("Found Echo Dot-1DH: " .. (echo and "YES" or "NO"))
     log("Found MacBook: " .. (macbook and "YES" or "NO"))
     log("Current mode: " .. (speakerMode and "SPEAKER MODE" or "HEADPHONE MODE"))
@@ -54,14 +56,18 @@ local function setOutputDevice()
             log("❌ No suitable speaker device found")
         end
     else
-        -- HEADPHONE MODE: WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
-        if wh1000xm4 then
-            wh1000xm4:setDefaultOutputDevice()
-            log("✅ Output: WH-1000XM4 (headphone mode)")
-            return
-        elseif fifine then
+        -- HEADPHONE MODE: fifine > Philips TAT1215 > WH-1000XM4 > Echo Dot > MacBook Pro Speakers
+        if fifine then
             fifine:setDefaultOutputDevice()
             log("✅ Output: fifine speaker (headphone mode)")
+            return
+        elseif philips then
+            philips:setDefaultOutputDevice()
+            log("✅ Output: Philips TAT1215 (headphone mode)")
+            return
+        elseif wh1000xm4 then
+            wh1000xm4:setDefaultOutputDevice()
+            log("✅ Output: WH-1000XM4 (headphone mode)")
             return
         elseif echo then
             echo:setDefaultOutputDevice()

@@ -24,10 +24,12 @@ elif [[ "$SENDER" == "audio_mode_change" ]] || [[ "$SENDER" == "forced" ]]; then
     DISPLAY_NAME="$CURRENT_OUTPUT"
     if [[ "$CURRENT_OUTPUT" == "MacBook Pro Speakers" ]]; then
         DISPLAY_NAME="Built-in Speakers"
-    elif [[ "$CURRENT_OUTPUT" == *"WH-1000XM4"* ]]; then
-        DISPLAY_NAME="Sony WH-1000XM4"
     elif [[ "$CURRENT_OUTPUT" == *"fifine"* ]]; then
         DISPLAY_NAME="Fifine Speaker"
+    elif [[ "$CURRENT_OUTPUT" == *"Philips TAT1215"* ]]; then
+        DISPLAY_NAME="Philips Earbuds"
+    elif [[ "$CURRENT_OUTPUT" == *"WH-1000XM4"* ]]; then
+        DISPLAY_NAME="Sony WH-1000XM4"
     elif [[ "$CURRENT_OUTPUT" == *"Echo Dot"* ]]; then
         DISPLAY_NAME="Echo Dot"
     fi

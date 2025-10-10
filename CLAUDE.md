@@ -33,7 +33,7 @@ for sid in $((aerospace list-workspaces --monitor focused --empty no; aerospace 
 HammerSpoon automatically manages audio device switching with two modes:
 
 **HEADPHONE MODE** (default):
-- **Output**: WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
+- **Output**: fifine > Philips TAT1215 > WH-1000XM4 > Echo Dot > MacBook Pro Speakers
 - **Input**: fifine Microphone > MacBook Pro Microphone (never WH-1000XM4)
 
 **SPEAKER MODE** (toggle with Cmd+Alt+0 or click SketchyBar indicator):
