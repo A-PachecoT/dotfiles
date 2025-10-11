@@ -1,12 +1,12 @@
 local colors = require("colors")
 local settings = require("settings")
 
--- Available themes
+-- Available themes (using new theme system)
 local themes = {
-  { name = "Tokyo Night", file = "colors_tokyonight.lua" },
-  { name = "Catppuccin", file = "colors_catppuccin.lua" },
-  { name = "Gruvbox", file = "colors_gruvbox.lua" },
-  { name = "Nord", file = "colors_nord.lua" }
+  { name = "Tokyo Night", theme_name = "tokyonight" },
+  { name = "Catppuccin", theme_name = "catppuccin" },
+  { name = "Gruvbox", theme_name = "gruvbox" },
+  { name = "Nord", theme_name = "nord" }
 }
 
 local current_theme_index = 1
@@ -62,20 +62,18 @@ for i, theme in ipairs(themes) do
       drawing = false
     },
     click_script = string.format([[
-      # Switch theme
+      # Switch theme using new theme system
       cd ~/.config/sketchybar
 
-      # Save current colors as backup if not default
-      if [ ! -f colors_default.lua ]; then
-        cp colors.lua colors_default.lua
-      fi
+      # Update colors.lua to use the new theme
+      cat > colors.lua << 'EOF'
+-- %s
+return require("themes.%s")
+EOF
 
-      # Copy selected theme
-      if [ -f %s ]; then
-        cp %s colors.lua
-        sketchybar --reload
-      fi
-    ]], theme.file, theme.file)
+      # Reload SketchyBar to apply new theme + bar style
+      sketchybar --reload
+    ]], theme.name, theme.theme_name)
   })
 end
 
