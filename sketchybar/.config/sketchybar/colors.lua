@@ -1,2 +1,2 @@
--- Catppuccin
-return require("themes.catppuccin")
+-- Tokyo Night
+return require("themes.tokyonight")
