@@ -56,12 +56,16 @@ return function(variant)
     config.shadow = "on"
 
   elseif variant == "floating" then
-    -- Floating bar with shadow
+    -- Floating bar with shadow, rounded edges, and border
     config.color = base_color
     config.border_color = base_border
+    config.border_width = 2
+    config.corner_radius = 9
     config.shadow = "on"
     config.margin = 10
-    config.y_offset = 10
+    config.y_offset = 5
+    config.padding_left = 15
+    config.padding_right = 15
 
   end
 
