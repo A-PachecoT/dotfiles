@@ -1,6 +1,7 @@
 -- Catppuccin Mocha Theme
 return {
   name = "catppuccin",
+  bar_style = "floating",  -- Cozy café aesthetic - warm, elevated, comfortable
 
   -- Base colors (original names for backwards compatibility)
   black = 0xff11111b,     -- Crust

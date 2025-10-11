@@ -1,6 +1,7 @@
 -- Gruvbox Dark Theme
 return {
   name = "gruvbox",
+  bar_style = "opaque",  -- Cardboard/cork board aesthetic - warm, solid, grounded
 
   -- Base colors (original names for backwards compatibility)
   black = 0xff282828,     -- bg0

@@ -1,6 +1,7 @@
 -- Nord Theme
 return {
   name = "nord",
+  bar_style = "transparent",  -- Frosted ice aesthetic - cool, minimal, clean
 
   -- Base colors (original names for backwards compatibility)
   black = 0xff2e3440,     -- nord0

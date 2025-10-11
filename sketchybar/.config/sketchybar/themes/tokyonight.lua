@@ -1,6 +1,7 @@
 -- Tokyo Night Theme
 return {
   name = "tokyonight",
+  bar_style = "blur",  -- Cyberpunk glass aesthetic - sleek, modern, high-tech
 
   -- Base colors (original names for backwards compatibility)
   black = 0xff15161e,     -- bg_dark
