@@ -1,12 +1,16 @@
+local styles = require("styles")
 local colors = require("colors")
 
--- Equivalent to the --bar domain
-sbar.bar({
-  height = 40,
-  color = colors.bar.bg,
-  padding_right = 2,
-  padding_left = 2,
-  drawing = true,
-  topmost = false,
-  position = "top",
-})
+-- Get the current theme (handle both ThemeManager and direct theme)
+-- Each theme has its own aesthetic:
+-- - Gruvbox: "opaque" (cardboard/cork board - warm, solid)
+-- - Nord: "transparent" (frosted ice - cool, minimal)
+-- - Catppuccin: "floating" (cozy café - warm, elevated)
+-- - Tokyo Night: "blur" (cyberpunk glass - sleek, modern)
+local theme = colors.get and colors:get() or colors
+local preferred_style = theme.bar_style or "solid"
+
+local bar_style = styles.bar(preferred_style)
+
+-- Apply the style to the bar
+sbar.bar(bar_style)
