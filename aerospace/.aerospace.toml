@@ -201,5 +201,18 @@ run = 'move-node-to-workspace 2'
     backspace = ['close-all-windows-but-current', 'mode main']
 
 
-# Move windows by dragging any part of the window https://nikitabobko.github.io/AeroSpace/goodies#move-by-dragging-any-part-of-the-window
-#defaults write -g NSWindowShouldDragOnGesture -bool true
+# ============================================================
+# MOUSE-BASED WINDOW MANAGEMENT
+# ============================================================
+# Native macOS feature: Move windows by dragging any part of the window
+# https://nikitabobko.github.io/AeroSpace/goodies#move-by-dragging-any-part-of-the-window
+#
+# ENABLED: defaults write -g NSWindowShouldDragOnGesture -bool true
+# Usage: Hold Ctrl+Cmd + Left-click drag anywhere on window to move
+# Note: Requires logout/restart to take effect
+#
+# ⚠️ RESIZING windows with mouse (like Hyprland) is NOT SUPPORTED
+# Easy Move+Resize and Hummingbird DO NOT work with AeroSpace (cause flickering/conflicts)
+# AeroSpace is keyboard-first - use keyboard shortcuts for resizing:
+#   - Ctrl+Alt+H/L for width, Ctrl+Alt+J/K for height
+#   - Alt+Minus/Equal for smart resize
