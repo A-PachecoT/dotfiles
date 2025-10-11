@@ -1,30 +1,30 @@
--- Catppuccin Mocha Theme
+-- Nord Theme
 return {
   -- Base colors
-  black = 0xff11111b,     -- Crust
-  white = 0xffcdd6f4,     -- Text
-  red = 0xfff38ba8,       -- Red
-  green = 0xffa6e3a1,     -- Green
-  blue = 0xff89b4fa,      -- Blue
-  yellow = 0xfff9e2af,    -- Yellow
-  orange = 0xfffab387,    -- Peach
-  magenta = 0xffcba6f7,   -- Mauve
-  grey = 0xff6c7086,      -- Overlay0
+  black = 0xff2e3440,     -- nord0
+  white = 0xffe5e9f0,     -- nord6
+  red = 0xffbf616a,       -- nord11
+  green = 0xffa3be8c,     -- nord14
+  blue = 0xff81a1c1,      -- nord9
+  yellow = 0xffebcb8b,    -- nord13
+  orange = 0xffd08770,    -- nord12
+  magenta = 0xffb48ead,   -- nord15
+  grey = 0xff4c566a,      -- nord3
   transparent = 0x00000000,
 
   -- Bar colors
   bar = {
-    bg = 0xf01e1e2e,      -- Base with opacity
-    border = 0xff45475a,   -- Surface0
+    bg = 0xf02e3440,      -- nord0 with opacity
+    border = 0xff3b4252,   -- nord1
   },
   popup = {
-    bg = 0xe01e1e2e,      -- Base with less opacity
-    border = 0xff585b70    -- Surface1
+    bg = 0xe02e3440,      -- nord0 with less opacity
+    border = 0xff434c5e    -- nord2
   },
 
   -- Surface colors
-  bg1 = 0xff313244,       -- Surface0
-  bg2 = 0xff45475a,       -- Surface1
+  bg1 = 0xff3b4252,       -- nord1
+  bg2 = 0xff434c5e,       -- nord2
 
   with_alpha = function(color, alpha)
     if alpha > 1.0 or alpha < 0.0 then return color end
