@@ -1,5 +1,6 @@
 local colors = require("colors")
 local settings = require("settings")
+local styles = require("styles")
 
 -- Available themes (using new theme system)
 local themes = {
@@ -10,6 +11,9 @@ local themes = {
 }
 
 local current_theme_index = 1
+
+-- Get theme-aware button style (ghost variant for subtle appearance)
+local button_style = styles.button("ghost")
 
 -- Create theme switcher button
 local theme_switcher = sbar.add("item", "theme_switcher", {
@@ -33,11 +37,7 @@ local theme_switcher = sbar.add("item", "theme_switcher", {
       size = 11.0
     }
   },
-  background = {
-    color = colors.transparent,  -- No background
-    corner_radius = 6,
-    height = 20,
-  },
+  background = button_style.background,
   popup = {
     background = {
       border_width = 2,

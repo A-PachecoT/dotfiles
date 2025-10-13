@@ -1,9 +1,13 @@
 local colors = require("colors")
 local icons = require("icons")
 local settings = require("settings")
+local styles = require("styles")
 
 -- Padding item required because of bracket
 sbar.add("item", { width = 5 })
+
+-- Get theme-aware button style
+local button_style = styles.button()
 
 local apple = sbar.add("item", {
   icon = {
@@ -13,13 +17,9 @@ local apple = sbar.add("item", {
     padding_left = 8,
   },
   label = { drawing = false },
-  background = {
-    color = colors.bg2,
-    border_color = colors.black,
-    border_width = 1
-  },
-  padding_left = 1,
-  padding_right = 1,
+  background = button_style.background,
+  padding_left = button_style.padding_left,
+  padding_right = button_style.padding_right,
   click_script = "$CONFIG_DIR/helpers/menus/bin/menus -s 0"
 })
 

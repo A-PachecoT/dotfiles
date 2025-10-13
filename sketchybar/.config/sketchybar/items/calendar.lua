@@ -1,8 +1,12 @@
 local settings = require("settings")
 local colors = require("colors")
+local styles = require("styles")
 
 -- Padding item required because of bracket
 sbar.add("item", { position = "right", width = settings.group_paddings })
+
+-- Get theme-aware card style
+local card_style = styles.card()
 
 local cal = sbar.add("item", {
   icon = {
@@ -22,13 +26,9 @@ local cal = sbar.add("item", {
   },
   position = "right",
   update_freq = 30,
-  padding_left = 1,
-  padding_right = 1,
-  background = {
-    color = colors.bg2,
-    border_color = colors.black,
-    border_width = 1
-  },
+  padding_left = card_style.padding_left,
+  padding_right = card_style.padding_right,
+  background = card_style.background,
   click_script = "open -a 'Calendar'"
 })
 

@@ -4,11 +4,15 @@ print("Loading spaces.lua")
 local colors = require("colors")
 local icons = require("icons")
 local settings = require("settings")
+local styles = require("styles")
 local app_icons = require("helpers.app_icons")
 
 local spaces = {}
 local space_brackets = {}
 local max_spaces = 10
+
+-- Get theme-aware card style
+local card_style = styles.card()
 
 -- Create all 10 space items but hide them initially
 for i = 1, max_spaces do
@@ -33,12 +37,7 @@ for i = 1, max_spaces do
     },
     padding_right = 1,
     padding_left = 1,
-    background = {
-      color = colors.bg1,
-      border_width = 1,
-      height = 26,
-      border_color = colors.black,
-    },
+    background = card_style.background,
     popup = { background = { border_width = 5, border_color = colors.black } },
     drawing = false -- Start hidden
   })
