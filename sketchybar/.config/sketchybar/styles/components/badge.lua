@@ -3,9 +3,21 @@
 
 return function(variant)
   local colors = require("colors")
-  local current_theme = colors:get()
+  local current_theme = colors.get and colors:get() or colors
 
-  -- Default badge style
+  -- Get theme-specific component styling or use defaults
+  local style = current_theme.component_style or {
+    corner_radius = 0,
+    border_width = 1,
+    card_height = 26,
+    padding = 10,
+  }
+
+  -- Badges are pill-shaped, use corner_radius for roundness
+  -- Gruvbox will be less rounded, Tokyo Night very rounded
+  local badge_radius = math.max(style.corner_radius, 9)  -- Minimum 9 for pill shape
+
+  -- Default badge style with theme-specific properties
   local base = {
     icon = {
       padding_left = 6,
@@ -19,7 +31,7 @@ return function(variant)
     background = {
       color = current_theme.accent,
       height = 18,
-      corner_radius = 9,
+      corner_radius = badge_radius,
     },
     padding_left = 2,
     padding_right = 2,

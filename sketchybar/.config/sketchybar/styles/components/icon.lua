@@ -4,15 +4,23 @@
 return function(variant)
   local colors = require("colors")
   local settings = require("settings")
-  local current_theme = colors:get()
+  local current_theme = colors.get and colors:get() or colors
 
-  -- Default icon style
+  -- Get theme-specific component styling or use defaults
+  local style = current_theme.component_style or {
+    corner_radius = 0,
+    border_width = 1,
+    card_height = 26,
+    padding = 10,
+  }
+
+  -- Default icon style with theme-specific padding
   local base = {
     icon = {
       font = settings.font.text,
       color = current_theme.text,
-      padding_left = 8,
-      padding_right = 8,
+      padding_left = style.padding - 2,
+      padding_right = style.padding - 2,
     },
   }
 

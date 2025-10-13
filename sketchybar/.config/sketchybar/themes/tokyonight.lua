@@ -3,6 +3,14 @@ return {
   name = "tokyonight",
   bar_style = "blur",  -- Cyberpunk glass aesthetic - sleek, modern, high-tech
 
+  -- Component styling - Sleek, modern, cyberpunk aesthetic
+  component_style = {
+    corner_radius = 11,     -- Very rounded, futuristic
+    border_width = 0,       -- No borders, clean glass
+    card_height = 26,       -- Standard height
+    padding = 10,           -- Tight, modern padding
+  },
+
   -- Base colors (original names for backwards compatibility)
   black = 0xff15161e,     -- bg_dark
   white = 0xffc0caf5,     -- fg

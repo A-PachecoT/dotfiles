@@ -3,6 +3,14 @@ return {
   name = "nord",
   bar_style = "transparent",  -- Frosted ice aesthetic - cool, minimal, clean
 
+  -- Component styling - Minimal, precise, frosted ice aesthetic
+  component_style = {
+    corner_radius = 4,      -- Subtle rounds, clean edges
+    border_width = 1,       -- Thin borders, minimal
+    card_height = 26,       -- Standard height
+    padding = 10,           -- Tight padding
+  },
+
   -- Base colors (original names for backwards compatibility)
   black = 0xff2e3440,     -- nord0
   white = 0xffe5e9f0,     -- nord6

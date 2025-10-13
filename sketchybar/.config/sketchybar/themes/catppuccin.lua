@@ -3,6 +3,14 @@ return {
   name = "catppuccin",
   bar_style = "floating",  -- Cozy café aesthetic - warm, elevated, comfortable
 
+  -- Component styling - Soft, comfortable, cozy café aesthetic
+  component_style = {
+    corner_radius = 8,      -- Rounded, inviting
+    border_width = 1,       -- Medium borders
+    card_height = 26,       -- Standard height
+    padding = 12,           -- Comfortable padding
+  },
+
   -- Base colors (original names for backwards compatibility)
   black = 0xff11111b,     -- Crust
   white = 0xffcdd6f4,     -- Text

@@ -3,6 +3,14 @@ return {
   name = "gruvbox",
   bar_style = "opaque",  -- Cardboard/cork board aesthetic - warm, solid, grounded
 
+  -- Component styling - Bold, analog, cardboard aesthetic
+  component_style = {
+    corner_radius = 2,      -- Sharp corners, slightly softened
+    border_width = 2,       -- Thick borders, substantial
+    card_height = 28,       -- Taller, more presence
+    padding = 12,           -- Generous padding
+  },
+
   -- Base colors (original names for backwards compatibility)
   black = 0xff282828,     -- bg0
   white = 0xffebdbb2,     -- fg0

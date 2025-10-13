@@ -3,24 +3,33 @@
 
 return function(variant)
   local colors = require("colors")
-  local current_theme = colors:get()
+  local current_theme = colors.get and colors:get() or colors
 
-  -- Default button style
+  -- Get theme-specific component styling or use defaults
+  local style = current_theme.component_style or {
+    corner_radius = 0,
+    border_width = 1,
+    card_height = 26,
+    padding = 10,
+  }
+
+  -- Default button style with theme-specific properties
   local base = {
     icon = {
-      padding_left = 8,
-      padding_right = 8,
+      padding_left = style.padding - 2,
+      padding_right = style.padding - 2,
       color = current_theme.text,
     },
     label = {
-      padding_right = 12,
+      padding_right = style.padding + 2,
       color = current_theme.text_muted,
     },
     background = {
       color = current_theme.surface,
       border_color = current_theme.border,
-      border_width = 1,
-      height = 26,
+      border_width = style.border_width,
+      height = style.card_height,
+      corner_radius = style.corner_radius,
     },
     padding_left = 1,
     padding_right = 1,
