@@ -1,6 +1,6 @@
 # Theme Aesthetics Guide
 
-Each theme now has its own unique bar aesthetic that matches its personality!
+Each theme now has its own unique **bar AND component** aesthetics that match its personality!
 
 ## 🎨 Theme Visual Styles
 
@@ -97,14 +97,77 @@ The `bar.lua` automatically reads this and applies the matching style!
 | **Catppuccin** | floating | Medium | ❌ | ✅ | Elevated, cozy café |
 | **Tokyo Night** | blur | ~38% | ✅ | ❌ | Sleek cyberpunk glass |
 
-## 💡 Pro Tip
+## 🎨 Component Styling Per Theme
 
-You can override a theme's default bar style by editing `bar.lua`:
+Each theme now also customizes component appearance (cards, buttons, badges):
+
+### **Gruvbox** - Bold Cardboard Components
+- **Corner Radius**: 2px (sharp, slightly softened)
+- **Border Width**: 2px (thick, substantial borders)
+- **Card Height**: 28px (taller, more presence)
+- **Padding**: 12px (generous spacing)
+- **Feel**: Analog, bold, like cardboard cutouts
+
+### **Nord** - Minimal Frosted Components
+- **Corner Radius**: 4px (subtle rounds, clean edges)
+- **Border Width**: 1px (thin, minimal borders)
+- **Card Height**: 26px (standard)
+- **Padding**: 10px (tight, precise spacing)
+- **Feel**: Clean, minimal, frosted glass precision
+
+### **Catppuccin** - Cozy Rounded Components
+- **Corner Radius**: 8px (rounded, inviting)
+- **Border Width**: 1px (medium borders)
+- **Card Height**: 26px (standard)
+- **Padding**: 12px (comfortable spacing)
+- **Feel**: Soft, warm, cozy café vibes
+
+### **Tokyo Night** - Sleek Cyberpunk Components
+- **Corner Radius**: 11px (very rounded, futuristic)
+- **Border Width**: 0px (no borders, clean glass)
+- **Card Height**: 26px (standard)
+- **Padding**: 10px (tight, modern spacing)
+- **Feel**: Sleek, modern, high-tech neon glass
+
+## 📊 Visual Comparison Table
+
+| Theme | Bar Style | Bar Corner | Bar Border | Component Corner | Component Border | Feel |
+|-------|-----------|------------|------------|------------------|------------------|------|
+| **Gruvbox** | opaque | 0 | 0 | **2px** | **2px** | Bold cardboard |
+| **Nord** | transparent | 0 | 0 | **4px** | **1px** | Frosted minimal |
+| **Catppuccin** | floating | **9px** | **2px** | **8px** | **1px** | Cozy café card |
+| **Tokyo Night** | blur | 0 | 0 | **11px** | **0px** | Sleek cyberpunk |
+
+## 🔧 Technical Details
+
+Each theme includes a `component_style` property:
 
 ```lua
--- Force a specific style regardless of theme
-local bar_style = styles.bar("minimal")  -- Override theme preference
-sbar.bar(bar_style)
+-- themes/gruvbox.lua
+component_style = {
+  corner_radius = 2,      -- Sharp corners
+  border_width = 2,       -- Thick borders
+  card_height = 28,       -- Taller cards
+  padding = 12,           -- Generous spacing
+}
 ```
 
-But by default, let each theme use its personality! 🎨
+All component styles (card, button, badge, separator, icon) automatically read these values!
+
+## 💡 Pro Tips
+
+**Override bar style** by editing `bar.lua`:
+```lua
+local bar_style = styles.bar("minimal")  -- Override theme preference
+```
+
+**Override component style** by editing component files or theme directly:
+```lua
+-- In your theme file
+component_style = {
+  corner_radius = 15,  -- Custom value
+  -- ...
+}
+```
+
+But by default, let each theme express its unique personality! 🎨
