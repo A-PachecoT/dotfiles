@@ -25,15 +25,15 @@ default-root-container-orientation = 'auto'
 on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 on-focus-changed = [
     'move-mouse window-lazy-center',
-    'exec-and-forget sketchybar --trigger space_windows_change'
+    'exec-and-forget timeout 2s sketchybar --trigger space_windows_change'
 ]
 
 # Automatically unhide hidden apps
 automatically-unhide-macos-hidden-apps = true
 
-# Notify SketchyBar about workspace changes
+# Notify SketchyBar about workspace changes with timeout
 exec-on-workspace-change = ['/bin/bash', '-c',
-    'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE'
+    'timeout 2s sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE &'
 ]
 
 # Window detection rules - auto-float certain apps
