@@ -58,6 +58,10 @@ if.app-name-regex-substring = 'spotify'
 run = 'layout floating'
 
 [[on-window-detected]]
+if.app-name-regex-substring = 'iterm'
+run = 'layout floating'
+
+[[on-window-detected]]
 if.app-name-regex-substring = 'obsidian'
 run = 'move-node-to-workspace 9'
 
@@ -162,7 +166,7 @@ run = 'move-node-to-workspace 2'
     alt-s = 'exec-and-forget open -a "Warp"'
     alt-c = 'exec-and-forget open -a "Cursor"'
     cmd-alt-c = 'exec-and-forget open -n -a "Cursor" --args --new-window'
-    cmd-alt-s = 'exec-and-forget open -n -a "Warp"'
+    cmd-alt-s = 'exec-and-forget open -n -a "iTerm"'
     
     # Workspace navigation
     alt-tab = 'workspace-back-and-forth'
