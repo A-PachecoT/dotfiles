@@ -27,6 +27,15 @@ function M.toggle()
     M.muted = not M.muted
     currentInput:setInputMuted(M.muted)
 
+    -- Play sound feedback
+    if M.muted then
+        -- Muted - play Pop sound
+        hs.task.new("/usr/bin/afplay", nil, {"/System/Library/Sounds/Pop.aiff"}):start()
+    else
+        -- Unmuted - play Tink sound
+        hs.task.new("/usr/bin/afplay", nil, {"/System/Library/Sounds/Tink.aiff"}):start()
+    end
+
     local statusText = M.muted and "🔇 Microphone MUTED" or "🎤 Microphone UNMUTED"
     log(statusText)
 
