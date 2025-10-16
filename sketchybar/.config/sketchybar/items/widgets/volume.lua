@@ -71,25 +71,53 @@ local volume_slider = sbar.add("slider", popup_width, {
 volume_percent:subscribe("volume_change", function(env)
   local volume = tonumber(env.INFO)
   local icon = icons.volume._0
-  if volume > 60 then
-    icon = icons.volume._100
-  elseif volume > 30 then
-    icon = icons.volume._66
-  elseif volume > 10 then
-    icon = icons.volume._33
-  elseif volume > 0 then
-    icon = icons.volume._10
-  end
 
-  local lead = ""
-  if volume < 10 then
-    lead = "0"
-  end
+  -- Check mute state
+  sbar.exec("osascript -e 'output muted of (get volume settings)'", function(muted)
+    local is_muted = muted:match("true") ~= nil
 
-  volume_icon:set({ label = icon })
-  volume_percent:set({ label = lead .. volume .. "%" })
-  volume_slider:set({ slider = { percentage = volume } })
+    if is_muted then
+      icon = icons.volume._0
+    elseif volume > 60 then
+      icon = icons.volume._100
+    elseif volume > 30 then
+      icon = icons.volume._66
+    elseif volume > 10 then
+      icon = icons.volume._33
+    elseif volume > 0 then
+      icon = icons.volume._10
+    end
+
+    local lead = ""
+    if volume < 10 then
+      lead = "0"
+    end
+
+    volume_icon:set({
+      label = icon,
+      icon = { color = is_muted and colors.red or colors.grey }
+    })
+    volume_percent:set({ label = lead .. volume .. "%" })
+    volume_slider:set({ slider = { percentage = volume } })
+  end)
 end)
+
+local function volume_toggle_mute()
+  sbar.exec("osascript -e 'output muted of (get volume settings)'", function(muted)
+    local is_muted = muted:match("true") ~= nil
+
+    if is_muted then
+      -- Unmute and play Tink sound
+      sbar.exec("/bin/bash -c 'osascript -e \"set volume without output muted\" && afplay /System/Library/Sounds/Tink.aiff'")
+    else
+      -- Mute and play Pop sound
+      sbar.exec("/bin/bash -c 'osascript -e \"set volume with output muted\" && afplay /System/Library/Sounds/Pop.aiff'")
+    end
+
+    -- Trigger volume_change event to update UI
+    sbar.exec("sketchybar --trigger volume_change")
+  end)
+end
 
 local function volume_collapse_details()
   local drawing = volume_bracket:query().popup.drawing == "on"
@@ -100,11 +128,6 @@ end
 
 local current_audio_device = "None"
 local function volume_toggle_details(env)
-  if env.BUTTON == "right" then
-    sbar.exec("open /System/Library/PreferencePanes/Sound.prefpane")
-    return
-  end
-
   local should_draw = volume_bracket:query().popup.drawing == "off"
   if should_draw then
     volume_bracket:set({ popup = { drawing = true } })
@@ -137,6 +160,14 @@ local function volume_toggle_details(env)
   end
 end
 
+local function volume_click(env)
+  if env.BUTTON == "right" then
+    volume_toggle_details(env)
+  else
+    volume_toggle_mute()
+  end
+end
+
 local function volume_scroll(env)
   local delta = env.INFO.delta
   if not (env.INFO.modifier == "ctrl") then delta = delta * 10.0 end
@@ -144,9 +175,9 @@ local function volume_scroll(env)
   sbar.exec('osascript -e "set volume output volume (output volume of (get volume settings) + ' .. delta .. ')"')
 end
 
-volume_icon:subscribe("mouse.clicked", volume_toggle_details)
+volume_icon:subscribe("mouse.clicked", volume_click)
 volume_icon:subscribe("mouse.scrolled", volume_scroll)
-volume_percent:subscribe("mouse.clicked", volume_toggle_details)
+volume_percent:subscribe("mouse.clicked", volume_click)
 volume_percent:subscribe("mouse.exited.global", volume_collapse_details)
 volume_percent:subscribe("mouse.scrolled", volume_scroll)
 
