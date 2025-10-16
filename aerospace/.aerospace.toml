@@ -34,9 +34,9 @@ default-root-container-orientation = 'auto'
 # Automatically unhide hidden apps
 automatically-unhide-macos-hidden-apps = true
 
-# Notify SketchyBar about workspace changes with timeout
+# Notify SketchyBar about workspace changes
 exec-on-workspace-change = ['/bin/bash', '-c',
-    'timeout 2s sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE &'
+    'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE &'
 ]
 
 # Window detection rules - auto-float certain apps
