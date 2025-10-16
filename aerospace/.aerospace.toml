@@ -13,8 +13,9 @@ after-startup-command = [
 ]
 
 # Normalizations for better tiling
-enable-normalization-flatten-containers = true
-enable-normalization-opposite-orientation-for-nested-containers = true
+# TEMPORARILY DISABLED: May cause conflicts during fast window dragging
+enable-normalization-flatten-containers = false
+enable-normalization-opposite-orientation-for-nested-containers = false
 
 # Default layout settings
 accordion-padding = 30
@@ -22,11 +23,13 @@ default-root-container-layout = 'tiles'
 default-root-container-orientation = 'auto'
 
 
-on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
-on-focus-changed = [
-    'move-mouse window-lazy-center',
-    'exec-and-forget timeout 2s sketchybar --trigger space_windows_change'
-]
+# Disable automatic mouse movement to prevent drag interruptions
+# on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+
+# Temporarily disable to test drag performance
+# on-focus-changed = [
+#     'exec-and-forget timeout 2s sketchybar --trigger space_windows_change'
+# ]
 
 # Automatically unhide hidden apps
 automatically-unhide-macos-hidden-apps = true

@@ -91,55 +91,32 @@ function M.centerWindow()
 end
 
 function M.init()
-    -- Window filter to watch for new windows
-    local windowFilter = hs.window.filter.new()
+    -- TEMPORARILY DISABLED: Auto-centering causes conflicts with AeroSpace window dragging
+    -- The windowCreated event fires repeatedly when dragging across monitors
+    -- Use manual centering with Cmd+Alt+C instead
 
-    -- Handle NEW windows
-    windowFilter:subscribe(hs.window.filter.windowCreated, function(window)
-        if not window then return end
+    -- local windowFilter = hs.window.filter.new()
+    -- windowFilter:subscribe(hs.window.filter.windowCreated, function(window)
+    --     if not window then return end
+    --     local app = window:application()
+    --     if not app then return end
+    --     local appName = app:name()
+    --     log("New window detected: " .. appName)
+    --     if shouldCenterApp(appName) then
+    --         log("Matched for centering: " .. appName)
+    --         hs.timer.doAfter(0.3, function()
+    --             if window:isVisible() and window:isStandard() then
+    --                 log("Attempting to auto-center new window: " .. appName)
+    --                 centerWindowFrame(window)
+    --             else
+    --                 log("❌ Window not ready - visible: " .. tostring(window:isVisible()) .. ", standard: " .. tostring(window:isStandard()))
+    --             end
+    --         end)
+    --     end
+    -- end)
 
-        local app = window:application()
-        if not app then return end
-
-        local appName = app:name()
-        log("New window detected: " .. appName)
-
-        if shouldCenterApp(appName) then
-            log("Matched for centering: " .. appName)
-            -- Longer delay to ensure window is fully created and positioned by AeroSpace
-            hs.timer.doAfter(0.3, function()
-                if window:isVisible() and window:isStandard() then
-                    log("Attempting to auto-center new window: " .. appName)
-                    centerWindowFrame(window)
-                else
-                    log("❌ Window not ready - visible: " .. tostring(window:isVisible()) .. ", standard: " .. tostring(window:isStandard()))
-                end
-            end)
-        end
-    end)
-
-    -- Handle EXISTING windows when they get focused
-    windowFilter:subscribe(hs.window.filter.windowFocused, function(window)
-        if not window then return end
-
-        local app = window:application()
-        if not app then return end
-
-        local appName = app:name()
-
-        if shouldCenterApp(appName) then
-            -- Small delay to let AeroSpace set it to floating first
-            hs.timer.doAfter(0.15, function()
-                if window:isVisible() and window:isStandard() then
-                    log("Auto-centering focused window: " .. appName)
-                    centerWindowFrame(window)
-                end
-            end)
-        end
-    end)
-
-    log("Window Manager initialized")
-    log("Auto-centering enabled for: " .. table.concat(autoCenterApps, ", "))
+    log("Window Manager initialized (auto-centering disabled)")
+    log("Use Cmd+Alt+C to manually center any window")
 end
 
 return M
