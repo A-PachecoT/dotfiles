@@ -3,7 +3,7 @@
 
 # Alt + _ : Launch/Focus app
 alt - a : open -a "Obsidian"
-alt - q : open -a "Dia"
+alt - q : open -a "Comet"
 alt - w : open -a "WhatsApp"
 alt - g : open -a "GatherV2"
 alt - s : open -a "Warp"

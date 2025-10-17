@@ -1,6 +1,6 @@
 -- Audio Device Priority Manager
 -- Two Priority Modes:
--- HEADPHONE MODE: fifine > Philips TAT1215 > WH-1000XM4 > Echo Dot > MacBook Pro Speakers
+-- HEADPHONE MODE: Philips TAT1215 > WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
 -- SPEAKER MODE: Echo Dot > MacBook Pro Speakers (skips fifine/headphones)
 -- Input Priority: fifine Microphone > MacBook Pro Microphone (never WH-1000XM4)
 
@@ -55,18 +55,18 @@ local function setOutputDevice()
             log("❌ No suitable speaker device found")
         end
     else
-        -- HEADPHONE MODE: fifine > Philips TAT1215 > WH-1000XM4 > Echo Dot > MacBook Pro Speakers
-        if fifine then
-            fifine:setDefaultOutputDevice()
-            log("✅ Output: fifine speaker (headphone mode)")
-            return
-        elseif philips then
+        -- HEADPHONE MODE: Philips TAT1215 > WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
+        if philips then
             philips:setDefaultOutputDevice()
             log("✅ Output: Philips TAT1215 (headphone mode)")
             return
         elseif wh1000xm4 then
             wh1000xm4:setDefaultOutputDevice()
             log("✅ Output: WH-1000XM4 (headphone mode)")
+            return
+        elseif fifine then
+            fifine:setDefaultOutputDevice()
+            log("✅ Output: fifine speaker (headphone mode)")
             return
         elseif echo then
             echo:setDefaultOutputDevice()

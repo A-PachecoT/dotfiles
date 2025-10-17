@@ -33,7 +33,7 @@ for sid in $((aerospace list-workspaces --monitor focused --empty no; aerospace 
 HammerSpoon automatically manages audio device switching with two modes:
 
 **HEADPHONE MODE** (default):
-- **Output**: fifine > Philips TAT1215 > WH-1000XM4 > Echo Dot > MacBook Pro Speakers
+- **Output**: Philips TAT1215 > WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
 - **Input**: fifine Microphone > MacBook Pro Microphone (never WH-1000XM4)
 
 **SPEAKER MODE** (toggle with Cmd+Alt+0 or click SketchyBar indicator):
@@ -135,10 +135,15 @@ These apps launch automatically via `after-startup-command` and move to assigned
 after-startup-command = [
     'exec-and-forget sketchybar',
     'exec-and-forget open -a "Obsidian"',    # → workspace 9
-    'exec-and-forget open -a "Dia"',         # → workspace 1
+    'exec-and-forget open -a "Comet"',       # → workspace 1 (replaced Dia browser)
     'exec-and-forget open -a "Cursor"'       # → workspace 2
 ]
 ```
+
+**Browser Configuration:**
+- **Comet browser** is configured as the primary browser (workspace 1, `alt-q` hotkey)
+- Replaced Dia browser throughout the config (2025-10-17)
+- Icon mapping: `["Comet"] = ":comet:"` in `app_icons.lua`
 
 ### macOS Login Items (System Settings)
 
@@ -179,7 +184,67 @@ mv ~/Library/LaunchAgents/com.example.plist ~/Library/LaunchAgents/com.example.p
 
 Colors and styling are centralized in `sketchybar/.config/sketchybar/themes/tokyo-night`. The theme is sourced by the main config and plugins, creating a consistent HyDE-inspired aesthetic across all status bar elements.
 
+### SketchyBar App Icons
+
+App icons are managed via **sketchybar-app-font**, a ligature-based font that displays custom icons for applications in the status bar. The icon mappings are stored in `sketchybar/.config/sketchybar/helpers/app_icons.lua`.
+
+**Updating App Icons:**
+
+The upstream repository is frequently updated with new app icons. To pull the latest icons:
+
+```bash
+# Download latest font
+curl -L https://github.com/kvndrsslr/sketchybar-app-font/releases/latest/download/sketchybar-app-font.ttf -o ~/Library/Fonts/sketchybar-app-font.ttf
+
+# Download latest icon mappings
+curl -L https://github.com/kvndrsslr/sketchybar-app-font/releases/latest/download/icon_map.lua -o ~/.config/sketchybar/helpers/app_icons.lua
+
+# Reload SketchyBar
+sketchybar --reload
+```
+
+**Note:** Keep a backup of your `app_icons.lua` before updating in case you have custom mappings: `cp ~/.config/sketchybar/helpers/app_icons.lua ~/.config/sketchybar/helpers/app_icons.lua.backup`
+
+**Current Icon Count:** 516+ applications supported (as of last update)
+
+## Maintenance Tasks
+
+### Regular Updates
+
+**SketchyBar App Icons** (check monthly or when adding new apps):
+```bash
+# Backup current icons
+cp ~/.config/sketchybar/helpers/app_icons.lua ~/.config/sketchybar/helpers/app_icons.lua.backup
+
+# Update font and mappings
+curl -L https://github.com/kvndrsslr/sketchybar-app-font/releases/latest/download/sketchybar-app-font.ttf -o ~/Library/Fonts/sketchybar-app-font.ttf
+curl -L https://github.com/kvndrsslr/sketchybar-app-font/releases/latest/download/icon_map.lua -o ~/.config/sketchybar/helpers/app_icons.lua
+
+# Reload to apply
+sketchybar --reload
+```
+
+**Homebrew Packages:**
+```bash
+brew update && brew upgrade
+brew upgrade --cask
+```
+
+**Git Repository:**
+```bash
+# Commit configuration changes regularly
+git add -A
+git commit -m "Update configurations"
+git push
+```
+
 ## Conflict Resolution
 
 The install script handles conflicts by backing up existing files to `backup/` before creating symlinks. If stow conflicts occur, use `stow --adopt` or manually resolve by moving existing files.
-- in references/ folder we have others dotfiles. a notable one is from the creator of sketchbar, which has a beautiful design
+
+## Reference Dotfiles
+
+The `references/` folder contains other dotfiles configurations for inspiration:
+- **dotfiles-felixkratz-creator-sketchybar**: From the creator of SketchyBar, featuring beautiful design patterns
+- **dotfiles-full-aerospace-and-sketchybar-falleco**: Complete AeroSpace + SketchyBar setup
+- **dotfiles-omerxx**: Additional configuration examples
