@@ -8,7 +8,7 @@ start-at-login = true
 after-startup-command = [
     'exec-and-forget sketchybar',
     'exec-and-forget open -a "Obsidian"',
-    'exec-and-forget open -a "Dia"',
+    'exec-and-forget open -a "Comet"',
     'exec-and-forget open -a "Cursor"'
 ]
 
@@ -69,7 +69,7 @@ if.app-name-regex-substring = 'obsidian'
 run = 'move-node-to-workspace 9'
 
 [[on-window-detected]]
-if.app-name-regex-substring = 'dia'
+if.app-name-regex-substring = 'comet'
 run = 'move-node-to-workspace 1'
 
 [[on-window-detected]]
@@ -155,16 +155,18 @@ run = 'move-node-to-workspace 2'
     
     # Reload config
     alt-shift-r = 'reload-config'
-    
+    cmd-shift-r = 'exec-and-forget /Users/styreep/dotfiles/scripts/reload-all.sh'  # Reload SketchyBar, AeroSpace, and HammerSpoon
+    cmd-ctrl-shift-r = 'exec-and-forget /Users/styreep/dotfiles/scripts/hard-reset-all.sh'  # Hard reset: force quit and reopen all apps
+
     # Terminal launch (using Warp)
     alt-enter = 'exec-and-forget open -a "Warp"'
     ctrl-alt-enter = 'exec-and-forget open -na "Warp"'
     
     # Quick app launches
-    alt-d = 'exec-and-forget open -a "Raycast"'  # App launcher
     alt-a = 'exec-and-forget open -a "Obsidian"'
-    alt-q = 'exec-and-forget open -a "Dia"'
+    alt-q = 'exec-and-forget open -a "Comet"'
     alt-w = 'exec-and-forget open -a "WhatsApp"'
+    alt-f = 'exec-and-forget open -a "Finder"'
     alt-g = 'exec-and-forget open -a "GatherV2"'
     alt-s = 'exec-and-forget open -a "Warp"'
     alt-c = 'exec-and-forget open -a "Cursor"'
