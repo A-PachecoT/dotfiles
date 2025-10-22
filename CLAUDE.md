@@ -30,6 +30,9 @@ for sid in $((aerospace list-workspaces --monitor focused --empty no; aerospace 
 ```
 
 ### Audio Priority System
+
+**For comprehensive documentation, see [docs/audio-priority-system.md](docs/audio-priority-system.md)**
+
 HammerSpoon automatically manages audio device switching with two modes:
 
 **HEADPHONE MODE** (default):
@@ -46,6 +49,8 @@ Features:
 - SketchyBar shows current mode with icon (󰋋 headphone / 󰓃 speaker) and device name on hover
 - Click the SketchyBar icon to toggle modes
 
+See the [comprehensive audio system documentation](docs/audio-priority-system.md) for architecture details, debugging, troubleshooting, and implementation specifics.
+
 ## Essential Commands
 
 ### Dotfiles Management
@@ -58,6 +63,9 @@ Features:
 
 # Reinstall after updates
 ./install.sh restow
+
+# Setup global Jupyter environment
+./install.sh jupyter
 
 # Individual package management
 stow aerospace        # Install specific package
@@ -104,6 +112,54 @@ Cmd+Alt+0
 
 # Run original audio priority script manually (backup)
 ./scripts/audio-priority.sh
+```
+
+### Python & Jupyter Management
+
+This dotfiles repository includes automatic setup for a **global Jupyter environment** using `uv` (per global CLAUDE.md instructions).
+
+**Setup:**
+```bash
+# Create global Jupyter environment (done automatically during install)
+./install.sh jupyter
+
+# Or setup manually
+cd ~ && uv venv .jupyter-env
+uv pip install --python ~/.jupyter-env/bin/python ipykernel jupyter jupyterlab pandas numpy matplotlib seaborn scikit-learn
+~/.jupyter-env/bin/python -m ipykernel install --user --name=jupyter-global --display-name="Python (Global Jupyter)"
+```
+
+**Usage:**
+```bash
+# Activate environment for terminal work
+source ~/.jupyter-env/bin/activate
+
+# Install additional packages
+uv pip install --python ~/.jupyter-env/bin/python <package-name>
+
+# In VS Code: Select kernel "Python (Global Jupyter)" for notebooks
+# Cmd+Shift+P → "Notebook: Select Notebook Kernel" → "jupyter-global"
+```
+
+**Architecture:**
+- **Location**: `~/.jupyter-env/` (global environment, outside dotfiles repo)
+- **Kernel**: Registered as `jupyter-global` in Jupyter/VS Code
+- **Packages**: Pre-installed with common data science libraries (pandas, numpy, matplotlib, seaborn, scikit-learn)
+- **Purpose**: Single environment for all notebooks across projects (unless project-specific dependencies needed)
+
+**When to use project-specific environments:**
+Create a local `.venv` in your project directory when:
+- Project has conflicting dependency versions
+- Project requires specific Python version
+- Project needs isolated environment for deployment
+
+```bash
+# Project-specific environment
+cd /path/to/project
+uv venv
+source .venv/bin/activate
+uv pip install ipykernel <other-packages>
+python -m ipykernel install --user --name=project-name
 ```
 
 ## Configuration Flow

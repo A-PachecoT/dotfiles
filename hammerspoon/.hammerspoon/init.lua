@@ -78,3 +78,6 @@ print("  Cmd+Shift+M      - Toggle microphone mute")
 print("  Cmd+Alt+C        - Center current window")
 print("  Alt+Shift+A      - Capture screenshot")
 print("  Cmd+Shift+R      - Reload SketchyBar")
+
+-- TuneUp - Audio Profile Manager
+tuneup = require("tuneup")
