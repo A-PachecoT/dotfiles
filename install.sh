@@ -114,13 +114,55 @@ restow_packages() {
     success "All packages restowed"
 }
 
+# Function to setup Jupyter environment
+setup_jupyter() {
+    info "Setting up global Jupyter environment..."
+
+    # Check if uv is installed
+    if ! command -v uv &> /dev/null; then
+        warning "uv is not installed. Install it with: curl -LsSf https://astral.sh/uv/install.sh | sh"
+        return 1
+    fi
+
+    # Create global Jupyter environment
+    JUPYTER_ENV="$HOME/.jupyter-env"
+
+    if [[ -d "$JUPYTER_ENV" ]]; then
+        info "Jupyter environment already exists at $JUPYTER_ENV"
+        read -p "Recreate it? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            rm -rf "$JUPYTER_ENV"
+        else
+            info "Skipping Jupyter setup"
+            return 0
+        fi
+    fi
+
+    info "Creating virtual environment at $JUPYTER_ENV..."
+    cd "$HOME" && uv venv "$JUPYTER_ENV"
+
+    info "Installing Jupyter and common data science packages..."
+    uv pip install --python "$JUPYTER_ENV/bin/python" \
+        ipykernel jupyter jupyterlab \
+        pandas numpy matplotlib seaborn scikit-learn
+
+    info "Registering Jupyter kernel..."
+    "$JUPYTER_ENV/bin/python" -m ipykernel install --user --name=jupyter-global --display-name="Python (Global Jupyter)"
+
+    success "Jupyter environment setup completed!"
+    info "The kernel 'jupyter-global' is now available in VS Code and Jupyter"
+    info "To activate: source ~/.jupyter-env/bin/activate"
+    info "To install more packages: uv pip install --python ~/.jupyter-env/bin/python <package>"
+}
+
 # Main installation function
 install_dotfiles() {
     info "Starting dotfiles installation..."
-    
+
     # Create backup
     backup_configs
-    
+
     # Stow each package
     for package in "${PACKAGES[@]}"; do
         if [[ -d "$package" ]]; then
@@ -129,20 +171,31 @@ install_dotfiles() {
             warning "Package directory '$package' not found, skipping..."
         fi
     done
-    
+
+    # Setup Jupyter environment
+    echo ""
+    read -p "Do you want to setup the global Jupyter environment? (Y/n): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        setup_jupyter
+    else
+        info "Skipping Jupyter setup"
+    fi
+
     success "Dotfiles installation completed!"
     info "Your configurations are now symlinked to ~/dotfiles/"
 }
 
 # Show usage
 usage() {
-    echo "Usage: $0 [install|unstow|restow|backup]"
+    echo "Usage: $0 [install|unstow|restow|backup|jupyter]"
     echo ""
     echo "Commands:"
     echo "  install  - Install dotfiles using stow (default)"
     echo "  unstow   - Remove all symlinks"
     echo "  restow   - Reinstall all symlinks (useful after updates)"
     echo "  backup   - Backup existing configurations only"
+    echo "  jupyter  - Setup global Jupyter environment with uv"
     echo ""
     echo "Available packages: ${PACKAGES[*]}"
 }
@@ -160,6 +213,9 @@ case "${1:-install}" in
         ;;
     "backup")
         backup_configs
+        ;;
+    "jupyter")
+        setup_jupyter
         ;;
     "help"|"-h"|"--help")
         usage

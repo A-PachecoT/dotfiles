@@ -181,6 +181,31 @@ Each package directory must mirror the home directory structure:
 - **skhd/**: DEPRECATED - App launch shortcuts now handled directly by AeroSpace for better integration and consistency across empty/occupied workspaces. The skhd service has been disabled from startup (LaunchAgent renamed to `.disabled`).
 - **yabai/**: NOT IN USE - AeroSpace has replaced yabai as the window manager. The yabai service has been disabled from startup (LaunchAgent renamed to `.disabled`).
 
+## Deprecated Projects (deprecated/)
+
+Projects in `deprecated/` are archived experiments that didn't reach production due to technical limitations or alternative solutions being superior.
+
+### TuneUp (Audio Profile Manager)
+**Status:** DEPRECATED (22 Oct 2024)
+**Reason:** macOS security restrictions prevent system-wide audio processing without Audio Unit extensions
+
+**What it was:** An attempt to create a system-wide audio equalizer with profile management (Normal, Bass Boosted, etc.) integrated with HammerSpoon and SketchyBar.
+
+**What was completed:**
+- ✅ Profile management system with SketchyBar widget
+- ✅ HammerSpoon integration with hotkey (`Cmd+Alt+E`)
+- ✅ Persistence and state management
+- ✅ Swift AVAudioEngine implementation (10-band EQ)
+
+**Why it failed:**
+- ❌ AVAudioEngine cannot process system audio (only app-generated audio)
+- ❌ Real system-wide EQ requires Audio Unit v3 extension (weeks of work + $99/year Apple Developer account)
+- ❌ Alternative integration with eqMac blocked (no API, buggy, security concerns)
+
+**Lesson learned:** Always research macOS sandboxing and security limitations BEFORE implementing audio/system-level features. Use existing solutions (eqMac, SoundSource) rather than reinventing the wheel.
+
+**Full documentation:** `deprecated/TuneUp/DEPRECATED.md`
+
 ## Startup Configuration
 
 ### AeroSpace-Managed Startup (aerospace/.aerospace.toml)
