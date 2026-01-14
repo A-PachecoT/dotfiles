@@ -1,6 +1,7 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+PHILOSOPHY: I'm a POWER user of terminal; Keyboard shortcuts>>mouse
 
 ## Repository Architecture
 
