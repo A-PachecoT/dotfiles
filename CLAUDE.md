@@ -51,6 +51,91 @@ Features:
 
 See the [comprehensive audio system documentation](docs/audio-priority-system.md) for architecture details, debugging, troubleshooting, and implementation specifics.
 
+## Hardware Setup
+
+### Physical Configuration
+
+**MacBook Pro** (USB-C only)
+- Connected to **Hub 1** (USB-C adapter directly on Mac)
+  - Hub 2 (desk hub) → contains fixed desk peripherals
+    - **fifine Microphone** (USB-A, 100mA) - **⚠️ HAS PHYSICAL VOLUME KNOB**
+    - **Logitech PRO Gaming Keyboard** (USB-A)
+    - **HDMI connection** for monitor
+  - Other USB-C devices can connect directly to Hub 1
+
+**Monitor:**
+- **VG27VQ** (DisplayPort connection)
+
+### USB Hub Topology
+
+```
+MacBook Pro (USB-C ports)
+    ↓
+Hub 1 (USB-C adapter on Mac)
+    ↓
+Hub 2 (desk hub - contains peripherals)
+    ├─ fifine Microphone (USB-A)
+    ├─ Logitech Keyboard (USB-A)
+    └─ HDMI (monitor)
+```
+
+**Power Requirements:**
+- fifine: 100mA required, 500mA available
+- Hub 2 devices: up to 500mA each
+- **Important**: Hubs in chain (hub → hub) can cause USB bandwidth/power issues if not powered externally
+
+### Known Hardware Issues & Solutions
+
+**1. fifine Microphone Not Working:**
+- ✅ **FIRST CHECK**: Physical volume knob on the fifine device itself (common oversight!)
+- Check macOS permissions: System Settings → Privacy & Security → Microphone
+- Verify device detection: `system_profiler SPUSBDataType | grep -A 10 "fifine"`
+- Reset USB audio driver: `sudo pkill -9 usbaudiod && sudo killall coreaudiod`
+- Try different USB port on Mac (left vs right side use different controllers)
+- If all else fails: Connect fifine directly to Mac with USB-A to USB-C adapter (bypass hubs)
+
+**2. Microsoft Teams Audio Device Interference:**
+- Teams Audio driver can cause buffer overruns on ALL microphones
+- Symptoms: `rec WARN coreaudio: coreaudio: unhandled buffer overrun. Data discarded.`
+- Solution: Remove corrupted audio preferences and restart Core Audio:
+  ```bash
+  rm -f ~/Library/Preferences/com.apple.audio.DeviceSettings.plist
+  sudo killall coreaudiod
+  ```
+- Disable in apps: Discord → Settings → Voice & Video → Audio Subsystem: Legacy
+
+**3. Hub Chain Issues:**
+- Symptoms: USB devices disconnect randomly, slow data transfer, microphone dropouts
+- Cause: Hub 1 → Hub 2 chain without sufficient power
+- Solution: Use powered USB hub (with external power adapter) for Hub 2
+- Alternative: Reduce number of devices on Hub 2, connect high-bandwidth devices directly to Hub 1
+
+**4. MacBook Pro Microphone (Lid Closed):**
+- MacBook Pro internal microphone does NOT work when lid is closed
+- This is expected behavior - use fifine or external mic instead
+
+### Hardware Troubleshooting Commands
+
+```bash
+# Check all USB devices and their power consumption
+system_profiler SPUSBDataType
+
+# Check all audio input devices
+hs -c "for i, device in ipairs(hs.audiodevice.allInputDevices()) do print(device:name()) end"
+
+# Check current default input device
+hs -c "print(hs.audiodevice.defaultInputDevice():name())"
+
+# Reset audio system completely
+rm -f ~/Library/Preferences/com.apple.audio.*.plist
+sudo killall coreaudiod
+hs -c "hs.reload()"
+
+# Check for USB audio driver issues
+ps aux | grep usbaudiod
+log show --predicate 'subsystem == "com.apple.audio"' --last 5m
+```
+
 ## Essential Commands
 
 ### Dotfiles Management
@@ -114,6 +199,156 @@ Cmd+Alt+0
 ./scripts/audio-priority.sh
 ```
 
+### Zellij (Terminal Multiplexer)
+
+Modern terminal multiplexer optimized for Claude Code workflow with vim keybindings.
+
+**Installation:**
+```bash
+brew install zellij yazi
+./install.sh restow  # Symlink zellij config
+```
+
+**Quick Start:**
+```bash
+# Start with dev layout (CC left + Editor right)
+zjdev
+
+# Start project session (auto-names from directory)
+zjp
+
+# Create named session with layout
+zjnew my-project dev
+
+# List/attach sessions
+zjl                    # List sessions
+zja my-project         # Attach to session
+```
+
+**Layouts Available:**
+- `dev` - Claude Code (40%) + Editor (60%) + floating yazi
+- `project` - 3 tabs: Dev, Terminal, Git
+- `fullstack` - 4 tabs: AI, Frontend, Backend, Services
+- `default` - Simple single pane
+
+**Key Bindings (Normal Mode):**
+| Key | Action |
+|-----|--------|
+| `Alt+h/j/k/l` | Navigate panes (vim style) |
+| `Alt+1-9` | Switch tabs (workspaces) |
+| `Alt+n` | New tab |
+| `Alt+w` | Close tab |
+| `Alt+d` | Split right |
+| `Alt+D` | Split down |
+| `Alt+x` | Close pane |
+| `Alt+z` | Zoom/fullscreen pane |
+| `Alt+f` | Toggle floating pane (yazi) |
+| `Alt+r` | Resize mode |
+| `Alt+s` | Scroll mode |
+| `Alt+/` | Search |
+| `Ctrl+Alt+d` | Detach session |
+
+**Modes:**
+- `Alt+p` → Pane mode (move, swap, rename panes)
+- `Alt+r` → Resize mode (h/j/k/l to resize)
+- `Alt+s` → Scroll mode (vim-like: j/k/d/u/g/G)
+- `Alt+o` → Session mode (detach, session manager)
+
+**Session Persistence:**
+Sessions survive terminal close but NOT macOS restart. To restore after restart:
+```bash
+# Sessions are named, just reattach or recreate
+zja my-project                    # Attach if exists
+zjnew my-project project          # Create with layout if not
+```
+
+**Save/Load Custom Layouts:**
+```bash
+# Export current layout
+zellij action dump-layout > ~/.config/zellij/layouts/custom.kdl
+
+# Load custom layout
+zellij --layout custom --session my-session
+```
+
+### Ghostty + tmux (Power User Setup)
+
+For running multiple Claude Code instances in parallel (like Anthropic engineers do), use Ghostty terminal with tmux.
+
+**Why this combo:**
+- **Ghostty**: GPU-accelerated, native macOS, fast, created by Mitchell Hashimoto
+- **tmux**: Session persistence across restarts, plugins for auto-save/restore
+
+**Quick Start:**
+```bash
+# Start tmux
+tmux
+
+# Or attach to existing session
+tmux attach -t main
+
+# Create named session
+tmux new -s project-name
+```
+
+**tmux Key Bindings (prefix: Ctrl+a):**
+| Key | Action |
+|-----|--------|
+| `Ctrl+a d` | Split right |
+| `Ctrl+a D` | Split down |
+| `Ctrl+a h/j/k/l` | Navigate panes (vim) |
+| `Ctrl+a z` | Zoom pane |
+| `Ctrl+a c` | New window |
+| `Ctrl+a 1-9` | Switch window |
+| `Ctrl+a s` | Session picker |
+| `Ctrl+a r` | Reload config |
+
+**Without prefix (Alt shortcuts):**
+| Key | Action |
+|-----|--------|
+| `Alt+h/j/k/l` | Navigate panes |
+| `Alt+1-9` | Switch windows |
+
+**Ghostty Key Bindings:**
+| Key | Action |
+|-----|--------|
+| `Ctrl+h/j/k/l` | Navigate splits |
+| `Cmd+d` | Split right |
+| `Cmd+Shift+d` | Split down |
+| `Cmd+1-9` | Switch tabs |
+| `Cmd+Shift+Enter` | Zoom split |
+
+**Session Persistence:**
+Sessions auto-save every 15 minutes and auto-restore on tmux start (via tmux-continuum plugin).
+
+```bash
+# Manual save
+Ctrl+a, Ctrl+s
+
+# Manual restore
+Ctrl+a, Ctrl+r
+```
+
+**Multi-Project Workflow (Boris Cherny style):**
+```bash
+# Create worktrees for each project
+git worktree add ../project-1 feature-1
+git worktree add ../project-2 feature-2
+
+# In tmux, create windows for each
+tmux new-window -n "proj1" -c "../project-1"
+tmux new-window -n "proj2" -c "../project-2"
+
+# Run Claude in each window
+# Use Alt+1, Alt+2 to switch between projects
+```
+
+**First time setup:**
+```bash
+# Install plugins (run inside tmux)
+Ctrl+a, I  # Capital I - installs all plugins
+```
+
 ### Python & Jupyter Management
 
 This dotfiles repository includes automatic setup for a **global Jupyter environment** using `uv` (per global CLAUDE.md instructions).
@@ -174,6 +409,9 @@ python -m ipykernel install --user --name=project-name
 Each package directory must mirror the home directory structure:
 - `aerospace/.aerospace.toml` → `~/.aerospace.toml`
 - `sketchybar/.config/sketchybar/` → `~/.config/sketchybar/`
+- `zellij/.config/zellij/` → `~/.config/zellij/`
+- `ghostty/.config/ghostty/` → `~/.config/ghostty/`
+- `tmux/.tmux.conf` → `~/.tmux.conf`
 - `git/.gitconfig` → `~/.gitconfig`
 
 ## Deprecated Packages
