@@ -346,6 +346,66 @@ tmux
 # Press: Ctrl+b I  (Capital I - installs all plugins)
 ```
 
+### Neovim + LazyVim (Editor)
+
+Default editor for terminal workflows. LazyVim provides IDE-like features with inline markdown rendering.
+
+**Installation:**
+```bash
+brew install neovim node  # node required for some plugins
+./install.sh restow       # Symlink nvim config
+nvim                      # First launch installs plugins (~30 sec)
+```
+
+**Aliases:**
+```bash
+nv              # nvim
+vim             # nvim
+vi              # nvim
+```
+
+**Integration with Yazi:**
+When you press `Enter` on a file in yazi, it opens in neovim (via `$EDITOR`).
+
+**Key Bindings (Space = Leader):**
+| Key | Action |
+|-----|--------|
+| `Space` | Show which-key menu (all commands) |
+| `Space mr` | Toggle markdown rendering |
+| `Space e` | File explorer (neo-tree) |
+| `Space ff` | Find files (telescope) |
+| `Space fg` | Live grep |
+| `Space /` | Search in buffer |
+| `Space w` | Save file |
+| `Space q` | Quit |
+| `Ctrl+h/j/k/l` | Navigate windows |
+| `Ctrl+d/u` | Scroll down/up (centered) |
+
+**Markdown Rendering:**
+Markdown files render inline with:
+- Colored headers with icons (󰲡 󰲣 󰲥)
+- Styled code blocks with borders
+- Bullet icons (● ○ ◆ ◇)
+- Checkboxes (󰄱 unchecked, 󰱒 checked)
+- Tables with borders
+- GitHub-style callouts (`[!NOTE]`, `[!TIP]`, `[!WARNING]`)
+
+Toggle rendering: `Space mr`
+
+**Plugin Management:**
+```bash
+# In neovim
+:Lazy              # Open plugin manager
+:Lazy sync         # Update all plugins
+:Lazy clean        # Remove unused plugins
+:Lazy health       # Check plugin status
+```
+
+**Config Location:**
+- `nvim/.config/nvim/lua/config/options.lua` - Editor settings
+- `nvim/.config/nvim/lua/config/keymaps.lua` - Custom keybindings
+- `nvim/.config/nvim/lua/plugins/init.lua` - Plugin configuration
+
 ### Python & Jupyter Management
 
 This dotfiles repository includes automatic setup for a **global Jupyter environment** using `uv` (per global CLAUDE.md instructions).
@@ -408,6 +468,7 @@ Each package directory must mirror the home directory structure:
 - `sketchybar/.config/sketchybar/` → `~/.config/sketchybar/`
 - `zellij/.config/zellij/` → `~/.config/zellij/`
 - `ghostty/.config/ghostty/` → `~/.config/ghostty/`
+- `nvim/.config/nvim/` → `~/.config/nvim/`
 - `tmux/.tmux.conf` → `~/.tmux.conf`
 - `git/.gitconfig` → `~/.gitconfig`
 
