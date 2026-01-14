@@ -31,7 +31,7 @@ if ! command -v stow &> /dev/null; then
 fi
 
 # Available packages
-PACKAGES=("aerospace" "sketchybar" "git" "zsh" "skhd")
+PACKAGES=("aerospace" "sketchybar" "git" "zsh" "skhd" "zellij" "ghostty" "tmux")
 
 # Function to backup existing configs
 backup_configs() {
@@ -54,6 +54,15 @@ backup_configs() {
                 ;;
             "skhd")
                 [[ -f ~/.skhdrc ]] && cp ~/.skhdrc backup/ && info "Backed up .skhdrc"
+                ;;
+            "zellij")
+                [[ -d ~/.config/zellij ]] && cp -r ~/.config/zellij backup/ && info "Backed up zellij config"
+                ;;
+            "ghostty")
+                [[ -d ~/.config/ghostty ]] && cp -r ~/.config/ghostty backup/ && info "Backed up ghostty config"
+                ;;
+            "tmux")
+                [[ -f ~/.tmux.conf ]] && cp ~/.tmux.conf backup/ && info "Backed up .tmux.conf"
                 ;;
         esac
     done
@@ -80,6 +89,9 @@ stow_package() {
                 ;;
             "skhd")
                 [[ -f ~/.skhdrc ]] && mv ~/.skhdrc ~/.skhdrc.bak
+                ;;
+            "tmux")
+                [[ -f ~/.tmux.conf ]] && mv ~/.tmux.conf ~/.tmux.conf.bak
                 ;;
         esac
         
