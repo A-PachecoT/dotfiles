@@ -1,0 +1,86 @@
+// Fullstack Layout - For full-stack development
+// Tab 1: Claude Code (AI assistance)
+// Tab 2: Frontend
+// Tab 3: Backend
+// Tab 4: Database/Services
+//
+// Usage:
+//   zellij --layout fullstack --session my-app
+
+layout {
+    // =========================================================================
+    // TAB 1: AI Assistant
+    // =========================================================================
+    tab name="AI" focus=true {
+        pane size=1 borderless=true {
+            plugin location="compact-bar"
+        }
+        pane split_direction="vertical" {
+            pane size="50%" {
+                command "claude"
+                name "Claude Code"
+            }
+            pane size="50%" name="Notes/Scratch"
+        }
+    }
+
+    // =========================================================================
+    // TAB 2: Frontend
+    // =========================================================================
+    tab name="Frontend" {
+        pane size=1 borderless=true {
+            plugin location="compact-bar"
+        }
+        pane split_direction="vertical" {
+            pane size="60%" name="Frontend Code"
+            pane size="40%" split_direction="horizontal" {
+                pane name="Dev Server"
+                pane name "Tests"
+            }
+        }
+    }
+
+    // =========================================================================
+    // TAB 3: Backend
+    // =========================================================================
+    tab name="Backend" {
+        pane size=1 borderless=true {
+            plugin location="compact-bar"
+        }
+        pane split_direction="vertical" {
+            pane size="60%" name="Backend Code"
+            pane size="40%" split_direction="horizontal" {
+                pane name="Server"
+                pane name="Logs"
+            }
+        }
+    }
+
+    // =========================================================================
+    // TAB 4: Services
+    // =========================================================================
+    tab name="Services" {
+        pane size=1 borderless=true {
+            plugin location="compact-bar"
+        }
+        pane split_direction="vertical" {
+            pane size="50%" name="Database"
+            pane size="50%" split_direction="horizontal" {
+                pane name="Docker"
+                pane name="Other"
+            }
+        }
+    }
+
+    // Floating file browser
+    floating_panes {
+        pane {
+            command "yazi"
+            name "Files"
+            width "60%"
+            height "70%"
+            x "20%"
+            y "15%"
+        }
+    }
+}

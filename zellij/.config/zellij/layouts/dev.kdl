@@ -1,0 +1,43 @@
+// Development Layout
+// Left: Claude Code (40%) | Right: Editor (60%)
+// Toggle floating yazi with Alt+f
+//
+// Usage:
+//   zellij --layout dev
+//   zellij --layout dev --session proyecto-x
+
+layout {
+    // Compact bar at top showing tabs
+    pane size=1 borderless=true {
+        plugin location="compact-bar"
+    }
+
+    // Main content area
+    pane split_direction="vertical" {
+        // Left panel - Claude Code (40%)
+        pane size="40%" {
+            command "claude"
+            name "Claude Code"
+        }
+
+        // Right panel - Editor (60%)
+        pane size="60%" {
+            // Starts with shell, user can open editor manually
+            // or change command to "hx" / "nvim" / "code ."
+            name "Editor"
+        }
+    }
+
+    // Floating pane for file browser (hidden by default)
+    // Toggle with Alt+f
+    floating_panes {
+        pane {
+            command "yazi"
+            name "Files"
+            width "60%"
+            height "70%"
+            x "20%"
+            y "15%"
+        }
+    }
+}

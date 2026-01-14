@@ -1,0 +1,12 @@
+// Default Layout - Simple single pane
+// Just a clean terminal with compact bar
+//
+// Usage:
+//   zellij --layout default
+
+layout {
+    pane size=1 borderless=true {
+        plugin location="compact-bar"
+    }
+    pane
+}
