@@ -1,0 +1,126 @@
+# Ghostty Configuration
+# Optimized for Claude Code power user workflow
+
+# =============================================================================
+# APPEARANCE
+# =============================================================================
+
+# Tokyo Night theme colors
+background = 1a1b26
+foreground = c0caf5
+selection-background = 33467c
+selection-foreground = c0caf5
+
+# Palette (Tokyo Night)
+palette = 0=#15161e
+palette = 1=#f7768e
+palette = 2=#9ece6a
+palette = 3=#e0af68
+palette = 4=#7aa2f7
+palette = 5=#bb9af7
+palette = 6=#7dcfff
+palette = 7=#a9b1d6
+palette = 8=#414868
+palette = 9=#f7768e
+palette = 10=#9ece6a
+palette = 11=#e0af68
+palette = 12=#7aa2f7
+palette = 13=#bb9af7
+palette = 14=#7dcfff
+palette = 15=#c0caf5
+
+# Cursor
+cursor-color = c0caf5
+cursor-style = block
+cursor-style-blink = false
+
+# Font
+font-family = JetBrainsMono Nerd Font
+font-size = 14
+font-feature = calt
+font-feature = liga
+
+# Window
+window-padding-x = 10
+window-padding-y = 10
+window-decoration = true
+macos-titlebar-style = hidden
+window-theme = ghostty
+
+# Opacity (1.0 = fully opaque)
+background-opacity = 0.95
+
+# =============================================================================
+# BEHAVIOR
+# =============================================================================
+
+# Shell
+command = /bin/zsh
+
+# Scrollback (50k lines for verbose Claude output)
+scrollback-limit = 50000
+
+# Mouse
+mouse-hide-while-typing = true
+copy-on-select = clipboard
+
+# macOS specific
+macos-option-as-alt = true
+
+# Confirm before closing with running processes
+confirm-close-surface = false
+
+# =============================================================================
+# KEYBINDINGS - Vim Style Navigation
+# =============================================================================
+
+# tmux pane navigation (Cmd+hjkl sends Ctrl+b + key)
+keybind = cmd+h=text:\x02h
+keybind = cmd+j=text:\x02j
+keybind = cmd+k=text:\x02k
+keybind = cmd+l=text:\x02l
+
+# tmux commands (Cmd sends Ctrl+b + key)
+keybind = cmd+d=text:\x02d
+keybind = cmd+shift+d=text:\x02D
+keybind = cmd+z=text:\x02z
+keybind = cmd+x=text:\x02x
+keybind = cmd+w=unbind
+
+# Split resize
+keybind = cmd+ctrl+h=resize_split:left,20
+keybind = cmd+ctrl+l=resize_split:right,20
+keybind = cmd+ctrl+k=resize_split:up,20
+keybind = cmd+ctrl+j=resize_split:down,20
+
+# Tab management
+keybind = cmd+t=new_tab
+keybind = cmd+w=close_surface
+keybind = cmd+1=goto_tab:1
+keybind = cmd+2=goto_tab:2
+keybind = cmd+3=goto_tab:3
+keybind = cmd+4=goto_tab:4
+keybind = cmd+5=goto_tab:5
+keybind = cmd+6=goto_tab:6
+keybind = cmd+7=goto_tab:7
+keybind = cmd+8=goto_tab:8
+keybind = cmd+9=goto_tab:9
+
+# Quick actions
+keybind = cmd+shift+enter=toggle_split_zoom
+keybind = cmd+enter=toggle_fullscreen
+
+# Clear screen (Cmd+Shift+k to avoid conflict with tmux navigation)
+keybind = cmd+shift+k=clear_screen
+
+# =============================================================================
+# CLIPBOARD & NOTIFICATIONS
+# =============================================================================
+
+# Clipboard (important for Claude Code image paste)
+clipboard-read = allow
+clipboard-write = allow
+clipboard-paste-protection = false
+
+# Desktop notifications (for knowing when Claude needs input)
+desktop-notifications = true
