@@ -170,8 +170,8 @@ tn() {
     tmux select-pane -t "$session_name":1.1
     tmux split-window -v -t "$session_name" -c "$project_path" -p 20
 
-    # Start Claude Code in right pane
-    tmux send-keys -t "$session_name":1.3 "claude" Enter
+    # Start Claude Code in right pane (using cl alias)
+    tmux send-keys -t "$session_name":1.3 "cl" Enter
 
     # Start yazi in top-left pane
     tmux send-keys -t "$session_name":1.1 "yazi" Enter
