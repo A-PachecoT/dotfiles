@@ -173,7 +173,7 @@ run = 'move-node-to-workspace 2'
     alt-shift-s = 'exec-and-forget open -a "Warp"'
     alt-c = 'exec-and-forget open -a "Cursor"'
     cmd-alt-c = 'exec-and-forget open -n -a "Cursor" --args --new-window'
-    cmd-alt-s = 'exec-and-forget open -n -a "iTerm"'
+    cmd-alt-s = 'exec-and-forget /Users/styreep/dotfiles/scripts/open-floating-terminal.sh'
     
     # Workspace navigation
     alt-tab = 'workspace-back-and-forth'
