@@ -105,3 +105,91 @@ alias lt="eza --icons --git --tree --level=2"
 # cat with syntax highlighting and Git integration
 alias cat="bat"
 alias catn="bat --style=plain"  # cat without line numbers/git gutter
+
+# Added by Antigravity
+export PATH="/Users/styreep/.antigravity/antigravity/bin:$PATH"
+
+# bun completions
+[ -s "/Users/styreep/.bun/_bun" ] && source "/Users/styreep/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# Android SDK
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export PATH=$PATH:$ANDROID_HOME/emulator
+export PATH=$PATH:$ANDROID_HOME/platform-tools
+export PATH=$PATH:$ANDROID_HOME/tools
+export PATH=$PATH:$ANDROID_HOME/tools/bin
+
+# ============================================================
+# tmux - Power User Terminal Multiplexer
+# ============================================================
+
+alias tm="tmux"
+alias tma="tmux attach -t"
+alias tml="tmux list-sessions"
+alias tmk="tmux kill-session -t"
+alias tmka="tmux kill-server"
+
+# Resume project session
+# Usage: tr [path]
+tr() {
+    local project_path="${1:-$PWD}"
+    local session_name="$(basename $project_path)"
+
+    cd "$project_path" || return 1
+
+    if tmux has-session -t "$session_name" 2>/dev/null; then
+        tmux attach -t "$session_name"
+    else
+        echo "No session '$session_name'. Use 'tn' to create new."
+    fi
+}
+
+# New project with dev layout
+# Layout: Left (60%): Editor top + Console bottom | Right (40%): Claude Code
+# Usage: tn [path]
+tn() {
+    local project_path="${1:-$PWD}"
+    local session_name="$(basename $project_path)"
+
+    cd "$project_path" || return 1
+
+    # Kill existing session if any
+    tmux kill-session -t "$session_name" 2>/dev/null
+
+    # Create session with left pane (60%)
+    tmux new-session -d -s "$session_name" -c "$project_path"
+
+    # Split right for Claude Code (40%)
+    tmux split-window -h -t "$session_name" -c "$project_path" -p 40
+
+    # Split left pane vertically (editor top 80%, console bottom 20%)
+    tmux select-pane -t "$session_name":1.1
+    tmux split-window -v -t "$session_name" -c "$project_path" -p 20
+
+    # Start Claude Code in right pane
+    tmux send-keys -t "$session_name":1.3 "claude" Enter
+
+    # Start yazi in top-left pane
+    tmux send-keys -t "$session_name":1.1 "yazi" Enter
+
+    # Focus on Claude Code pane
+    tmux select-pane -t "$session_name":1.3
+
+    tmux attach -t "$session_name"
+}
+
+# Project picker with fzf
+tp() {
+    local project=$(find ~/projects ~/cofoundy/projects -maxdepth 2 -type d -name ".git" 2>/dev/null | sed 's/\/.git$//' | fzf --prompt="Project: ")
+    [[ -n "$project" ]] && tr "$project"
+}
+
+# New project picker with fzf
+tnp() {
+    local project=$(find ~/projects ~/cofoundy/projects -maxdepth 2 -type d -name ".git" 2>/dev/null | sed 's/\/.git$//' | fzf --prompt="New Project: ")
+    [[ -n "$project" ]] && tn "$project"
+}
