@@ -34,6 +34,7 @@ brew install stow
 ### 🔧 Development Tools
 - **Git**: Version control configuration
 - **Zsh**: Shell configuration
+- **Python/Jupyter**: Global environment with `uv` for notebooks
 
 ## 🏗️ Structure
 
@@ -72,6 +73,9 @@ brew install stow
 
 # Backup existing configs only
 ./install.sh backup
+
+# Setup global Jupyter environment
+./install.sh jupyter
 ```
 
 ## 🔗 How It Works
@@ -155,6 +159,51 @@ ls -la ~/.aerospace.toml ~/.config/sketchybar ~/.gitconfig
 - **AeroSpace**: Window manager
 - **SketchyBar**: Status bar
 - **MonoLisa**: Font (optional but recommended)
+- **uv**: Python package manager (for Jupyter setup)
+
+## 🐍 Python & Jupyter Setup
+
+This dotfiles includes automatic setup for a global Jupyter environment using `uv`.
+
+### Quick Start
+```bash
+# Setup global environment (automatically includes common data science packages)
+./install.sh jupyter
+
+# Use in VS Code
+# 1. Open any .ipynb file
+# 2. Select kernel: "Python (Global Jupyter)"
+# 3. Start coding!
+
+# Install additional packages
+uv pip install --python ~/.jupyter-env/bin/python <package-name>
+```
+
+### What's Included
+- **Location**: `~/.jupyter-env/`
+- **Kernel**: `jupyter-global` (available in VS Code and Jupyter)
+- **Pre-installed packages**:
+  - `ipykernel`, `jupyter`, `jupyterlab`
+  - `pandas`, `numpy`, `matplotlib`, `seaborn`
+  - `scikit-learn`
+
+### When to Use
+- ✅ **Use global env** for general data analysis and learning
+- ⚠️ **Use project env** when:
+  - Project has specific version requirements
+  - Need isolated dependencies for deployment
+  - Working with conflicting package versions
+
+```bash
+# Create project-specific environment
+cd /path/to/project
+uv venv
+source .venv/bin/activate
+uv pip install ipykernel <other-packages>
+python -m ipykernel install --user --name=project-name
+```
+
+See [CLAUDE.md](CLAUDE.md#python--jupyter-management) for detailed documentation.
 
 ## 🎨 Customization
 

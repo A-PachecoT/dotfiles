@@ -271,82 +271,78 @@ zellij action dump-layout > ~/.config/zellij/layouts/custom.kdl
 zellij --layout custom --session my-session
 ```
 
-### Ghostty + tmux (Power User Setup)
+### Ghostty + tmux (Power User Setup) [RECOMMENDED]
 
-For running multiple Claude Code instances in parallel (like Anthropic engineers do), use Ghostty terminal with tmux.
+Primary workflow for Claude Code development. Ghostty intercepts Cmd keys and sends them to tmux, allowing shortcuts to work even inside Claude Code.
 
-**Why this combo:**
-- **Ghostty**: GPU-accelerated, native macOS, fast, created by Mitchell Hashimoto
-- **tmux**: Session persistence across restarts, plugins for auto-save/restore
-
-**Quick Start:**
+**Installation:**
 ```bash
-# Start tmux
-tmux
-
-# Or attach to existing session
-tmux attach -t main
-
-# Create named session
-tmux new -s project-name
+brew install --cask ghostty
+brew install tmux
+./install.sh restow
 ```
 
-**tmux Key Bindings (prefix: Ctrl+a):**
-| Key | Action |
-|-----|--------|
-| `Ctrl+a d` | Split right |
-| `Ctrl+a D` | Split down |
-| `Ctrl+a h/j/k/l` | Navigate panes (vim) |
-| `Ctrl+a z` | Zoom pane |
-| `Ctrl+a c` | New window |
-| `Ctrl+a 1-9` | Switch window |
-| `Ctrl+a s` | Session picker |
-| `Ctrl+a r` | Reload config |
+**Project Commands:**
+```bash
+tn              # New project with dev layout (current dir)
+tn ~/path       # New project at specific path
+tr              # Resume existing project session
+tp              # Project picker with fzf → resume
+tnp             # Project picker with fzf → new
+```
 
-**Without prefix (Alt shortcuts):**
-| Key | Action |
-|-----|--------|
-| `Alt+h/j/k/l` | Navigate panes |
-| `Alt+1-9` | Switch windows |
+**Dev Layout (`tn` command):**
+```
+┌─────────────────────┬────────────────┐
+│   yazi (files)      │                │
+│       80%           │  Claude Code   │
+├─────────────────────┤     (40%)      │
+│   Console  20%      │                │
+└─────────────────────┴────────────────┘
+        (60%)
+```
 
-**Ghostty Key Bindings:**
+**Ghostty Key Bindings (work inside Claude Code!):**
 | Key | Action |
 |-----|--------|
-| `Ctrl+h/j/k/l` | Navigate splits |
+| `Cmd+h/j/k/l` | Navigate panes |
 | `Cmd+d` | Split right |
 | `Cmd+Shift+d` | Split down |
-| `Cmd+1-9` | Switch tabs |
-| `Cmd+Shift+Enter` | Zoom split |
+| `Cmd+z` | Zoom pane |
+| `Cmd+x` | Close pane |
+| `Cmd+Shift+k` | Clear screen |
+
+**tmux Key Bindings (prefix: Ctrl+b):**
+| Key | Action |
+|-----|--------|
+| `Ctrl+b h/j/k/l` | Navigate panes |
+| `Ctrl+b d` | Split right |
+| `Ctrl+b D` | Split down |
+| `Ctrl+b z` | Zoom pane |
+| `Ctrl+b c` | New window |
+| `Ctrl+b 1-9` | Switch window |
+| `Ctrl+b s` | Session picker |
 
 **Session Persistence:**
-Sessions auto-save every 15 minutes and auto-restore on tmux start (via tmux-continuum plugin).
+Sessions auto-save every 10 minutes and auto-restore on tmux start (via tmux-continuum plugin).
 
+**Multi-Project Workflow:**
 ```bash
-# Manual save
-Ctrl+a, Ctrl+s
+# AeroSpace workspace 1: Project A
+tn ~/projects/project-a     # Creates tmux session "project-a"
 
-# Manual restore
-Ctrl+a, Ctrl+r
-```
+# AeroSpace workspace 2: Project B
+tn ~/projects/project-b     # Creates tmux session "project-b"
 
-**Multi-Project Workflow (Boris Cherny style):**
-```bash
-# Create worktrees for each project
-git worktree add ../project-1 feature-1
-git worktree add ../project-2 feature-2
-
-# In tmux, create windows for each
-tmux new-window -n "proj1" -c "../project-1"
-tmux new-window -n "proj2" -c "../project-2"
-
-# Run Claude in each window
-# Use Alt+1, Alt+2 to switch between projects
+# Switch between projects with Alt+1, Alt+2 (AeroSpace)
+# Each workspace has its own Ghostty + tmux session
 ```
 
 **First time setup:**
 ```bash
-# Install plugins (run inside tmux)
-Ctrl+a, I  # Capital I - installs all plugins
+# Open Ghostty, start tmux, then install plugins
+tmux
+# Press: Ctrl+b I  (Capital I - installs all plugins)
 ```
 
 ### Python & Jupyter Management

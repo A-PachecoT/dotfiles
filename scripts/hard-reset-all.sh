@@ -3,8 +3,8 @@
 # Hard reset: Force quit and reopen SketchyBar, AeroSpace, and HammerSpoon
 # Useful when apps are hung and reload doesn't work
 
-# Force quit SketchyBar and restart via brew services
-killall SketchyBar 2>/dev/null
+# Kill ALL SketchyBar processes including zombie triggers
+pkill -9 sketchybar 2>/dev/null
 sleep 0.5
 /opt/homebrew/bin/brew services restart sketchybar
 

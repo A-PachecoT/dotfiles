@@ -34,3 +34,13 @@
     pr = pull --rebase
     amend = commit -a --amend --no-edit
     ciam = commit -a --amend --no-edit
+[credential "https://github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[url "https://@github.com/"]
+	insteadOf = https://github.com/
+[url "https://github.com/"]
+	insteadOf = ssh://git@github.com/
