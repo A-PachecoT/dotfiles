@@ -82,9 +82,9 @@ keybind = cmd+l=text:\x02l
 
 # tmux commands (Cmd sends Ctrl+b + key)
 keybind = cmd+d=text:\x02d
-keybind = cmd+shift+d=text:\x02D
 keybind = cmd+z=text:\x02z
 keybind = cmd+x=text:\x02x
+keybind = cmd+shift+d=text:\x02:detach\r
 keybind = cmd+w=unbind
 
 # Split resize
