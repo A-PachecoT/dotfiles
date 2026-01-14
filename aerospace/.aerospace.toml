@@ -35,8 +35,9 @@ default-root-container-orientation = 'auto'
 automatically-unhide-macos-hidden-apps = true
 
 # Notify SketchyBar about workspace changes
+# Removed '&' to prevent zombie process accumulation
 exec-on-workspace-change = ['/bin/bash', '-c',
-    'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE &'
+    'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE'
 ]
 
 # Window detection rules - auto-float certain apps
@@ -158,17 +159,18 @@ run = 'move-node-to-workspace 2'
     cmd-shift-r = 'exec-and-forget /Users/styreep/dotfiles/scripts/reload-all.sh'  # Reload SketchyBar, AeroSpace, and HammerSpoon
     cmd-ctrl-shift-r = 'exec-and-forget /Users/styreep/dotfiles/scripts/hard-reset-all.sh'  # Hard reset: force quit and reopen all apps
 
-    # Terminal launch (using Warp)
-    alt-enter = 'exec-and-forget open -a "Warp"'
-    ctrl-alt-enter = 'exec-and-forget open -na "Warp"'
-    
+    # Terminal launch (using Ghostty)
+    alt-enter = 'exec-and-forget open -a "Ghostty"'
+    ctrl-alt-enter = 'exec-and-forget open -na "Ghostty"'
+
     # Quick app launches
     alt-a = 'exec-and-forget open -a "Obsidian"'
     alt-q = 'exec-and-forget open -a "Comet"'
     alt-w = 'exec-and-forget open -a "WhatsApp"'
     alt-f = 'exec-and-forget open -a "Finder"'
     alt-g = 'exec-and-forget open -a "GatherV2"'
-    alt-s = 'exec-and-forget open -a "Warp"'
+    alt-s = 'exec-and-forget open -a "Ghostty"'
+    alt-shift-s = 'exec-and-forget open -a "Warp"'
     alt-c = 'exec-and-forget open -a "Cursor"'
     cmd-alt-c = 'exec-and-forget open -n -a "Cursor" --args --new-window'
     cmd-alt-s = 'exec-and-forget open -n -a "iTerm"'
