@@ -4,6 +4,10 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 # Add local bin to PATH
 export PATH="$HOME/.local/bin:$PATH"
 
+# Default editor (neovim with LazyVim)
+export EDITOR="nvim"
+export VISUAL="nvim"
+
 # Claude CLI
 export PATH="/Users/styreep/.local/bin:$PATH"
 
@@ -13,6 +17,9 @@ alias cl="claude --dangerously-skip-permissions"
 alias cu="cursor ."
 alias python="python3"
 alias py="python3"
+alias vim="nvim"
+alias vi="nvim"
+alias nv="nvim"
 export PATH="$HOME/Library/TinyTeX/bin/universal-darwin:$PATH"
 
 # pnpm
