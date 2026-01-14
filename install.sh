@@ -31,7 +31,7 @@ if ! command -v stow &> /dev/null; then
 fi
 
 # Available packages
-PACKAGES=("aerospace" "sketchybar" "git" "zsh" "skhd" "zellij" "ghostty" "tmux")
+PACKAGES=("aerospace" "sketchybar" "git" "zsh" "skhd" "zellij" "ghostty" "tmux" "nvim")
 
 # Function to backup existing configs
 backup_configs() {
@@ -63,6 +63,9 @@ backup_configs() {
                 ;;
             "tmux")
                 [[ -f ~/.tmux.conf ]] && cp ~/.tmux.conf backup/ && info "Backed up .tmux.conf"
+                ;;
+            "nvim")
+                [[ -d ~/.config/nvim ]] && cp -r ~/.config/nvim backup/ && info "Backed up nvim config"
                 ;;
         esac
     done
