@@ -64,6 +64,9 @@ scrollback-limit = 50000
 mouse-hide-while-typing = true
 copy-on-select = clipboard
 
+# Links - Cmd+click to open URLs
+link-url = true
+
 # macOS specific
 macos-option-as-alt = true
 
