@@ -162,6 +162,26 @@ alias tma="tmux attach -t"
 alias tml="tmux list-sessions"
 alias tmka="tmux kill-server"
 
+# th - tmux help
+th() {
+    echo -e "\033[1;34m━━━ tmux commands ━━━\033[0m"
+    echo -e "\033[1mtm\033[0m          Session manager TUI (CPU, kill sessions)"
+    echo -e "\033[1mtw .\033[0m        Setup dev layout (yazi + console + claude)"
+    echo -e "\033[1mts NAME\033[0m     Switch/create session"
+    echo -e "\033[1mtp\033[0m          Project picker → new window with layout"
+    echo -e "\033[1mtml\033[0m         List sessions"
+    echo -e "\033[1mtmka\033[0m        Kill ALL sessions"
+    echo ""
+    echo -e "\033[1;34m━━━ Ghostty keys ━━━\033[0m"
+    echo -e "\033[1mCmd+1-9\033[0m     Switch windows"
+    echo -e "\033[1mCmd+c\033[0m       New window"
+    echo -e "\033[1mCmd+w\033[0m       Kill window + children"
+    echo -e "\033[1mCmd+x\033[0m       Kill pane + children"
+    echo -e "\033[1mCmd+d\033[0m       Split right"
+    echo -e "\033[1mCmd+z\033[0m       Zoom pane"
+    echo -e "\033[1mCmd+hjkl\033[0m    Navigate panes"
+}
+
 # tw - Setup dev layout in CURRENT window (most used command)
 # Layout: Left 60% (yazi 80% + console 20%) | Right 40% (Claude Code)
 # Usage: tw [path]  or just  tw .
