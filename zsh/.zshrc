@@ -154,17 +154,19 @@ tw() {
     [[ -z "$TMUX" ]] && { echo "Not in tmux. Open Ghostty first."; return 1; }
 
     local path="${1:-$PWD}"
-    path="$(cd "$path" 2>/dev/null && pwd)" || { echo "Invalid path"; return 1; }
-    local name="$(basename "$path")"
+    [[ "$path" == "." ]] && path="$PWD"
+    [[ -d "$path" ]] || { echo "Invalid path"; return 1; }
+    path="$(cd "$path" 2>/dev/null && /bin/pwd)"
+    local name="${path##*/}"
 
-    cd "$path"
-    tmux rename-window "$name"
-    tmux split-window -h -c "$path" -p 40
-    tmux select-pane -t 1
-    tmux split-window -v -c "$path" -p 20
-    tmux send-keys -t 3 "cl -c" Enter
-    tmux send-keys -t 1 "yazi" Enter
-    tmux select-pane -t 3
+    command cd "$path"
+    /opt/homebrew/bin/tmux rename-window "$name"
+    /opt/homebrew/bin/tmux split-window -h -c "$path" -p 40
+    /opt/homebrew/bin/tmux select-pane -t 1
+    /opt/homebrew/bin/tmux split-window -v -c "$path" -p 20
+    /opt/homebrew/bin/tmux send-keys -t 3 "cl -c" Enter
+    /opt/homebrew/bin/tmux send-keys -t 1 "yazi" Enter
+    /opt/homebrew/bin/tmux select-pane -t 3
 }
 
 # ts - Switch to session (create if needed)
