@@ -114,8 +114,53 @@ local spaces_indicator = sbar.add("item", {
   }
 })
 
+-- Session to workspace mapping
+local session_workspace_map = {
+  cofoundy = 2,
+  bilio = 3,
+  personal = 4,
+  per = 4,
+  dotfiles = 4,  -- For testing in personal workspace
+  notes = 9,
+}
+
+-- Function to get pending Claude events per workspace
+local function get_pending_by_workspace()
+  local pending = {}
+  local queue_dir = os.getenv("HOME") .. "/.claude-pending"
+
+  -- List files in queue directory
+  local handle = io.popen("ls -1 " .. queue_dir .. " 2>/dev/null")
+  if handle then
+    for file in handle:lines() do
+      -- Parse filename: timestamp_session_window_type
+      local session = file:match("^%d+_([^_]+)_")
+      local event_type = file:match("_([^_]+)$")
+      if session then
+        local ws = session_workspace_map[session]
+        if ws then
+          -- Track both count and whether any are questions
+          if not pending[ws] then
+            pending[ws] = { count = 0, has_question = false }
+          end
+          pending[ws].count = pending[ws].count + 1
+          if event_type == "question" then
+            pending[ws].has_question = true
+          end
+        end
+      end
+    end
+    handle:close()
+  end
+
+  return pending
+end
+
 -- Function to update workspace visibility and app icons
 local function update_workspaces()
+  -- Get pending Claude events
+  local claude_pending = get_pending_by_workspace()
+
   -- Get occupied workspaces and focused workspace
   local occupied = {}
   local focused_ws = nil
@@ -157,10 +202,28 @@ local function update_workspaces()
     space_brackets[i]:set({ drawing = is_occupied })
 
     if is_occupied then
+      -- Check for pending Claude in this workspace
+      local pending_info = claude_pending[i]
+      local badge = ""
+      local badge_color = colors.white
+
+      if pending_info and pending_info.count > 0 then
+        if pending_info.has_question then
+          badge = " 🔔"  -- Question needs attention
+          badge_color = colors.red or 0xfff7768e
+        else
+          badge = " ●"  -- Completed
+          badge_color = colors.green or 0xff9ece6a
+        end
+      end
+
       -- Update selection state with animation
       sbar.animate("tanh", 10, function()
         spaces[i]:set({
-          icon = { highlight = is_focused },
+          icon = {
+            highlight = is_focused,
+            string = i .. badge,
+          },
           label = { highlight = is_focused },
           background = { border_color = is_focused and colors.black or colors.bg2 }
         })
@@ -224,6 +287,11 @@ end)
 
 -- Subscribe to front app change
 space_window_observer:subscribe("front_app_switched", function(env)
+  update_workspaces()
+end)
+
+-- Subscribe to Claude pending changes
+space_window_observer:subscribe("claude_pending_change", function(env)
   update_workspaces()
 end)
 
