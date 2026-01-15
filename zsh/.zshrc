@@ -156,10 +156,10 @@ export PATH=$PATH:$ANDROID_HOME/tools/bin
 #   - tmux window = Project (switch with Cmd+1-9)
 #   - Dev layout = yazi + console + claude
 
-alias tm="tmux"
+# tm - TUI session manager (shows CPU, allows killing sessions)
+alias tm="~/dotfiles/scripts/tm"
 alias tma="tmux attach -t"
 alias tml="tmux list-sessions"
-alias tmk="tmux kill-session -t"
 alias tmka="tmux kill-server"
 
 # tw - Setup dev layout in CURRENT window (most used command)

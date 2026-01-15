@@ -1,0 +1,10 @@
+#!/bin/bash
+# Kill all child processes of all panes in current window, then kill the window
+for pid in $(tmux list-panes -F '#{pane_pid}'); do
+    pkill -TERM -P "$pid" 2>/dev/null
+done
+sleep 0.1
+for pid in $(tmux list-panes -F '#{pane_pid}'); do
+    pkill -KILL -P "$pid" 2>/dev/null
+done
+tmux kill-window

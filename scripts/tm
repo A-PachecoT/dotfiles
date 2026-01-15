@@ -1,0 +1,292 @@
+#!/bin/bash
+# tm - tmux session manager TUI
+# One command to see, attach, and kill sessions with CPU visibility
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+DIM='\033[0;90m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Kill all processes in a tmux session
+kill_session_processes() {
+    local session="$1"
+
+    # Get all pane PIDs in the session
+    local pane_pids=$(tmux list-panes -t "$session" -F "#{pane_pid}" 2>/dev/null)
+
+    for pid in $pane_pids; do
+        # Kill all descendants of each pane shell
+        pkill -TERM -P "$pid" 2>/dev/null || true
+        # Give processes a moment to exit gracefully
+        sleep 0.1
+        # Force kill any remaining
+        pkill -KILL -P "$pid" 2>/dev/null || true
+    done
+
+    # Kill the tmux session
+    tmux kill-session -t "$session" 2>/dev/null
+}
+
+# Kill all detached sessions
+kill_all_detached() {
+    local detached=$(tmux list-sessions -F "#{session_name} #{?session_attached,attached,detached}" 2>/dev/null | grep "detached" | awk '{print $1}')
+    local count=0
+
+    for session in $detached; do
+        kill_session_processes "$session"
+        ((count++)) || true
+    done
+
+    echo "$count"
+}
+
+# Get session info with CPU
+get_session_info() {
+    local session="$1"
+    local windows=$(tmux list-windows -t "$session" 2>/dev/null | wc -l | tr -d ' ')
+    local attached=$(tmux list-sessions -F "#{session_name} #{?session_attached,ATTACHED,detached}" 2>/dev/null | grep "^$session " | awk '{print $2}')
+
+    # Get all descendant PIDs and calculate total CPU
+    local pane_pids=$(tmux list-panes -t "$session" -F "#{pane_pid}" 2>/dev/null | tr '\n' ' ')
+    local total_cpu="0"
+    local top_proc=""
+
+    if [ -n "$pane_pids" ]; then
+        local all_pids=""
+        for pid in $pane_pids; do
+            local descendants=$(pgrep -P "$pid" 2>/dev/null | tr '\n' ' ')
+            all_pids="$all_pids $pid $descendants"
+        done
+
+        if [ -n "$(echo $all_pids | tr -d ' ')" ]; then
+            total_cpu=$(ps -p $(echo $all_pids) -o %cpu= 2>/dev/null | awk '{sum+=$1} END {printf "%.0f", sum}')
+            top_proc=$(ps -p $(echo $all_pids) -o %cpu=,comm= 2>/dev/null | sort -rn | head -1 | awk '{print $2}')
+        fi
+    fi
+
+    # Format output
+    local cpu_display="${total_cpu:-0}%"
+    local status_color=""
+
+    if [ "$attached" = "ATTACHED" ]; then
+        status_color="$GREEN"
+    else
+        status_color="$DIM"
+    fi
+
+    local cpu_color="$NC"
+    if [ "${total_cpu:-0}" -gt 50 ]; then
+        cpu_color="$RED"
+    elif [ "${total_cpu:-0}" -gt 10 ]; then
+        cpu_color="$YELLOW"
+    fi
+
+    printf "%-15s %2s wins  ${status_color}%-10s${NC}  ${cpu_color}%6s${NC}  ${DIM}%s${NC}" \
+        "$session" "$windows" "$attached" "$cpu_display" "$top_proc"
+}
+
+# Preview function for fzf
+preview_session() {
+    local session="$1"
+
+    echo -e "${BOLD}${BLUE}Session: $session${NC}\n"
+
+    echo -e "${BOLD}Windows:${NC}"
+    tmux list-windows -t "$session" -F "  #{window_index}: #{window_name} (#{window_panes} panes)" 2>/dev/null
+
+    echo -e "\n${BOLD}Processes (>1% CPU):${NC}"
+    local pane_pids=$(tmux list-panes -t "$session" -F "#{pane_pid}" 2>/dev/null | tr '\n' ' ')
+
+    for pid in $pane_pids; do
+        local descendants=$(pgrep -P "$pid" 2>/dev/null)
+        for dpid in $descendants; do
+            local info=$(ps -p "$dpid" -o %cpu=,command= 2>/dev/null)
+            local cpu=$(echo "$info" | awk '{print $1}')
+            if (( $(echo "${cpu:-0} > 1" | bc -l 2>/dev/null || echo 0) )); then
+                local cmd=$(echo "$info" | cut -d' ' -f2- | rev | cut -d'/' -f1 | rev | cut -c1-50)
+                echo -e "  ${YELLOW}${cpu}%${NC} $cmd"
+            fi
+        done
+    done
+}
+
+# Main TUI
+main() {
+    if ! tmux list-sessions &>/dev/null; then
+        echo "No tmux sessions running."
+        exit 0
+    fi
+
+    # Build session list
+    local sessions=$(tmux list-sessions -F "#{session_name}" 2>/dev/null)
+    local session_list=""
+
+    for session in $sessions; do
+        session_list+="$(get_session_info "$session")\n"
+    done
+
+    # Export functions for fzf
+    export -f preview_session get_session_info kill_session_processes 2>/dev/null || true
+    export RED YELLOW GREEN BLUE DIM BOLD NC
+
+    # Create temp script for preview (fzf can't use bash functions directly)
+    local preview_script=$(mktemp)
+    cat > "$preview_script" << 'PREVIEW'
+#!/bin/bash
+session=$(echo "$1" | awk '{print $1}')
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+DIM='\033[0;90m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+echo -e "${BOLD}${BLUE}Session: $session${NC}\n"
+
+echo -e "${BOLD}Windows:${NC}"
+tmux list-windows -t "$session" -F "  #{window_index}: #{window_name} (#{window_panes} panes)" 2>/dev/null
+
+echo -e "\n${BOLD}Processes (>1% CPU):${NC}"
+pane_pids=$(tmux list-panes -t "$session" -F "#{pane_pid}" 2>/dev/null | tr '\n' ' ')
+
+for pid in $pane_pids; do
+    descendants=$(pgrep -P "$pid" 2>/dev/null)
+    for dpid in $descendants; do
+        info=$(ps -p "$dpid" -o %cpu=,command= 2>/dev/null)
+        cpu=$(echo "$info" | awk '{print $1}')
+        if (( $(echo "${cpu:-0} > 1" | bc -l 2>/dev/null || echo 0) )); then
+            cmd=$(echo "$info" | cut -d' ' -f2- | rev | cut -d'/' -f1 | rev | cut -c1-50)
+            echo -e "  ${YELLOW}${cpu}%${NC} $cmd"
+        fi
+    done
+done
+PREVIEW
+    chmod +x "$preview_script"
+
+    # Create temp script for kill action
+    local kill_script=$(mktemp)
+    cat > "$kill_script" << 'KILL'
+#!/bin/bash
+session=$(echo "$1" | awk '{print $1}')
+pane_pids=$(tmux list-panes -t "$session" -F "#{pane_pid}" 2>/dev/null)
+for pid in $pane_pids; do
+    pkill -TERM -P "$pid" 2>/dev/null || true
+    sleep 0.1
+    pkill -KILL -P "$pid" 2>/dev/null || true
+done
+tmux kill-session -t "$session" 2>/dev/null
+KILL
+    chmod +x "$kill_script"
+
+    # Create temp script for kill-all-detached
+    local killall_script=$(mktemp)
+    cat > "$killall_script" << 'KILLALL'
+#!/bin/bash
+detached=$(tmux list-sessions -F "#{session_name} #{?session_attached,attached,detached}" 2>/dev/null | grep "detached" | awk '{print $1}')
+for session in $detached; do
+    pane_pids=$(tmux list-panes -t "$session" -F "#{pane_pid}" 2>/dev/null)
+    for pid in $pane_pids; do
+        pkill -TERM -P "$pid" 2>/dev/null || true
+        sleep 0.1
+        pkill -KILL -P "$pid" 2>/dev/null || true
+    done
+    tmux kill-session -t "$session" 2>/dev/null
+done
+KILLALL
+    chmod +x "$killall_script"
+
+    # Create temp script for reload (regenerates session list)
+    local reload_script=$(mktemp)
+    cat > "$reload_script" << 'RELOAD'
+#!/bin/bash
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+GREEN='\033[0;32m'
+DIM='\033[0;90m'
+NC='\033[0m'
+
+for session in $(tmux list-sessions -F "#{session_name}" 2>/dev/null); do
+    windows=$(tmux list-windows -t "$session" 2>/dev/null | wc -l | tr -d ' ')
+    attached=$(tmux list-sessions -F "#{session_name} #{?session_attached,ATTACHED,detached}" 2>/dev/null | grep "^$session " | awk '{print $2}')
+
+    pane_pids=$(tmux list-panes -t "$session" -F "#{pane_pid}" 2>/dev/null | tr '\n' ' ')
+    total_cpu="0"
+    top_proc=""
+
+    if [ -n "$pane_pids" ]; then
+        all_pids=""
+        for pid in $pane_pids; do
+            descendants=$(pgrep -P "$pid" 2>/dev/null | tr '\n' ' ')
+            all_pids="$all_pids $pid $descendants"
+        done
+        if [ -n "$(echo $all_pids | tr -d ' ')" ]; then
+            total_cpu=$(ps -p $(echo $all_pids) -o %cpu= 2>/dev/null | awk '{sum+=$1} END {printf "%.0f", sum}')
+            top_proc=$(ps -p $(echo $all_pids) -o %cpu=,comm= 2>/dev/null | sort -rn | head -1 | awk '{print $2}')
+        fi
+    fi
+
+    cpu_display="${total_cpu:-0}%"
+    if [ "$attached" = "ATTACHED" ]; then
+        status_color="$GREEN"
+    else
+        status_color="$DIM"
+    fi
+
+    cpu_color="$NC"
+    if [ "${total_cpu:-0}" -gt 50 ]; then
+        cpu_color="$RED"
+    elif [ "${total_cpu:-0}" -gt 10 ]; then
+        cpu_color="$YELLOW"
+    fi
+
+    printf "%-15s %2s wins  ${status_color}%-10s${NC}  ${cpu_color}%6s${NC}  ${DIM}%s${NC}\n" \
+        "$session" "$windows" "$attached" "$cpu_display" "$top_proc"
+done
+RELOAD
+    chmod +x "$reload_script"
+
+    # Header
+    local header="Enter: attach │ Ctrl-k: kill session │ Ctrl-x: kill all detached │ Esc: exit"
+
+    # Run fzf
+    local selected=$(echo -e "$session_list" | grep -v '^$' | \
+        fzf --ansi \
+            --header="$header" \
+            --preview="$preview_script {}" \
+            --preview-window=right:50%:wrap \
+            --bind="ctrl-k:execute-silent($kill_script {})+reload($reload_script)" \
+            --bind="ctrl-x:execute-silent($killall_script)+reload($reload_script)" \
+            --no-multi \
+            --height=80% \
+            --layout=reverse \
+            --border=rounded \
+            --prompt="tmux> " \
+            --pointer="▶" \
+            --color="header:italic:dim")
+
+    # Cleanup temp scripts
+    rm -f "$preview_script" "$kill_script" "$killall_script" "$reload_script"
+
+    # Attach to selected session
+    if [ -n "$selected" ]; then
+        local session=$(echo "$selected" | awk '{print $1}')
+        if tmux has-session -t "$session" 2>/dev/null; then
+            tmux switch-client -t "$session" 2>/dev/null || tmux attach-session -t "$session"
+        fi
+    fi
+}
+
+# Handle --info flag for reload
+if [ "$1" = "--info" ] && [ -n "$2" ]; then
+    get_session_info "$2"
+    exit 0
+fi
+
+main "$@"

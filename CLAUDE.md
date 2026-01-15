@@ -380,7 +380,28 @@ tw .            # Setup dev layout in current window (most used!)
 tw ~/path       # Setup dev layout for specific project
 ts cofoundy     # Switch to session (or create if needed)
 tp              # Project picker with fzf → new window with dev layout
+tm              # Session manager TUI (see below)
 ```
+
+**Session Manager (`tm` command):**
+TUI for monitoring and managing tmux sessions with CPU visibility.
+```
+┌─ tmux sessions ─────────────────────────────────────────┐
+│ > cofoundy     6 wins   ATTACHED   187% CPU  ← uvicorn │
+│   bilio        1 win    detached     2% CPU            │
+│   per          3 wins   detached     0% CPU            │
+├─────────────────────────────────────────────────────────┤
+│ Preview: windows + high CPU processes                   │
+└─────────────────────────────────────────────────────────┘
+ Enter: attach │ Ctrl-k: kill session │ Ctrl-x: kill all detached
+```
+- Shows all sessions with CPU usage and top process
+- Preview pane shows windows and processes using >1% CPU
+- **Ctrl-k**: Kill selected session + all child processes (uvicorn, claude, etc.)
+- **Ctrl-x**: Kill ALL detached sessions (cleanup orphans)
+
+**Process Cleanup:**
+Cmd+x (pane) and Cmd+w (window) now automatically kill child processes, preventing orphaned servers and Claude instances from running in the background.
 
 **Dev Layout (`tw` command):**
 ```
