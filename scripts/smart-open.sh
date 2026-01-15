@@ -145,14 +145,23 @@ file=$(basename "$resolved_path")
 # Tier 1: Try IPC first (most reliable)
 # ya emit reveal navigates to parent dir AND highlights the file atomically
 # This handles special characters, spaces, quotes, etc. safely
+#
+# Socket naming: Each yazi instance uses "yazi-$TMUX_PANE" as socket name
+# We find the yazi pane first, then use its pane ID to construct the socket name
 # -----------------------------------------------------------------------------
-if ya emit reveal "$resolved_path" 2>/dev/null; then
-    # Find and focus the yazi pane so user sees the result
-    yazi_pane=$(tmux list-panes -F '#{pane_id} #{pane_current_command}' 2>/dev/null | grep -iE '\byazi\b' | head -1 | awk '{print $1}' || true)
-    if [[ -n "$yazi_pane" ]]; then
+
+# Find yazi pane in current tmux window
+yazi_pane=$(tmux list-panes -F '#{pane_id} #{pane_current_command}' 2>/dev/null | grep -iE '\byazi\b' | head -1 | awk '{print $1}' || true)
+
+if [[ -n "$yazi_pane" ]]; then
+    # Construct socket name from yazi's pane ID (matches y() function in zshrc)
+    socket_name="yazi-${yazi_pane}"
+
+    if YAZI_ID="$socket_name" ya emit reveal "$resolved_path" 2>/dev/null; then
+        # Focus the yazi pane so user sees the result
         tmux select-pane -t "$yazi_pane"
+        exit 0
     fi
-    exit 0
 fi
 
 # -----------------------------------------------------------------------------
