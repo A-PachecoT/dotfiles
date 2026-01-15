@@ -120,6 +120,9 @@ keybind = cmd+digit_8=text:\x02\x38
 keybind = cmd+digit_9=unbind
 keybind = cmd+digit_9=text:\x02\x39
 
+# Smart open URLs/files (tmux-fingers)
+keybind = cmd+f=text:\x02F
+
 # Quick actions
 keybind = cmd+shift+enter=toggle_split_zoom
 keybind = cmd+enter=toggle_fullscreen
