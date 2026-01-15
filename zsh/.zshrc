@@ -162,7 +162,7 @@ tw() {
     tmux split-window -h -c "$path" -p 40
     tmux select-pane -t 1
     tmux split-window -v -c "$path" -p 20
-    tmux send-keys -t 3 "cl" Enter
+    tmux send-keys -t 3 "cl -c" Enter
     tmux send-keys -t 1 "yazi" Enter
     tmux select-pane -t 3
 }

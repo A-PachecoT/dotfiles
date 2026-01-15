@@ -1,21 +1,17 @@
 #!/bin/bash
 # Launch Ghostty windows with specific tmux sessions
-# Called from AeroSpace after-startup-command
-# Each window title shows session name → AeroSpace routes to correct workspace
+# Move each to correct workspace immediately after creation
 
-sleep 1  # Wait for AeroSpace to be ready
+launch_session() {
+    local session=$1
+    local workspace=$2
+    open -na Ghostty --args --command="tmux new -A -s $session"
+    sleep 0.3
+    aerospace move-node-to-workspace $workspace
+}
 
-# Workspace 2: Cofoundy
-open -na Ghostty --args -e 'shell:tmux new -A -s cofoundy'
 sleep 0.5
-
-# Workspace 3: Bilio
-open -na Ghostty --args -e 'shell:tmux new -A -s bilio'
-sleep 0.5
-
-# Workspace 4: Personal
-open -na Ghostty --args -e 'shell:tmux new -A -s personal'
-sleep 0.5
-
-# Workspace 9: Notes (simple claude for Obsidian assistance)
-open -na Ghostty --args -e 'shell:tmux new -A -s notes'
+launch_session cofoundy 2
+launch_session bilio 3
+launch_session personal 4
+launch_session notes 9
