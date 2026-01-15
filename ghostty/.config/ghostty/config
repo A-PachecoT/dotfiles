@@ -84,7 +84,7 @@ keybind = cmd+l=text:\x02l
 keybind = cmd+d=text:\x02d
 keybind = cmd+z=text:\x02z
 keybind = cmd+x=text:\x02x
-keybind = cmd+shift+d=text:\x02:detach\r
+# keybind = cmd+shift+d=text:\x02q  # Use native tmux: Ctrl+b q
 keybind = cmd+w=unbind
 
 # Split resize
