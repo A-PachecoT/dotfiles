@@ -122,15 +122,20 @@ if [[ ! -e "$resolved_path" ]]; then
 fi
 
 # =============================================================================
-# YAZI NAVIGATION (3-tier fallback system)
-# Purpose: Navigate to the file in the most reliable way possible
+# FILE NAVIGATION (2-tier system)
+# Purpose: Open the file in the most appropriate application
 #
-# Tier 1: IPC via `ya emit reveal` - Most reliable, handles special chars
-# Tier 2: Keystroke simulation - When IPC unavailable (no $YAZI_ID)
-# Tier 3: Editor fallback - When no yazi pane exists
+# Tier 1: Yazi IPC via `ya emit reveal`
+#         - Most reliable, handles special chars, spaces, quotes
+#         - Requires $YAZI_ID (set when using yazi shell integration)
+#         - The `y` alias/function in zshrc enables this
 #
-# The bug fix: Always send Escape first to ensure yazi is in normal mode,
-# not stuck in command mode (:) or search mode (/)
+# Tier 2: Editor fallback ($EDITOR)
+#         - When yazi IPC unavailable
+#         - Supports +line syntax for jumping to error line
+#
+# NOTE: Keystroke simulation (`:cd`, `/search`) doesn't work in yazi because
+# `:` opens SHELL mode (external commands), not internal command mode.
 # =============================================================================
 
 dir=$(dirname "$resolved_path")
@@ -151,59 +156,30 @@ if ya emit reveal "$resolved_path" 2>/dev/null; then
 fi
 
 # -----------------------------------------------------------------------------
-# Tier 2: Keystroke simulation fallback
-# Used when ya emit fails (no $YAZI_ID, yazi not running with IPC)
+# Tier 2: Editor fallback (yazi IPC failed)
+#
+# WHY NO KEYSTROKE FALLBACK:
+# Yazi's `:` opens SHELL mode (external commands), not internal commands.
+# There's no `:cd /path` like vim - `cd` in a subshell doesn't change yazi's dir.
+# The only reliable way to control yazi externally is via IPC (`ya emit`),
+# which requires $YAZI_ID (set when using yazi's shell integration).
+#
+# If you want smart-open to navigate yazi, use the `y` shell wrapper
+# which enables IPC via $YAZI_ID.
 # -----------------------------------------------------------------------------
-yazi_pane=$(tmux list-panes -F '#{pane_id} #{pane_current_command}' 2>/dev/null | grep -iE '\byazi\b' | head -1 | awk '{print $1}' || true)
 
-if [[ -n "$yazi_pane" ]]; then
-    # BUG FIX: Send Escape first to ensure we're in normal mode
-    # This fixes the issue where yazi gets stuck in command/search mode
-    tmux send-keys -t "$yazi_pane" Escape
-
-    # Small delay to let yazi process the Escape
-    sleep 0.05
-
-    # Navigate to directory using command mode
-    # Single quotes inside the command to handle paths with spaces
-    tmux send-keys -t "$yazi_pane" ":cd '${dir}'" Enter
-
-    # Small delay to let cd complete
-    sleep 0.05
-
-    # Search for the file
-    # Escape special regex characters in filename to avoid search errors
-    # Characters that need escaping in regex: . [ ] \ * ^ $ ( ) + ? { } |
-    escaped_file=$(printf '%s' "$file" | sed 's/[.[\*^$()+?{|]/\\&/g')
-
-    # Use anchored search (^...$) to match exact filename
-    tmux send-keys -t "$yazi_pane" "/^${escaped_file}\$" Enter
-
-    # Exit search mode and return to normal mode
-    tmux send-keys -t "$yazi_pane" Escape
-
-    # Focus the yazi pane so user sees the result
-    tmux select-pane -t "$yazi_pane"
-    exit 0
-fi
-
-# -----------------------------------------------------------------------------
-# Tier 3: Editor fallback
-# No yazi pane found - open file in $EDITOR with line number support
-# -----------------------------------------------------------------------------
+# Open file in $EDITOR with line number support
+# This is the reliable fallback when yazi IPC isn't available
 if [[ -n "${EDITOR:-}" ]]; then
-    # Get the pane where we should open the editor (current pane)
     if [[ -n "$line_number" ]]; then
         # Most editors support +line syntax (vim, nvim, code, etc.)
         tmux send-keys "$EDITOR +$line_number '$resolved_path'" Enter
     else
         tmux send-keys "$EDITOR '$resolved_path'" Enter
     fi
+    tmux display-message "Opened in editor: $file:${line_number:-1}"
     exit 0
 fi
 
-# -----------------------------------------------------------------------------
-# Last resort: Just show the path
-# No yazi, no editor - at least tell the user where the file is
-# -----------------------------------------------------------------------------
-tmux display-message "Found: $resolved_path (no yazi or editor to open it)"
+# Last resort: Just show the path (no editor configured)
+tmux display-message "Found: $resolved_path (set \$EDITOR to open)"
