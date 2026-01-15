@@ -192,7 +192,7 @@ ts() {
 tp() {
     [[ -z "$TMUX" ]] && { echo "Not in tmux. Open Ghostty first."; return 1; }
 
-    local project=$(find ~/projects ~/cofoundy/projects -maxdepth 2 -type d -name ".git" 2>/dev/null | \
+    local project=$(find ~/projects ~/cofoundy/projects ~/cofoundy/packages -maxdepth 2 -type d -name ".git" 2>/dev/null | \
         sed 's/\/.git$//' | \
         fzf --prompt="Project: " --preview 'ls -la {}')
     [[ -n "$project" ]] && { tmux new-window -c "$project" && tw "$project"; }
