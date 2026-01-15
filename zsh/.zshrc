@@ -212,8 +212,8 @@ tw() {
 
     cd "$project_path" || return 1
 
-    # Create new window with dev layout
-    tmux new-window -n "$window_name" -c "$project_path"
+    # Rename current window and set up dev layout
+    tmux rename-window "$window_name"
     tmux split-window -h -c "$project_path" -p 40
     tmux select-pane -t 1
     tmux split-window -v -c "$project_path" -p 20
