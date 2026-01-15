@@ -45,7 +45,7 @@ autocmd("FileType", {
   pattern = { "markdown", "md" },
   callback = function()
     vim.opt_local.wrap = true
-    vim.opt_local.spell = true
+    vim.opt_local.spell = false  -- Disabled: too many false positives (tech terms)
     vim.opt_local.conceallevel = 2
   end,
 })

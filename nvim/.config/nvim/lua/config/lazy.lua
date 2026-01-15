@@ -22,7 +22,7 @@ require("lazy").setup({
     { "LazyVim/LazyVim", import = "lazyvim.plugins" },
 
     -- LazyVim Extras (enable features here)
-    { import = "lazyvim.plugins.extras.lang.markdown" },  -- Markdown preview & highlighting
+    -- { import = "lazyvim.plugins.extras.lang.markdown" },  -- Disabled: too many lint warnings
     { import = "lazyvim.plugins.extras.lang.json" },      -- JSON support
     { import = "lazyvim.plugins.extras.lang.yaml" },      -- YAML support
 
