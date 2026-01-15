@@ -165,6 +165,8 @@ tr() {
 # Usage: tn [path]
 tn() {
     local project_path="${1:-$PWD}"
+    # Resolve to absolute path for correct basename
+    project_path="$(cd "$project_path" && pwd)"
     local session_name="$(basename $project_path)"
 
     cd "$project_path" || return 1
@@ -204,6 +206,8 @@ tw() {
     fi
 
     local project_path="${1:-$PWD}"
+    # Resolve to absolute path for correct basename
+    project_path="$(cd "$project_path" && pwd)"
     local window_name="$(basename $project_path)"
 
     cd "$project_path" || return 1
