@@ -11,6 +11,11 @@ export VISUAL="nvim"
 # Claude CLI
 export PATH="/Users/styreep/.local/bin:$PATH"
 
+# Auto-attach to tmux in Ghostty (session restores via tmux-continuum)
+if [[ "$TERM_PROGRAM" == "ghostty" ]] && [[ -z "$TMUX" ]]; then
+    tmux attach -t dev 2>/dev/null || tmux new -s dev
+fi
+
 alias l="ls -la"
 alias proj="cd ~/projects"
 alias cl="claude --dangerously-skip-permissions"
@@ -187,6 +192,34 @@ tn() {
     tmux select-pane -t "$session_name":1.3
 
     tmux attach -t "$session_name"
+}
+
+# Add project as new window in current session (use inside tmux)
+# Layout: Left (60%): yazi top + Console bottom | Right (40%): Claude Code
+# Usage: tw [path]
+tw() {
+    if [[ -z "$TMUX" ]]; then
+        echo "Not in tmux. Use 'tn' to start a new session."
+        return 1
+    fi
+
+    local project_path="${1:-$PWD}"
+    local window_name="$(basename $project_path)"
+
+    cd "$project_path" || return 1
+
+    # Create new window with dev layout
+    tmux new-window -n "$window_name" -c "$project_path"
+    tmux split-window -h -c "$project_path" -p 40
+    tmux select-pane -t 1
+    tmux split-window -v -c "$project_path" -p 20
+
+    # Start Claude Code in right pane
+    tmux send-keys -t 3 "cl" Enter
+    # Start yazi in top-left pane
+    tmux send-keys -t 1 "yazi" Enter
+    # Focus on Claude Code pane
+    tmux select-pane -t 3
 }
 
 # Project picker with fzf
