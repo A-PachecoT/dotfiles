@@ -1,0 +1,42 @@
+#!/opt/homebrew/bin/bash
+# Smart horizontal split - adds column and redistributes proportionally
+#
+# Ratios follow "main pane priority" - leftmost pane stays largest,
+# newer panes get progressively smaller (fibonacci-ish distribution)
+
+# Predefined ratios by column count
+declare -A RATIOS
+RATIOS[2]="60 40"
+RATIOS[3]="50 30 20"
+RATIOS[4]="40 25 20 15"
+RATIOS[5]="35 22 18 14 11"
+
+# Create the split first
+tmux split-window -h -c "#{pane_current_path}"
+
+# Small delay to let tmux update layout
+sleep 0.05
+
+# Count columns (unique x positions = unique columns)
+cols=$(tmux list-panes -F '#{pane_left}' | sort -u | wc -l | tr -d ' ')
+
+# Get ratio for this column count
+ratio="${RATIOS[$cols]}"
+if [[ -z "$ratio" ]]; then
+    # More than 5 columns - fall back to even distribution
+    tmux select-layout even-horizontal
+    exit 0
+fi
+
+# Get one pane per column (sorted left to right by x position)
+# Using awk to get first pane_id for each unique x position
+mapfile -t panes < <(tmux list-panes -F '#{pane_left} #{pane_id}' | sort -n -k1 | awk '!seen[$1]++ {print $2}')
+read -ra widths <<< "$ratio"
+
+# Resize each column from left to right
+# Each resize sets absolute window percentage, tmux adjusts neighbors
+for i in "${!panes[@]}"; do
+    if [[ $i -lt ${#widths[@]} ]]; then
+        tmux resize-pane -t "${panes[$i]}" -x "${widths[$i]}%"
+    fi
+done

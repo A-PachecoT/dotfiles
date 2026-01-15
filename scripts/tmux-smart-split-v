@@ -1,0 +1,48 @@
+#!/opt/homebrew/bin/bash
+# Smart vertical split - adds row within current column and redistributes
+#
+# Only affects panes in the same column (same x range), preserving
+# the horizontal layout structure
+
+# Predefined ratios by row count within column
+declare -A RATIOS
+RATIOS[2]="70 30"
+RATIOS[3]="55 30 15"
+RATIOS[4]="45 25 18 12"
+RATIOS[5]="40 25 18 10 7"
+
+# Get current pane's x position before split
+current_x=$(tmux display-message -p '#{pane_left}')
+current_width=$(tmux display-message -p '#{pane_width}')
+
+# Create the split
+tmux split-window -v -c "#{pane_current_path}"
+
+# Small delay to let tmux update layout
+sleep 0.05
+
+# Find all panes in the same column (same x position, within tolerance)
+# Panes are in same column if their x position matches current_x
+mapfile -t column_panes < <(tmux list-panes -F '#{pane_left} #{pane_top} #{pane_id}' | \
+    awk -v cx="$current_x" -v cw="$current_width" \
+    '$1 >= cx && $1 < cx + cw {print $2, $3}' | \
+    sort -n -k1 | awk '{print $2}')
+
+rows=${#column_panes[@]}
+
+# Get ratio for this row count
+ratio="${RATIOS[$rows]}"
+if [[ -z "$ratio" ]]; then
+    # More than 5 rows - just use even distribution for this column
+    # Can't use select-layout here as it affects whole window
+    exit 0
+fi
+
+read -ra heights <<< "$ratio"
+
+# Resize each row in this column from top to bottom
+for i in "${!column_panes[@]}"; do
+    if [[ $i -lt ${#heights[@]} ]]; then
+        tmux resize-pane -t "${column_panes[$i]}" -y "${heights[$i]}%"
+    fi
+done
