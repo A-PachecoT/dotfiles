@@ -1,0 +1,86 @@
+#!/bin/bash
+# Claude Code notification with voice announcement and queue management
+# Usage: claude-notify <event_type>
+#   event_type: "stop" or "question"
+
+set -euo pipefail
+
+QUEUE_DIR="$HOME/.claude-pending"
+EVENT_TYPE="${1:-stop}"
+TIMESTAMP=$(date +%s)
+
+# Ensure queue directory exists
+mkdir -p "$QUEUE_DIR"
+
+# Get tmux context (if in tmux)
+if [[ -n "${TMUX:-}" ]]; then
+    SESSION=$(tmux display-message -p '#S')
+    WINDOW=$(tmux display-message -p '#W')
+    WINDOW_INDEX=$(tmux display-message -p '#I')
+    PANE_ID=$(tmux display-message -p '#D')
+    LOCATION="${SESSION} ${WINDOW}"
+else
+    # Fallback - not in tmux
+    SESSION="standalone"
+    WINDOW=$(basename "$PWD")
+    WINDOW_INDEX="0"
+    PANE_ID="0"
+    LOCATION="$WINDOW"
+fi
+
+# Create queue entry file
+# Format: timestamp_session_window_type
+QUEUE_FILE="${QUEUE_DIR}/${TIMESTAMP}_${SESSION}_${WINDOW}_${EVENT_TYPE}"
+
+# Write metadata to file (JSON for future extensibility)
+cat > "$QUEUE_FILE" << EOF
+{
+  "timestamp": $TIMESTAMP,
+  "session": "$SESSION",
+  "window": "$WINDOW",
+  "window_index": "$WINDOW_INDEX",
+  "pane_id": "$PANE_ID",
+  "event_type": "$EVENT_TYPE",
+  "cwd": "$PWD"
+}
+EOF
+
+# Build announcement with window number
+# Format: "session window-number window-name done" e.g. "cofoundy 1 api done"
+if [[ -n "${TMUX:-}" ]]; then
+    ANNOUNCEMENT="${SESSION} ${WINDOW_INDEX} ${WINDOW}"
+else
+    ANNOUNCEMENT="${WINDOW}"
+fi
+
+# Play sound based on event type
+if [[ "$EVENT_TYPE" == "question" ]]; then
+    # Question/notification - more attention-grabbing
+    afplay /System/Library/Sounds/Glass.aiff &
+    ANNOUNCEMENT="question ${ANNOUNCEMENT}"
+else
+    # Stop/completion - softer
+    afplay /System/Library/Sounds/Funk.aiff &
+    ANNOUNCEMENT="${ANNOUNCEMENT} done"
+fi
+
+# Voice announcement (async, don't block)
+say -v Samantha "$ANNOUNCEMENT" &
+
+# Set tmux window option for badge display
+if [[ -n "${TMUX:-}" ]]; then
+    # Set @claude_pending option on current window
+    # "q" = question (🔔), "s" = stop (●)
+    if [[ "$EVENT_TYPE" == "question" ]]; then
+        tmux set-option -w @claude_pending "q" 2>/dev/null || true
+    else
+        tmux set-option -w @claude_pending "s" 2>/dev/null || true
+    fi
+    # Trigger status bar refresh
+    tmux refresh-client -S 2>/dev/null || true
+fi
+
+# Trigger SketchyBar update for workspace badges
+sketchybar --trigger claude_pending_change 2>/dev/null &
+
+exit 0

@@ -1,0 +1,85 @@
+#!/bin/bash
+# Clear pending Claude events
+# Usage:
+#   claude-pending-clear              # Clear for current tmux window
+#   claude-pending-clear <session> <window>  # Clear specific
+#   claude-pending-clear --all        # Clear all pending
+#   claude-pending-clear --file <path>       # Clear specific file
+
+set -euo pipefail
+
+QUEUE_DIR="$HOME/.claude-pending"
+
+# Ensure queue exists
+mkdir -p "$QUEUE_DIR"
+
+# Function to trigger SketchyBar refresh
+trigger_sketchybar() {
+    sketchybar --trigger claude_pending_change 2>/dev/null &
+}
+
+case "${1:-current}" in
+    --all)
+        # Clear all pending
+        rm -f "$QUEUE_DIR"/*_*_*_* 2>/dev/null || true
+        echo "Cleared all pending"
+        trigger_sketchybar
+        ;;
+    --file)
+        # Clear specific file
+        if [[ -n "${2:-}" && -f "$2" ]]; then
+            rm -f "$2"
+            echo "Cleared: $(basename "$2")"
+            trigger_sketchybar
+        fi
+        ;;
+    current)
+        # Clear for current tmux window
+        if [[ -n "${TMUX:-}" ]]; then
+            SESSION=$(tmux display-message -p '#S')
+            WINDOW=$(tmux display-message -p '#W')
+        else
+            echo "Not in tmux, specify session and window"
+            exit 1
+        fi
+        # Find and remove matching files
+        PATTERN="${QUEUE_DIR}/*_${SESSION}_${WINDOW}_*"
+        CLEARED=0
+        for f in $PATTERN; do
+            if [[ -f "$f" ]]; then
+                rm -f "$f"
+                ((CLEARED++))
+            fi
+        done
+        if [[ $CLEARED -gt 0 ]]; then
+            echo "Cleared $CLEARED pending for ${SESSION}:${WINDOW}"
+            # Trigger tmux refresh
+            tmux refresh-client -S 2>/dev/null || true
+            trigger_sketchybar
+        fi
+        ;;
+    *)
+        # Clear specific session:window
+        SESSION="$1"
+        WINDOW="${2:-}"
+        if [[ -z "$WINDOW" && "$SESSION" == *":"* ]]; then
+            # Handle session:window format
+            WINDOW="${SESSION#*:}"
+            SESSION="${SESSION%%:*}"
+        fi
+        if [[ -z "$WINDOW" ]]; then
+            echo "Usage: claude-pending-clear <session> <window>"
+            exit 1
+        fi
+        PATTERN="${QUEUE_DIR}/*_${SESSION}_${WINDOW}_*"
+        CLEARED=0
+        for f in $PATTERN; do
+            if [[ -f "$f" ]]; then
+                rm -f "$f"
+                ((CLEARED++))
+            fi
+        done
+        echo "Cleared $CLEARED pending for ${SESSION}:${WINDOW}"
+        [[ $CLEARED -gt 0 ]] && trigger_sketchybar
+        ;;
+esac

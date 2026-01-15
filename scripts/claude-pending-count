@@ -1,0 +1,59 @@
+#!/bin/bash
+# Count pending Claude events
+# Usage:
+#   claude-pending-count              # Total count
+#   claude-pending-count --session    # Count for current session
+#   claude-pending-count --window     # Check if current window has pending
+#   claude-pending-count --questions  # Count only questions
+
+set -euo pipefail
+
+QUEUE_DIR="$HOME/.claude-pending"
+MODE="${1:---total}"
+
+mkdir -p "$QUEUE_DIR"
+
+case "$MODE" in
+    --total)
+        find "$QUEUE_DIR" -type f -name '*_*_*_*' 2>/dev/null | wc -l | tr -d ' '
+        ;;
+    --session)
+        if [[ -n "${TMUX:-}" ]]; then
+            SESSION=$(tmux display-message -p '#S')
+            find "$QUEUE_DIR" -type f -name "*_${SESSION}_*_*" 2>/dev/null | wc -l | tr -d ' '
+        else
+            echo "0"
+        fi
+        ;;
+    --window)
+        # Returns 0 (has pending) or 1 (no pending) - for conditionals
+        if [[ -n "${TMUX:-}" ]]; then
+            SESSION=$(tmux display-message -p '#S')
+            WINDOW=$(tmux display-message -p '#W')
+            COUNT=$(find "$QUEUE_DIR" -type f -name "*_${SESSION}_${WINDOW}_*" 2>/dev/null | wc -l | tr -d ' ')
+            if [[ "$COUNT" -gt 0 ]]; then
+                echo "$COUNT"
+                exit 0
+            else
+                echo "0"
+                exit 1
+            fi
+        else
+            echo "0"
+            exit 1
+        fi
+        ;;
+    --questions)
+        find "$QUEUE_DIR" -type f -name '*_*_*_question' 2>/dev/null | wc -l | tr -d ' '
+        ;;
+    --stops)
+        find "$QUEUE_DIR" -type f -name '*_*_*_stop' 2>/dev/null | wc -l | tr -d ' '
+        ;;
+    --by-session)
+        # Output: session:count for each session with pending
+        for f in "$QUEUE_DIR"/*_*_*_*; do
+            [[ -f "$f" ]] || continue
+            basename "$f" | cut -d'_' -f2
+        done | sort | uniq -c | awk '{print $2":"$1}'
+        ;;
+esac

@@ -1,0 +1,84 @@
+#!/bin/bash
+# List all pending Claude events
+# Usage: claude-pending-list [--json|--simple|--fzf]
+
+set -euo pipefail
+
+QUEUE_DIR="$HOME/.claude-pending"
+FORMAT="${1:---simple}"
+
+# Ensure queue exists
+mkdir -p "$QUEUE_DIR"
+
+# Get list of pending files (sorted by timestamp - oldest first)
+FILES=()
+while IFS= read -r line; do
+    [[ -n "$line" ]] && FILES+=("$line")
+done < <(find "$QUEUE_DIR" -type f -name '*_*_*_*' 2>/dev/null | sort)
+
+if [[ ${#FILES[@]} -eq 0 ]]; then
+    if [[ "$FORMAT" == "--json" ]]; then
+        echo "[]"
+    fi
+    exit 0
+fi
+
+case "$FORMAT" in
+    --json)
+        # Output as JSON array
+        echo "["
+        for i in "${!FILES[@]}"; do
+            cat "${FILES[$i]}"
+            [[ $i -lt $((${#FILES[@]} - 1)) ]] && echo ","
+        done
+        echo "]"
+        ;;
+    --fzf)
+        # Output for fzf: "session:window (type) - time ago"
+        NOW=$(date +%s)
+        for f in "${FILES[@]}"; do
+            # Parse filename: timestamp_session_window_type
+            BASENAME=$(basename "$f")
+            TS=$(echo "$BASENAME" | cut -d'_' -f1)
+            SESSION=$(echo "$BASENAME" | cut -d'_' -f2)
+            WINDOW=$(echo "$BASENAME" | cut -d'_' -f3)
+            TYPE=$(echo "$BASENAME" | cut -d'_' -f4)
+
+            # Calculate time ago
+            DIFF=$((NOW - TS))
+            if [[ $DIFF -lt 60 ]]; then
+                AGO="${DIFF}s ago"
+            elif [[ $DIFF -lt 3600 ]]; then
+                AGO="$((DIFF / 60))m ago"
+            else
+                AGO="$((DIFF / 3600))h ago"
+            fi
+
+            # Icon for type
+            if [[ "$TYPE" == "question" ]]; then
+                ICON="🔔"
+            else
+                ICON="●"
+            fi
+
+            # Format: filepath|display
+            echo "${f}|${SESSION}:${WINDOW} ${ICON} ${AGO}"
+        done
+        ;;
+    --simple|*)
+        # Simple list: session:window type
+        for f in "${FILES[@]}"; do
+            BASENAME=$(basename "$f")
+            SESSION=$(echo "$BASENAME" | cut -d'_' -f2)
+            WINDOW=$(echo "$BASENAME" | cut -d'_' -f3)
+            TYPE=$(echo "$BASENAME" | cut -d'_' -f4)
+
+            if [[ "$TYPE" == "question" ]]; then
+                ICON="🔔"
+            else
+                ICON="●"
+            fi
+            echo "${SESSION}:${WINDOW} ${ICON}"
+        done
+        ;;
+esac
