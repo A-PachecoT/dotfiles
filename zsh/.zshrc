@@ -11,10 +11,7 @@ export VISUAL="nvim"
 # Claude CLI
 export PATH="/Users/styreep/.local/bin:$PATH"
 
-# Auto-attach to tmux in Ghostty (session restores via tmux-continuum)
-if [[ "$TERM_PROGRAM" == "ghostty" ]] && [[ -z "$TMUX" ]]; then
-    tmux attach -t dev 2>/dev/null || tmux new -s dev
-fi
+# Note: tmux auto-attach handled by dev-startup.sh (AeroSpace startup)
 
 alias l="ls -la"
 alias proj="cd ~/projects"
@@ -138,6 +135,11 @@ export PATH=$PATH:$ANDROID_HOME/tools/bin
 # ============================================================
 # tmux - Power User Terminal Multiplexer
 # ============================================================
+# Architecture:
+#   - AeroSpace workspace = Company (cofoundy, bilio, personal, notes)
+#   - tmux session = Company (one per workspace)
+#   - tmux window = Project (switch with Cmd+1-9)
+#   - Dev layout = yazi + console + claude
 
 alias tm="tmux"
 alias tma="tmux attach -t"
@@ -145,95 +147,53 @@ alias tml="tmux list-sessions"
 alias tmk="tmux kill-session -t"
 alias tmka="tmux kill-server"
 
-# Resume project session
-# Usage: tr [path]
-tr() {
-    local project_path="${1:-$PWD}"
-    local session_name="$(basename $project_path)"
-
-    cd "$project_path" || return 1
-
-    if tmux has-session -t "$session_name" 2>/dev/null; then
-        tmux attach -t "$session_name"
-    else
-        echo "No session '$session_name'. Use 'tn' to create new."
-    fi
-}
-
-# New project with dev layout
-# Layout: Left (60%): Editor top + Console bottom | Right (40%): Claude Code
-# Usage: tn [path]
-tn() {
-    local project_path="${1:-$PWD}"
-    # Resolve to absolute path for correct basename
-    project_path="$(cd "$project_path" && pwd)"
-    local session_name="$(basename $project_path)"
-
-    cd "$project_path" || return 1
-
-    # Kill existing session if any
-    tmux kill-session -t "$session_name" 2>/dev/null
-
-    # Create session with left pane (60%)
-    tmux new-session -d -s "$session_name" -c "$project_path"
-
-    # Split right for Claude Code (40%)
-    tmux split-window -h -t "$session_name" -c "$project_path" -p 40
-
-    # Split left pane vertically (editor top 80%, console bottom 20%)
-    tmux select-pane -t "$session_name":1.1
-    tmux split-window -v -t "$session_name" -c "$project_path" -p 20
-
-    # Start Claude Code in right pane (using cl alias)
-    tmux send-keys -t "$session_name":1.3 "cl" Enter
-
-    # Start yazi in top-left pane
-    tmux send-keys -t "$session_name":1.1 "yazi" Enter
-
-    # Focus on Claude Code pane
-    tmux select-pane -t "$session_name":1.3
-
-    tmux attach -t "$session_name"
-}
-
-# Add project as new window in current session (use inside tmux)
-# Layout: Left (60%): yazi top + Console bottom | Right (40%): Claude Code
-# Usage: tw [path]
+# tw - Setup dev layout in CURRENT window (most used command)
+# Layout: Left 60% (yazi 80% + console 20%) | Right 40% (Claude Code)
+# Usage: tw [path]  or just  tw .
 tw() {
-    if [[ -z "$TMUX" ]]; then
-        echo "Not in tmux. Use 'tn' to start a new session."
-        return 1
-    fi
+    [[ -z "$TMUX" ]] && { echo "Not in tmux. Open Ghostty first."; return 1; }
 
-    local project_path="${1:-$PWD}"
-    # Resolve to absolute path for correct basename
-    project_path="$(cd "$project_path" && pwd)"
-    local window_name="$(basename $project_path)"
+    local path="${1:-$PWD}"
+    path="$(cd "$path" 2>/dev/null && pwd)" || { echo "Invalid path"; return 1; }
+    local name="$(basename "$path")"
 
-    cd "$project_path" || return 1
-
-    # Rename current window and set up dev layout
-    tmux rename-window "$window_name"
-    tmux split-window -h -c "$project_path" -p 40
+    cd "$path"
+    tmux rename-window "$name"
+    tmux split-window -h -c "$path" -p 40
     tmux select-pane -t 1
-    tmux split-window -v -c "$project_path" -p 20
-
-    # Start Claude Code in right pane
+    tmux split-window -v -c "$path" -p 20
     tmux send-keys -t 3 "cl" Enter
-    # Start yazi in top-left pane
     tmux send-keys -t 1 "yazi" Enter
-    # Focus on Claude Code pane
     tmux select-pane -t 3
 }
 
-# Project picker with fzf
-tp() {
-    local project=$(find ~/projects ~/cofoundy/projects -maxdepth 2 -type d -name ".git" 2>/dev/null | sed 's/\/.git$//' | fzf --prompt="Project: ")
-    [[ -n "$project" ]] && tr "$project"
+# ts - Switch to session (create if needed)
+# Usage: ts cofoundy  or  ts bilio  or  ts personal
+ts() {
+    local session="${1:-dev}"
+    if tmux has-session -t "$session" 2>/dev/null; then
+        if [[ -n "$TMUX" ]]; then
+            tmux switch-client -t "$session"
+        else
+            tmux attach -t "$session"
+        fi
+    else
+        if [[ -n "$TMUX" ]]; then
+            tmux new-session -d -s "$session"
+            tmux switch-client -t "$session"
+        else
+            tmux new-session -s "$session"
+        fi
+    fi
 }
 
-# New project picker with fzf
-tnp() {
-    local project=$(find ~/projects ~/cofoundy/projects -maxdepth 2 -type d -name ".git" 2>/dev/null | sed 's/\/.git$//' | fzf --prompt="New Project: ")
-    [[ -n "$project" ]] && tn "$project"
+# tp - Project picker → setup in current session
+# Usage: tp
+tp() {
+    [[ -z "$TMUX" ]] && { echo "Not in tmux. Open Ghostty first."; return 1; }
+
+    local project=$(find ~/projects ~/cofoundy/projects -maxdepth 2 -type d -name ".git" 2>/dev/null | \
+        sed 's/\/.git$//' | \
+        fzf --prompt="Project: " --preview 'ls -la {}')
+    [[ -n "$project" ]] && { tmux new-window -c "$project" && tw "$project"; }
 }
