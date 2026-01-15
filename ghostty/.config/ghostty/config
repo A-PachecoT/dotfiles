@@ -93,18 +93,29 @@ keybind = cmd+ctrl+l=resize_split:right,20
 keybind = cmd+ctrl+k=resize_split:up,20
 keybind = cmd+ctrl+j=resize_split:down,20
 
-# Tab management
-keybind = cmd+t=new_tab
-keybind = cmd+w=close_surface
-keybind = cmd+1=goto_tab:1
-keybind = cmd+2=goto_tab:2
-keybind = cmd+3=goto_tab:3
-keybind = cmd+4=goto_tab:4
-keybind = cmd+5=goto_tab:5
-keybind = cmd+6=goto_tab:6
-keybind = cmd+7=goto_tab:7
-keybind = cmd+8=goto_tab:8
-keybind = cmd+9=goto_tab:9
+# tmux window management (Cmd sends Ctrl+b + key)
+keybind = cmd+c=text:\x02c
+keybind = cmd+w=text:\x02&
+keybind = cmd+r=unbind
+keybind = cmd+r=text:\x02r
+keybind = cmd+digit_1=unbind
+keybind = cmd+digit_1=text:\x02\x31
+keybind = cmd+digit_2=unbind
+keybind = cmd+digit_2=text:\x02\x32
+keybind = cmd+digit_3=unbind
+keybind = cmd+digit_3=text:\x02\x33
+keybind = cmd+digit_4=unbind
+keybind = cmd+digit_4=text:\x02\x34
+keybind = cmd+digit_5=unbind
+keybind = cmd+digit_5=text:\x02\x35
+keybind = cmd+digit_6=unbind
+keybind = cmd+digit_6=text:\x02\x36
+keybind = cmd+digit_7=unbind
+keybind = cmd+digit_7=text:\x02\x37
+keybind = cmd+digit_8=unbind
+keybind = cmd+digit_8=text:\x02\x38
+keybind = cmd+digit_9=unbind
+keybind = cmd+digit_9=text:\x02\x39
 
 # Quick actions
 keybind = cmd+shift+enter=toggle_split_zoom
