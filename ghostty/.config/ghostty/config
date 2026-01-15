@@ -95,7 +95,7 @@ keybind = cmd+ctrl+j=resize_split:down,20
 
 # tmux window management (Cmd sends Ctrl+b + key)
 keybind = cmd+c=text:\x02c
-keybind = cmd+w=text:\x02&
+keybind = cmd+w=text:\x02w
 keybind = cmd+r=unbind
 keybind = cmd+r=text:\x02r
 keybind = cmd+digit_1=unbind
