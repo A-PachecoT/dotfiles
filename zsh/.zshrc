@@ -196,7 +196,7 @@ tw() {
 
     command cd "$path"
     /opt/homebrew/bin/tmux rename-window "$name"
-    /opt/homebrew/bin/tmux split-window -h -c "$path" -p 40
+    /opt/homebrew/bin/tmux split-window -h -c "$path" -p 60
     /opt/homebrew/bin/tmux select-pane -t 1
     /opt/homebrew/bin/tmux split-window -v -c "$path" -p 20
     /opt/homebrew/bin/tmux send-keys -t 3 "cl -c" Enter

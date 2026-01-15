@@ -6,10 +6,10 @@
 
 # Predefined ratios by column count
 declare -A RATIOS
-RATIOS[2]="60 40"
-RATIOS[3]="50 30 20"
-RATIOS[4]="40 25 20 15"
-RATIOS[5]="35 22 18 14 11"
+RATIOS[2]="40 60"
+RATIOS[3]="30 40 30"
+RATIOS[4]="25 35 25 15"
+RATIOS[5]="20 30 25 15 10"
 
 # Create the split first
 tmux split-window -h -c "#{pane_current_path}"
