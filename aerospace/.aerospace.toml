@@ -9,7 +9,7 @@ after-startup-command = [
     'exec-and-forget sketchybar',
     'exec-and-forget open -a "Obsidian"',
     'exec-and-forget open -a "Comet"',
-    'exec-and-forget open -a "Cursor"'
+    'exec-and-forget open -a "Ghostty"'
 ]
 
 # Normalizations for better tiling
@@ -74,8 +74,12 @@ if.app-name-regex-substring = 'comet'
 run = 'move-node-to-workspace 1'
 
 [[on-window-detected]]
-if.app-name-regex-substring = 'cursor'
+if.app-name-regex-substring = 'ghostty'
 run = 'move-node-to-workspace 2'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'cursor'
+run = 'move-node-to-workspace 3'
 
 # Gaps configuration (Hyprland-like aesthetics)
 [gaps]
