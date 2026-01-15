@@ -75,6 +75,7 @@ AeroSpace routes Ghostty windows by title (session name).
 - `tw .` - Setup dev layout in current window (yazi + console + claude)
 - `ts cofoundy` - Switch to session
 - `tp` - Project picker with fzf → new window with dev layout
+- `y` - Launch yazi file manager (exits into browsed directory)
 - `Cmd+1-9` - Switch project windows
 - `Alt+2/3/4/9` - Switch company workspaces
 
@@ -420,6 +421,32 @@ Cmd+1, Cmd+2    # Switch between project windows
 Alt+3           # Jump to bilio workspace
 Alt+4           # Jump to personal workspace
 ```
+
+### Yazi (File Manager)
+
+Terminal file manager with vim keybindings. Integrated into dev layout via `tw` command.
+
+**Alias:**
+```bash
+y               # Launch yazi (exits into browsed directory)
+```
+
+**Key Bindings:**
+| Key | Action |
+|-----|--------|
+| `s` | Recursive file search (uses `fd`) |
+| `S` | Content search (uses `rg`) |
+| `/` | Filter in current directory |
+| `h/j/k/l` | Navigate (vim style) |
+| `Enter` | Open file in `$EDITOR` (neovim) |
+| `o` | Open file with system default |
+| `y` | Yank (copy) file |
+| `p` | Paste file |
+| `d` | Trash file |
+| `D` | Permanently delete |
+| `a` | Create file |
+| `r` | Rename |
+| `q` | Quit (shell exits into current directory) |
 
 ### Neovim + LazyVim (Editor)
 

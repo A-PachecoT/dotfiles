@@ -115,6 +115,17 @@ alias lt="eza --icons --git --tree --level=2"
 alias cat="bat"
 alias catn="bat --style=plain"  # cat without line numbers/git gutter
 
+# --- Yazi (File Manager) ---
+# y to launch, exits into the directory you were browsing
+function y() {
+    local tmp="$(mktemp -t yazi-cwd.XXXXXX)" cwd
+    yazi "$@" --cwd-file="$tmp"
+    if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
+        builtin cd -- "$cwd"
+    fi
+    rm -f -- "$tmp"
+}
+
 # Added by Antigravity
 export PATH="/Users/styreep/.antigravity/antigravity/bin:$PATH"
 
