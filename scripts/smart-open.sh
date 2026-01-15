@@ -154,10 +154,11 @@ file=$(basename "$resolved_path")
 yazi_pane=$(tmux list-panes -F '#{pane_id} #{pane_current_command}' 2>/dev/null | grep -iE '\byazi\b' | head -1 | awk '{print $1}' || true)
 
 if [[ -n "$yazi_pane" ]]; then
-    # Construct socket name from yazi's pane ID (matches y() function in zshrc)
-    socket_name="yazi-${yazi_pane}"
+    # Use pane ID as YAZI_ID (must be a number, matches --client-id in y() function)
+    # Strip the % prefix from tmux pane ID (e.g., %144 → 144)
+    client_id="${yazi_pane#%}"
 
-    if YAZI_ID="$socket_name" ya emit reveal "$resolved_path" 2>/dev/null; then
+    if YAZI_ID="$client_id" ya emit reveal "$resolved_path" 2>/dev/null; then
         # Focus the yazi pane so user sees the result
         tmux select-pane -t "$yazi_pane"
         exit 0
@@ -177,18 +178,17 @@ fi
 # which enables IPC via $YAZI_ID.
 # -----------------------------------------------------------------------------
 
-# Open file in $EDITOR with line number support
-# This is the reliable fallback when yazi IPC isn't available
+# Open file in $EDITOR via new tmux split
+# Don't use send-keys (sends to wrong pane) - create a proper split instead
 if [[ -n "${EDITOR:-}" ]]; then
     if [[ -n "$line_number" ]]; then
-        # Most editors support +line syntax (vim, nvim, code, etc.)
-        tmux send-keys "$EDITOR +$line_number '$resolved_path'" Enter
+        # Open editor in a new vertical split, then close when done
+        tmux split-window -h "$EDITOR +$line_number '$resolved_path'"
     else
-        tmux send-keys "$EDITOR '$resolved_path'" Enter
+        tmux split-window -h "$EDITOR '$resolved_path'"
     fi
-    tmux display-message "Opened in editor: $file:${line_number:-1}"
     exit 0
 fi
 
-# Last resort: Just show the path (no editor configured)
-tmux display-message "Found: $resolved_path (set \$EDITOR to open)"
+# Last resort: Copy path and notify (user can paste wherever they want)
+tmux display-message "Path copied: $resolved_path (no yazi IPC, no \$EDITOR)"

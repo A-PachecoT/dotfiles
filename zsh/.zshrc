@@ -117,12 +117,13 @@ alias catn="bat --style=plain"  # cat without line numbers/git gutter
 
 # --- Yazi (File Manager) ---
 # y to launch, exits into the directory you were browsing
-# --listen enables IPC so external scripts (like smart-open.sh) can control yazi
+# --client-id enables IPC so external scripts (like smart-open.sh) can control yazi
 function y() {
     local tmp="$(mktemp -t yazi-cwd.XXXXXX)" cwd
-    # Use tmux pane ID as unique socket name (allows multiple yazis)
-    local socket_name="yazi-${TMUX_PANE:-$$}"
-    yazi "$@" --cwd-file="$tmp" --listen "$socket_name"
+    # Use tmux pane ID (without %) as client ID for IPC (must be a number)
+    # TMUX_PANE is like "%144", we strip the % to get just the number
+    local client_id="${TMUX_PANE#%}"
+    yazi "$@" --cwd-file="$tmp" --client-id "${client_id:-$$}"
     if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
         builtin cd -- "$cwd"
     fi
