@@ -1,0 +1,142 @@
+#!/bin/bash
+# Jump to pending Claude with cycling support
+# Usage:
+#   claude-jump           # Jump to oldest, or cycle if pressed recently
+#   claude-jump --next    # Force jump to next pending
+#   claude-jump --newest  # Jump to newest pending
+#   claude-jump --reset   # Reset cycle state
+
+set -euo pipefail
+
+QUEUE_DIR="$HOME/.claude-pending"
+STATE_FILE="$HOME/.claude-pending/.jump-state"
+MODE="${1:---auto}"
+CYCLE_TIMEOUT=3  # Seconds before cycle resets
+
+mkdir -p "$QUEUE_DIR"
+
+# Get all pending files sorted by timestamp
+ALL_FILES=()
+while IFS= read -r line; do
+    [[ -n "$line" ]] && ALL_FILES+=("$line")
+done < <(find "$QUEUE_DIR" -type f -name '*_*_*_*' 2>/dev/null | sort)
+
+if [[ ${#ALL_FILES[@]} -eq 0 ]]; then
+    echo "No pending Claude events"
+    exit 0
+fi
+
+# Read state (last jumped file and timestamp)
+LAST_FILE=""
+LAST_TIME=0
+if [[ -f "$STATE_FILE" ]]; then
+    LAST_FILE=$(head -1 "$STATE_FILE" 2>/dev/null || echo "")
+    LAST_TIME=$(tail -1 "$STATE_FILE" 2>/dev/null || echo "0")
+fi
+
+NOW=$(date +%s)
+TIME_DIFF=$((NOW - LAST_TIME))
+
+# Determine which file to jump to
+case "$MODE" in
+    --newest)
+        TARGET="${ALL_FILES[-1]}"
+        ;;
+    --next)
+        # Force next in cycle
+        TARGET=""
+        FOUND_LAST=false
+        for f in "${ALL_FILES[@]}"; do
+            if [[ "$FOUND_LAST" == true ]]; then
+                TARGET="$f"
+                break
+            fi
+            if [[ "$f" == "$LAST_FILE" ]]; then
+                FOUND_LAST=true
+            fi
+        done
+        # Wrap around if needed
+        [[ -z "$TARGET" ]] && TARGET="${ALL_FILES[0]}"
+        ;;
+    --reset)
+        rm -f "$STATE_FILE"
+        echo "Cycle state reset"
+        exit 0
+        ;;
+    --auto|--oldest|*)
+        # Auto mode: if pressed recently, cycle; otherwise start from oldest
+        if [[ $TIME_DIFF -lt $CYCLE_TIMEOUT && -n "$LAST_FILE" ]]; then
+            # Recent press - cycle to next
+            TARGET=""
+            FOUND_LAST=false
+            for f in "${ALL_FILES[@]}"; do
+                if [[ "$FOUND_LAST" == true ]]; then
+                    TARGET="$f"
+                    break
+                fi
+                if [[ "$f" == "$LAST_FILE" ]]; then
+                    FOUND_LAST=true
+                fi
+            done
+            # Wrap around
+            [[ -z "$TARGET" ]] && TARGET="${ALL_FILES[0]}"
+        else
+            # Fresh start - oldest
+            TARGET="${ALL_FILES[0]}"
+        fi
+        ;;
+esac
+
+if [[ -z "$TARGET" || ! -f "$TARGET" ]]; then
+    echo "No pending Claude events"
+    exit 0
+fi
+
+# Save state for cycling
+echo "$TARGET" > "$STATE_FILE"
+echo "$NOW" >> "$STATE_FILE"
+
+# Parse the target file
+BASENAME=$(basename "$TARGET")
+TARGET_SESSION=$(echo "$BASENAME" | cut -d'_' -f2)
+TARGET_WINDOW=$(echo "$BASENAME" | cut -d'_' -f3)
+TARGET_TYPE=$(echo "$BASENAME" | cut -d'_' -f4)
+
+echo "Jumping to: ${TARGET_SESSION}:${TARGET_WINDOW} (${TARGET_TYPE})"
+
+# Check if target session exists
+if ! tmux has-session -t "$TARGET_SESSION" 2>/dev/null; then
+    echo "Session '$TARGET_SESSION' not found"
+    exit 1
+fi
+
+# Map session to AeroSpace workspace
+# Based on your setup: cofoundy=2, bilio=3, personal=4, notes=9
+case "$TARGET_SESSION" in
+    cofoundy) WORKSPACE=2 ;;
+    bilio)    WORKSPACE=3 ;;
+    personal|per) WORKSPACE=4 ;;
+    notes)    WORKSPACE=9 ;;
+    *)        WORKSPACE="" ;;
+esac
+
+# Switch AeroSpace workspace if needed (and if we know the mapping)
+if [[ -n "$WORKSPACE" ]]; then
+    CURRENT_WORKSPACE=$(aerospace list-workspaces --focused 2>/dev/null || echo "")
+    if [[ "$CURRENT_WORKSPACE" != "$WORKSPACE" ]]; then
+        aerospace workspace "$WORKSPACE" 2>/dev/null || true
+        # Small delay for workspace switch
+        sleep 0.1
+    fi
+fi
+
+# Switch tmux session and window
+if [[ -n "${TMUX:-}" ]]; then
+    # Inside tmux - use switch-client
+    tmux switch-client -t "${TARGET_SESSION}:${TARGET_WINDOW}" 2>/dev/null || \
+    tmux switch-client -t "$TARGET_SESSION" 2>/dev/null
+else
+    # Outside tmux - attach
+    tmux attach-session -t "${TARGET_SESSION}:${TARGET_WINDOW}" 2>/dev/null || \
+    tmux attach-session -t "$TARGET_SESSION" 2>/dev/null
+fi

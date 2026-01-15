@@ -1,0 +1,107 @@
+#!/bin/bash
+# FZF picker for Claude pending events
+# Called by claude-picker, runs inside tmux popup
+
+set -euo pipefail
+
+QUEUE_DIR="$HOME/.claude-pending"
+SCRIPT_DIR="$(dirname "$0")"
+
+mkdir -p "$QUEUE_DIR"
+
+# Generate list for fzf
+generate_list() {
+    NOW=$(date +%s)
+    find "$QUEUE_DIR" -type f -name '*_*_*_*' 2>/dev/null | sort | while read -r f; do
+        [[ -f "$f" ]] || continue
+        BASENAME=$(basename "$f")
+        TS=$(echo "$BASENAME" | cut -d'_' -f1)
+        SESSION=$(echo "$BASENAME" | cut -d'_' -f2)
+        WINDOW=$(echo "$BASENAME" | cut -d'_' -f3)
+        TYPE=$(echo "$BASENAME" | cut -d'_' -f4)
+
+        # Calculate time ago
+        DIFF=$((NOW - TS))
+        if [[ $DIFF -lt 60 ]]; then
+            AGO="${DIFF}s"
+        elif [[ $DIFF -lt 3600 ]]; then
+            AGO="$((DIFF / 60))m"
+        else
+            AGO="$((DIFF / 3600))h"
+        fi
+
+        # Icon and color hint for type
+        if [[ "$TYPE" == "question" ]]; then
+            ICON="🔔"
+            TYPE_LABEL="question"
+        else
+            ICON="●"
+            TYPE_LABEL="done"
+        fi
+
+        # Output: filepath<TAB>display
+        printf "%s\t%s  %s:%s  %s  %s ago\n" "$f" "$ICON" "$SESSION" "$WINDOW" "$TYPE_LABEL" "$AGO"
+    done
+}
+
+# Preview command - show last lines from Claude output or file metadata
+preview_cmd() {
+    FILE="$1"
+    if [[ -f "$FILE" ]]; then
+        echo "=== Event Details ==="
+        cat "$FILE" | jq -r '"Session: \(.session)\nWindow: \(.window)\nType: \(.event_type)\nPath: \(.cwd)"' 2>/dev/null || cat "$FILE"
+        echo ""
+        echo "=== Recent directory files ==="
+        CWD=$(cat "$FILE" | jq -r '.cwd' 2>/dev/null)
+        if [[ -n "$CWD" && -d "$CWD" ]]; then
+            ls -la "$CWD" 2>/dev/null | head -10
+        fi
+    fi
+}
+export -f preview_cmd
+
+# Run fzf
+SELECTED=$(generate_list | fzf \
+    --ansi \
+    --delimiter='\t' \
+    --with-nth=2 \
+    --preview="bash -c 'preview_cmd {1}'" \
+    --preview-window=right:40%:wrap \
+    --header="Select pending Claude (Enter to jump, Ctrl-D to dismiss)" \
+    --bind="ctrl-d:execute(rm -f {1})+reload(bash -c 'generate_list')" \
+    --prompt="Claude > " \
+    --height=100% \
+    --layout=reverse \
+    --no-mouse \
+    2>/dev/null) || exit 0
+
+# Extract file path (first field)
+FILE_PATH=$(echo "$SELECTED" | cut -f1)
+
+if [[ -z "$FILE_PATH" || ! -f "$FILE_PATH" ]]; then
+    exit 0
+fi
+
+# Parse and jump
+BASENAME=$(basename "$FILE_PATH")
+TARGET_SESSION=$(echo "$BASENAME" | cut -d'_' -f2)
+TARGET_WINDOW=$(echo "$BASENAME" | cut -d'_' -f3)
+
+# Map session to workspace
+case "$TARGET_SESSION" in
+    cofoundy) WORKSPACE=2 ;;
+    bilio)    WORKSPACE=3 ;;
+    personal|per) WORKSPACE=4 ;;
+    notes)    WORKSPACE=9 ;;
+    *)        WORKSPACE="" ;;
+esac
+
+# Switch workspace if needed
+if [[ -n "$WORKSPACE" ]]; then
+    aerospace workspace "$WORKSPACE" 2>/dev/null || true
+    sleep 0.1
+fi
+
+# Switch tmux session/window
+tmux switch-client -t "${TARGET_SESSION}:${TARGET_WINDOW}" 2>/dev/null || \
+tmux switch-client -t "$TARGET_SESSION" 2>/dev/null || true

@@ -1,0 +1,43 @@
+#!/bin/bash
+# Interactive picker for pending Claude events
+# Usage: claude-picker
+# Opens fzf in tmux popup to select and jump to pending Claude
+
+set -euo pipefail
+
+QUEUE_DIR="$HOME/.claude-pending"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+mkdir -p "$QUEUE_DIR"
+
+# Check if any pending
+COUNT=$(find "$QUEUE_DIR" -type f -name '*_*_*_*' 2>/dev/null | wc -l | tr -d ' ')
+if [[ "$COUNT" -eq 0 ]]; then
+    # No pending - show notification
+    if [[ -n "${TMUX:-}" ]]; then
+        tmux display-message "No pending Claude events"
+    else
+        # Use osascript for notification when outside terminal
+        osascript -e 'display notification "No pending Claude events" with title "Claude"' 2>/dev/null || true
+    fi
+    exit 0
+fi
+
+# Build the picker command
+PICKER_CMD="$SCRIPT_DIR/claude-picker-fzf"
+
+# If inside tmux, use popup
+if [[ -n "${TMUX:-}" ]]; then
+    tmux display-popup -E -w 60% -h 50% "$PICKER_CMD"
+else
+    # Outside tmux (called from AeroSpace)
+    # Send popup command to first available tmux session
+    if tmux list-sessions &>/dev/null; then
+        FIRST_SESSION=$(tmux list-sessions -F '#S' | head -1)
+        # Run popup in that session (don't attach, just send command)
+        tmux display-popup -t "$FIRST_SESSION" -E -w 60% -h 50% "$PICKER_CMD"
+    else
+        # No tmux sessions - show notification
+        osascript -e 'display notification "No tmux sessions available" with title "Claude Picker"' 2>/dev/null || true
+    fi
+fi
