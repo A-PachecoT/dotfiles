@@ -205,9 +205,17 @@ tw() {
 }
 
 # ts - Switch to session (create if needed)
-# Usage: ts cofoundy  or  ts bilio  or  ts personal
+# Usage: ts          (show fzf menu of sessions)
+#        ts cofoundy (switch to specific session)
 ts() {
-    local session="${1:-dev}"
+    local session="$1"
+
+    # If no argument, show fzf menu of existing sessions
+    if [[ -z "$session" ]]; then
+        session=$(tmux list-sessions -F "#{session_name}" 2>/dev/null | fzf --height=40% --reverse --prompt="session> ")
+        [[ -z "$session" ]] && return 0
+    fi
+
     if tmux has-session -t "$session" 2>/dev/null; then
         if [[ -n "$TMUX" ]]; then
             tmux switch-client -t "$session"
