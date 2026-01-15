@@ -94,10 +94,8 @@ if.app-name-regex-substring = 'ghostty'
 if.window-title-regex-substring = 'notes'
 run = 'move-node-to-workspace 9'
 
-# Fallback: any other Ghostty → workspace 5
-[[on-window-detected]]
-if.app-name-regex-substring = 'ghostty'
-run = 'move-node-to-workspace 5'
+# NOTE: No fallback for Ghostty - ad-hoc windows stay in current workspace
+# Only named sessions (cofoundy, bilio, personal, notes) get routed
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'cursor'
