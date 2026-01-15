@@ -3,6 +3,83 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 PHILOSOPHY: I'm a POWER user of terminal; Keyboard shortcuts>>mouse
 
+---
+
+## User Persona: Andre Pacheco
+
+### Who I Am
+- **Power user** - keyboard shortcuts over mouse, always
+- **Multi-company worker** - Cofoundy, Bilio, personal projects
+- **AI-assisted developer** - Claude Code is my pair programmer
+
+### My Dev Environment
+- macOS (Apple Silicon) with AeroSpace (tiling WM) + SketchyBar
+- Ghostty + tmux (terminal multiplexer)
+- Neovim + LazyVim (editor), Yazi (file manager)
+- Claude Code in every project
+
+### My Mental Model
+```
+AeroSpace Workspace = Company/Context (Alt+2/3/4 to switch)
+└── Ghostty window with tmux session
+    └── tmux windows = Projects (Cmd+1-9 to switch)
+        └── Dev layout: yazi + console + Claude Code
+```
+
+### What I Need (Non-Negotiable)
+1. **Persist everything** through OS restarts - no manual reconstruction
+2. **Instant actions** - no confirmation prompts, no extra keystrokes
+3. **Simple commands** - `tw` to setup project, `ts` to switch context
+4. **Clear architecture** - one way to do things, no ambiguity
+
+### Dev Layout (per project window)
+```
+┌─────────────────┬──────────────┐
+│   yazi (files)  │              │
+│      80%        │  Claude Code │
+├─────────────────┤     40%      │
+│   Console 20%   │              │
+└─────────────────┴──────────────┘
+       60%
+```
+
+### What Frustrates Me
+- Workflows that break or behave inconsistently
+- Having to remember which command does what
+- Losing state on restart
+- Confirmation dialogs and extra prompts
+- Mixing paradigms (sessions vs windows vs tabs)
+
+### Success Criteria
+Open laptop → everything restored → `tw .` → coding in 5 seconds.
+
+---
+
+## Current State
+
+**Architecture (Implemented):**
+```
+Startup (via dev-startup.sh):
+├── Workspace 1: Comet (browser)
+├── Workspace 2: Ghostty → tmux session "cofoundy"
+├── Workspace 3: Ghostty → tmux session "bilio"
+├── Workspace 4: Ghostty → tmux session "personal"
+├── Workspace 5: Fallback for ad-hoc Ghostty/Cursor
+└── Workspace 9: Obsidian + Ghostty → tmux session "notes"
+
+Each session has project windows, restored by tmux-continuum.
+AeroSpace routes Ghostty windows by title (session name).
+```
+
+**Commands:**
+- `tw .` - Setup dev layout in current window (yazi + console + claude)
+- `ts cofoundy` - Switch to session
+- `tp` - Project picker with fzf → new window with dev layout
+- `Cmd+1-9` - Switch project windows
+- `Alt+2/3/4/9` - Switch company workspaces
+
+---
+
 ## Repository Architecture
 
 This is a **GNU Stow-managed dotfiles repository** that uses symlinks to create a Single Source of Truth (SSOT) for macOS configuration files. The architecture centers around:
@@ -276,23 +353,35 @@ zellij --layout custom --session my-session
 
 Primary workflow for Claude Code development. Ghostty intercepts Cmd keys and sends them to tmux, allowing shortcuts to work even inside Claude Code.
 
+**Architecture:**
+```
+AeroSpace Workspaces (Alt+2/3/4/9 to switch companies)
+├── Workspace 2: Ghostty → tmux session "cofoundy"
+├── Workspace 3: Ghostty → tmux session "bilio"
+├── Workspace 4: Ghostty → tmux session "personal"
+└── Workspace 9: Obsidian + Ghostty → tmux session "notes"
+
+Each session contains project windows (Cmd+1-9 to switch).
+tmux-continuum auto-saves/restores everything.
+```
+
 **Installation:**
 ```bash
 brew install --cask ghostty
 brew install tmux
 ./install.sh restow
+# Then in tmux: Ctrl+b I to install plugins
 ```
 
 **Project Commands:**
 ```bash
-tn              # New project with dev layout (current dir)
-tn ~/path       # New project at specific path
-tr              # Resume existing project session
-tp              # Project picker with fzf → resume
-tnp             # Project picker with fzf → new
+tw .            # Setup dev layout in current window (most used!)
+tw ~/path       # Setup dev layout for specific project
+ts cofoundy     # Switch to session (or create if needed)
+tp              # Project picker with fzf → new window with dev layout
 ```
 
-**Dev Layout (`tn` command):**
+**Dev Layout (`tw` command):**
 ```
 ┌─────────────────────┬────────────────┐
 │   yazi (files)      │                │
@@ -307,43 +396,29 @@ tnp             # Project picker with fzf → new
 | Key | Action |
 |-----|--------|
 | `Cmd+h/j/k/l` | Navigate panes |
+| `Cmd+1-9` | Switch tmux windows (projects) |
+| `Cmd+c` | New tmux window |
+| `Cmd+w` | Close tmux window |
 | `Cmd+d` | Split right |
-| `Cmd+Shift+d` | Split down |
 | `Cmd+z` | Zoom pane |
 | `Cmd+x` | Close pane |
-| `Cmd+Shift+k` | Clear screen |
-
-**tmux Key Bindings (prefix: Ctrl+b):**
-| Key | Action |
-|-----|--------|
-| `Ctrl+b h/j/k/l` | Navigate panes |
-| `Ctrl+b d` | Split right |
-| `Ctrl+b D` | Split down |
-| `Ctrl+b z` | Zoom pane |
-| `Ctrl+b c` | New window |
-| `Ctrl+b 1-9` | Switch window |
-| `Ctrl+b s` | Session picker |
+| `Cmd+r` | Reload tmux config |
 
 **Session Persistence:**
-Sessions auto-save every 10 minutes and auto-restore on tmux start (via tmux-continuum plugin).
+Sessions auto-save every 10 minutes and auto-restore on tmux start (via tmux-continuum plugin). On macOS restart, `dev-startup.sh` opens Ghostty windows that reconnect to saved sessions.
 
-**Multi-Project Workflow:**
+**Daily Workflow:**
 ```bash
-# AeroSpace workspace 1: Project A
-tn ~/projects/project-a     # Creates tmux session "project-a"
+# Boot up → 4 Ghostty windows auto-open in correct workspaces
 
-# AeroSpace workspace 2: Project B
-tn ~/projects/project-b     # Creates tmux session "project-b"
+# In cofoundy workspace (Alt+2):
+Cmd+c           # New window
+tw .            # Setup dev layout for current project
+Cmd+1, Cmd+2    # Switch between project windows
 
-# Switch between projects with Alt+1, Alt+2 (AeroSpace)
-# Each workspace has its own Ghostty + tmux session
-```
-
-**First time setup:**
-```bash
-# Open Ghostty, start tmux, then install plugins
-tmux
-# Press: Ctrl+b I  (Capital I - installs all plugins)
+# Switch companies:
+Alt+3           # Jump to bilio workspace
+Alt+4           # Jump to personal workspace
 ```
 
 ### Neovim + LazyVim (Editor)
@@ -511,15 +586,22 @@ These apps launch automatically via `after-startup-command` and move to assigned
 ```toml
 after-startup-command = [
     'exec-and-forget sketchybar',
-    'exec-and-forget open -a "Obsidian"',    # → workspace 9
-    'exec-and-forget open -a "Comet"',       # → workspace 1 (replaced Dia browser)
-    'exec-and-forget open -a "Cursor"'       # → workspace 2
+    'exec-and-forget open -a "Obsidian"',                           # → workspace 9
+    'exec-and-forget open -a "Comet"',                              # → workspace 1
+    'exec-and-forget /Users/styreep/dotfiles/scripts/dev-startup.sh' # → workspaces 2,3,4,9
 ]
 ```
 
+**dev-startup.sh** launches 4 Ghostty windows with named tmux sessions:
+- `cofoundy` → workspace 2
+- `bilio` → workspace 3
+- `personal` → workspace 4
+- `notes` → workspace 9 (alongside Obsidian)
+
+AeroSpace routes each Ghostty window by matching the tmux session name in the window title.
+
 **Browser Configuration:**
 - **Comet browser** is configured as the primary browser (workspace 1, `alt-q` hotkey)
-- Replaced Dia browser throughout the config (2025-10-17)
 - Icon mapping: `["Comet"] = ":comet:"` in `app_icons.lua`
 
 ### macOS Login Items (System Settings)
