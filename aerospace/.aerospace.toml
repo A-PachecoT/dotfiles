@@ -9,7 +9,7 @@ after-startup-command = [
     'exec-and-forget sketchybar',
     'exec-and-forget open -a "Obsidian"',
     'exec-and-forget open -a "Comet"',
-    'exec-and-forget open -a "Ghostty"'
+    'exec-and-forget /Users/styreep/dotfiles/scripts/dev-startup.sh'
 ]
 
 # Normalizations for better tiling
@@ -73,13 +73,35 @@ run = 'move-node-to-workspace 9'
 if.app-name-regex-substring = 'comet'
 run = 'move-node-to-workspace 1'
 
+# Ghostty routing by tmux session name in window title
 [[on-window-detected]]
 if.app-name-regex-substring = 'ghostty'
+if.window-title-regex-substring = 'cofoundy'
 run = 'move-node-to-workspace 2'
 
 [[on-window-detected]]
-if.app-name-regex-substring = 'cursor'
+if.app-name-regex-substring = 'ghostty'
+if.window-title-regex-substring = 'bilio'
 run = 'move-node-to-workspace 3'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'ghostty'
+if.window-title-regex-substring = 'personal'
+run = 'move-node-to-workspace 4'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'ghostty'
+if.window-title-regex-substring = 'notes'
+run = 'move-node-to-workspace 9'
+
+# Fallback: any other Ghostty → workspace 5
+[[on-window-detected]]
+if.app-name-regex-substring = 'ghostty'
+run = 'move-node-to-workspace 5'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'cursor'
+run = 'move-node-to-workspace 5'
 
 # Gaps configuration (Hyprland-like aesthetics)
 [gaps]
