@@ -171,6 +171,78 @@ setup_jupyter() {
     info "To install more packages: uv pip install --python ~/.jupyter-env/bin/python <package>"
 }
 
+# Function to setup Claude Code hooks
+setup_claude_hooks() {
+    info "Setting up Claude Code hooks..."
+
+    DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
+    CLAUDE_DIR="$HOME/.claude"
+    SETTINGS_FILE="$CLAUDE_DIR/settings.json"
+    TEMPLATE_FILE="$DOTFILES_DIR/claude/settings.template.json"
+
+    # Check if template exists
+    if [[ ! -f "$TEMPLATE_FILE" ]]; then
+        error "Template file not found: $TEMPLATE_FILE"
+        return 1
+    fi
+
+    # Create .claude directory if needed
+    mkdir -p "$CLAUDE_DIR"
+
+    # Generate hooks config with actual paths
+    HOOKS_CONFIG=$(cat "$TEMPLATE_FILE" | sed "s|__DOTFILES__|$DOTFILES_DIR|g")
+
+    if [[ -f "$SETTINGS_FILE" ]]; then
+        # Merge hooks into existing settings
+        info "Merging hooks into existing settings.json..."
+
+        # Check if jq is available
+        if command -v jq &> /dev/null; then
+            # Use jq to merge (preserves existing settings)
+            EXISTING=$(cat "$SETTINGS_FILE")
+            NEW_HOOKS=$(echo "$HOOKS_CONFIG" | jq '.hooks')
+
+            echo "$EXISTING" | jq --argjson hooks "$NEW_HOOKS" '.hooks = $hooks' > "$SETTINGS_FILE.tmp"
+            mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
+            success "Hooks merged into settings.json"
+        else
+            warning "jq not installed, creating backup and replacing hooks section"
+            cp "$SETTINGS_FILE" "$SETTINGS_FILE.backup"
+
+            # Simple replacement - extract non-hooks settings and add our hooks
+            # This is a fallback, jq is preferred
+            python3 << EOF
+import json
+
+with open("$SETTINGS_FILE", "r") as f:
+    existing = json.load(f)
+
+hooks = json.loads('''$HOOKS_CONFIG''')["hooks"]
+existing["hooks"] = hooks
+
+with open("$SETTINGS_FILE", "w") as f:
+    json.dump(existing, f, indent=2)
+EOF
+            success "Hooks updated in settings.json (backup at settings.json.backup)"
+        fi
+    else
+        # Create new settings file with hooks
+        info "Creating new settings.json with hooks..."
+        echo "$HOOKS_CONFIG" | jq '.' > "$SETTINGS_FILE" 2>/dev/null || echo "$HOOKS_CONFIG" > "$SETTINGS_FILE"
+        success "Created settings.json with hooks"
+    fi
+
+    # Create queue directory
+    mkdir -p "$HOME/.claude-pending"
+
+    info "Claude Code hooks configured:"
+    info "  - PreToolUse: Block dangerous bash commands"
+    info "  - Stop: Voice notification on task completion"
+    info "  - Notification: Voice notification on questions"
+    info ""
+    info "Restart Claude Code to apply hooks"
+}
+
 # Main installation function
 install_dotfiles() {
     info "Starting dotfiles installation..."
@@ -197,13 +269,23 @@ install_dotfiles() {
         info "Skipping Jupyter setup"
     fi
 
+    # Setup Claude Code hooks
+    echo ""
+    read -p "Do you want to setup Claude Code hooks? (Y/n): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        setup_claude_hooks
+    else
+        info "Skipping Claude hooks setup"
+    fi
+
     success "Dotfiles installation completed!"
     info "Your configurations are now symlinked to ~/dotfiles/"
 }
 
 # Show usage
 usage() {
-    echo "Usage: $0 [install|unstow|restow|backup|jupyter]"
+    echo "Usage: $0 [install|unstow|restow|backup|jupyter|claude]"
     echo ""
     echo "Commands:"
     echo "  install  - Install dotfiles using stow (default)"
@@ -211,6 +293,7 @@ usage() {
     echo "  restow   - Reinstall all symlinks (useful after updates)"
     echo "  backup   - Backup existing configurations only"
     echo "  jupyter  - Setup global Jupyter environment with uv"
+    echo "  claude   - Setup Claude Code hooks (notifications, safety)"
     echo ""
     echo "Available packages: ${PACKAGES[*]}"
 }
@@ -231,6 +314,9 @@ case "${1:-install}" in
         ;;
     "jupyter")
         setup_jupyter
+        ;;
+    "claude")
+        setup_claude_hooks
         ;;
     "help"|"-h"|"--help")
         usage
