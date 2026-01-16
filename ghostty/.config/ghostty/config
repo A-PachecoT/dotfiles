@@ -121,6 +121,10 @@ keybind = cmd+digit_8=text:\x02\x38
 keybind = cmd+digit_9=unbind
 keybind = cmd+digit_9=text:\x02\x39
 
+# Window cycling (Ctrl+Tab / Ctrl+Shift+Tab)
+keybind = ctrl+tab=text:\x02n
+keybind = ctrl+shift+tab=text:\x02p
+
 # Smart open URLs/files (tmux-fingers) - sends prefix + F
 keybind = cmd+f=unbind
 keybind = cmd+f=text:\x02F
