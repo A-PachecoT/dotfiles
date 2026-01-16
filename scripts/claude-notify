@@ -12,6 +12,13 @@ TIMESTAMP=$(date +%s)
 # Ensure queue directory exists
 mkdir -p "$QUEUE_DIR"
 
+# Debug: log environment
+echo "$(date): TMUX='${TMUX:-}' PWD='$PWD'" >> "$QUEUE_DIR/notify-debug.log"
+
+# Get current AeroSpace workspace (with timeout to prevent hanging)
+# Aerospace can hang when called from hook context, so use short timeout + fallback
+WORKSPACE=$(perl -e 'alarm 1; exec @ARGV' aerospace list-workspaces --focused 2>/dev/null || echo "")
+
 # Get tmux context (if in tmux)
 if [[ -n "${TMUX:-}" ]]; then
     SESSION=$(tmux display-message -p '#S')
@@ -28,6 +35,16 @@ else
     LOCATION="$WINDOW"
 fi
 
+# Fallback: map session to workspace if aerospace didn't respond
+if [[ -z "$WORKSPACE" && -n "$SESSION" ]]; then
+    case "$SESSION" in
+        cofoundy) WORKSPACE="2" ;;
+        bilio)    WORKSPACE="3" ;;
+        personal|per|dotfiles) WORKSPACE="4" ;;
+        notes)    WORKSPACE="9" ;;
+    esac
+fi
+
 # Create queue entry file
 # Format: timestamp_session_window_type
 QUEUE_FILE="${QUEUE_DIR}/${TIMESTAMP}_${SESSION}_${WINDOW}_${EVENT_TYPE}"
@@ -41,6 +58,7 @@ cat > "$QUEUE_FILE" << EOF
   "window_index": "$WINDOW_INDEX",
   "pane_id": "$PANE_ID",
   "event_type": "$EVENT_TYPE",
+  "workspace": "$WORKSPACE",
   "cwd": "$PWD"
 }
 EOF
@@ -69,12 +87,14 @@ say -v Samantha "$ANNOUNCEMENT" &
 
 # Set tmux window option for badge display
 if [[ -n "${TMUX:-}" ]]; then
-    # Set @claude_pending option on current window
+    # Set @claude_pending option on the SPECIFIC window (not just current)
+    # Use -t to target session:window_index explicitly
     # "q" = question (🔔), "s" = stop (●)
+    TARGET="${SESSION}:${WINDOW_INDEX}"
     if [[ "$EVENT_TYPE" == "question" ]]; then
-        tmux set-option -w @claude_pending "q" 2>/dev/null || true
+        tmux set-option -t "$TARGET" -w @claude_pending "q" 2>/dev/null || true
     else
-        tmux set-option -w @claude_pending "s" 2>/dev/null || true
+        tmux set-option -t "$TARGET" -w @claude_pending "s" 2>/dev/null || true
     fi
     # Trigger status bar refresh
     tmux refresh-client -S 2>/dev/null || true

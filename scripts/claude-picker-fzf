@@ -14,11 +14,13 @@ generate_list() {
     NOW=$(date +%s)
     find "$QUEUE_DIR" -type f -name '*_*_*_*' 2>/dev/null | sort | while read -r f; do
         [[ -f "$f" ]] || continue
-        BASENAME=$(basename "$f")
-        TS=$(echo "$BASENAME" | cut -d'_' -f1)
-        SESSION=$(echo "$BASENAME" | cut -d'_' -f2)
-        WINDOW=$(echo "$BASENAME" | cut -d'_' -f3)
-        TYPE=$(echo "$BASENAME" | cut -d'_' -f4)
+
+        # Read from JSON for accurate data
+        SESSION=$(jq -r '.session // "unknown"' "$f" 2>/dev/null)
+        WINDOW=$(jq -r '.window // "unknown"' "$f" 2>/dev/null)
+        WINDOW_INDEX=$(jq -r '.window_index // "?"' "$f" 2>/dev/null)
+        TYPE=$(jq -r '.event_type // "stop"' "$f" 2>/dev/null)
+        TS=$(jq -r '.timestamp // 0' "$f" 2>/dev/null)
 
         # Calculate time ago
         DIFF=$((NOW - TS))
@@ -39,8 +41,8 @@ generate_list() {
             TYPE_LABEL="done"
         fi
 
-        # Output: filepath<TAB>display
-        printf "%s\t%s  %s:%s  %s  %s ago\n" "$f" "$ICON" "$SESSION" "$WINDOW" "$TYPE_LABEL" "$AGO"
+        # Output: filepath<TAB>display (session window_index window_name)
+        printf "%s\t%s  %s %s %s  %s  %s ago\n" "$f" "$ICON" "$SESSION" "$WINDOW_INDEX" "$WINDOW" "$TYPE_LABEL" "$AGO"
     done
 }
 
@@ -82,26 +84,15 @@ if [[ -z "$FILE_PATH" || ! -f "$FILE_PATH" ]]; then
     exit 0
 fi
 
-# Parse and jump
-BASENAME=$(basename "$FILE_PATH")
-TARGET_SESSION=$(echo "$BASENAME" | cut -d'_' -f2)
-TARGET_WINDOW=$(echo "$BASENAME" | cut -d'_' -f3)
+# Parse from JSON for accuracy
+TARGET_SESSION=$(jq -r '.session' "$FILE_PATH" 2>/dev/null)
+TARGET_WINDOW_INDEX=$(jq -r '.window_index' "$FILE_PATH" 2>/dev/null)
+WORKSPACE=$(jq -r '.workspace // empty' "$FILE_PATH" 2>/dev/null || echo "")
 
-# Map session to workspace
-case "$TARGET_SESSION" in
-    cofoundy) WORKSPACE=2 ;;
-    bilio)    WORKSPACE=3 ;;
-    personal|per) WORKSPACE=4 ;;
-    notes)    WORKSPACE=9 ;;
-    *)        WORKSPACE="" ;;
-esac
+# Write target to temp file for post-popup navigation
+# Format: session:window_index:workspace
+TARGET_FILE="/tmp/claude-picker-target"
+echo "${TARGET_SESSION}:${TARGET_WINDOW_INDEX}:${WORKSPACE}" > "$TARGET_FILE"
 
-# Switch workspace if needed
-if [[ -n "$WORKSPACE" ]]; then
-    aerospace workspace "$WORKSPACE" 2>/dev/null || true
-    sleep 0.1
-fi
-
-# Switch tmux session/window
-tmux switch-client -t "${TARGET_SESSION}:${TARGET_WINDOW}" 2>/dev/null || \
-tmux switch-client -t "$TARGET_SESSION" 2>/dev/null || true
+# The popup will close, and tmux will read the target file and navigate
+# This is handled by the tmux binding that calls this script

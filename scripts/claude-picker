@@ -26,6 +26,9 @@ fi
 # Build the picker command
 PICKER_CMD="$SCRIPT_DIR/claude-picker-fzf"
 
+# Clean up any stale target file
+rm -f /tmp/claude-picker-target
+
 # If inside tmux, use popup
 if [[ -n "${TMUX:-}" ]]; then
     tmux display-popup -E -w 60% -h 50% "$PICKER_CMD"
@@ -39,5 +42,34 @@ else
     else
         # No tmux sessions - show notification
         osascript -e 'display notification "No tmux sessions available" with title "Claude Picker"' 2>/dev/null || true
+        exit 0
     fi
+fi
+
+# After popup closes, navigate to selected target
+# Format: session:window_index:workspace
+if [[ -f /tmp/claude-picker-target ]]; then
+    TARGET=$(cat /tmp/claude-picker-target)
+    SESSION=$(echo "$TARGET" | cut -d: -f1)
+    WINDOW_INDEX=$(echo "$TARGET" | cut -d: -f2)
+    WORKSPACE=$(echo "$TARGET" | cut -d: -f3)
+
+    # Switch AeroSpace workspace if specified and outside current workspace
+    if [[ -n "$WORKSPACE" ]]; then
+        CURRENT_WS=$(aerospace list-workspaces --focused 2>/dev/null || echo "")
+        if [[ "$CURRENT_WS" != "$WORKSPACE" ]]; then
+            aerospace workspace "$WORKSPACE" 2>/dev/null || true
+            sleep 0.1
+        fi
+    fi
+
+    # Navigate tmux using window index
+    if [[ -n "${TMUX:-}" ]]; then
+        tmux switch-client -t "${SESSION}:${WINDOW_INDEX}" 2>/dev/null || \
+        tmux switch-client -t "$SESSION" 2>/dev/null || true
+    else
+        tmux select-window -t "${SESSION}:${WINDOW_INDEX}" 2>/dev/null || true
+    fi
+
+    rm -f /tmp/claude-picker-target
 fi

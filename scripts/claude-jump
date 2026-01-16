@@ -96,13 +96,14 @@ fi
 echo "$TARGET" > "$STATE_FILE"
 echo "$NOW" >> "$STATE_FILE"
 
-# Parse the target file
-BASENAME=$(basename "$TARGET")
-TARGET_SESSION=$(echo "$BASENAME" | cut -d'_' -f2)
-TARGET_WINDOW=$(echo "$BASENAME" | cut -d'_' -f3)
-TARGET_TYPE=$(echo "$BASENAME" | cut -d'_' -f4)
+# Parse the target file - read from JSON for accurate data
+TARGET_SESSION=$(jq -r '.session' "$TARGET" 2>/dev/null)
+TARGET_WINDOW=$(jq -r '.window' "$TARGET" 2>/dev/null)
+TARGET_WINDOW_INDEX=$(jq -r '.window_index' "$TARGET" 2>/dev/null)
+TARGET_TYPE=$(jq -r '.event_type' "$TARGET" 2>/dev/null)
+WORKSPACE=$(jq -r '.workspace // empty' "$TARGET" 2>/dev/null || echo "")
 
-echo "Jumping to: ${TARGET_SESSION}:${TARGET_WINDOW} (${TARGET_TYPE})"
+echo "Jumping to: ${TARGET_SESSION}:${TARGET_WINDOW_INDEX}:${TARGET_WINDOW} (${TARGET_TYPE}) workspace=${WORKSPACE}"
 
 # Check if target session exists
 if ! tmux has-session -t "$TARGET_SESSION" 2>/dev/null; then
@@ -110,33 +111,26 @@ if ! tmux has-session -t "$TARGET_SESSION" 2>/dev/null; then
     exit 1
 fi
 
-# Map session to AeroSpace workspace
-# Based on your setup: cofoundy=2, bilio=3, personal=4, notes=9
-case "$TARGET_SESSION" in
-    cofoundy) WORKSPACE=2 ;;
-    bilio)    WORKSPACE=3 ;;
-    personal|per) WORKSPACE=4 ;;
-    notes)    WORKSPACE=9 ;;
-    *)        WORKSPACE="" ;;
-esac
-
 # Switch AeroSpace workspace if needed (and if we know the mapping)
 if [[ -n "$WORKSPACE" ]]; then
-    CURRENT_WORKSPACE=$(aerospace list-workspaces --focused 2>/dev/null || echo "")
+    CURRENT_WORKSPACE=$(perl -e 'alarm 1; exec @ARGV' aerospace list-workspaces --focused 2>/dev/null || echo "")
     if [[ "$CURRENT_WORKSPACE" != "$WORKSPACE" ]]; then
-        aerospace workspace "$WORKSPACE" 2>/dev/null || true
+        perl -e 'alarm 2; exec @ARGV' aerospace workspace "$WORKSPACE" 2>/dev/null || true
         # Small delay for workspace switch
         sleep 0.1
     fi
 fi
 
-# Switch tmux session and window
+# Switch tmux session and window (use window_index for accuracy)
 if [[ -n "${TMUX:-}" ]]; then
-    # Inside tmux - use switch-client
-    tmux switch-client -t "${TARGET_SESSION}:${TARGET_WINDOW}" 2>/dev/null || \
+    # Inside tmux - use switch-client with window index
+    tmux switch-client -t "${TARGET_SESSION}:${TARGET_WINDOW_INDEX}" 2>/dev/null || \
     tmux switch-client -t "$TARGET_SESSION" 2>/dev/null
 else
-    # Outside tmux - attach
-    tmux attach-session -t "${TARGET_SESSION}:${TARGET_WINDOW}" 2>/dev/null || \
-    tmux attach-session -t "$TARGET_SESSION" 2>/dev/null
+    # Outside tmux (e.g., from AeroSpace)
+    # Select the target window by index (works even when not attached)
+    tmux select-window -t "${TARGET_SESSION}:${TARGET_WINDOW_INDEX}" 2>/dev/null || true
+
+    # Focus Ghostty app to ensure the terminal window is in front
+    osascript -e 'tell application "Ghostty" to activate' 2>/dev/null || true
 fi
