@@ -86,7 +86,7 @@ run = 'move-node-to-workspace 3'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'ghostty'
-if.window-title-regex-substring = 'personal'
+if.window-title-regex-substring = 'personal|dotfiles'
 run = 'move-node-to-workspace 4'
 
 [[on-window-detected]]

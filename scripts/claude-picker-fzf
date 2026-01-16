@@ -12,7 +12,7 @@ mkdir -p "$QUEUE_DIR"
 # Generate list for fzf
 generate_list() {
     NOW=$(date +%s)
-    find "$QUEUE_DIR" -type f -name '*_*_*_*' 2>/dev/null | sort | while read -r f; do
+    find "$QUEUE_DIR" -type f -name '*_*_*_*' 2>/dev/null | sort -r | while read -r f; do
         [[ -f "$f" ]] || continue
 
         # Read from JSON for accurate data
@@ -46,28 +46,12 @@ generate_list() {
     done
 }
 
-# Preview command - show last lines from Claude output or file metadata
-preview_cmd() {
-    FILE="$1"
-    if [[ -f "$FILE" ]]; then
-        echo "=== Event Details ==="
-        cat "$FILE" | jq -r '"Session: \(.session)\nWindow: \(.window)\nType: \(.event_type)\nPath: \(.cwd)"' 2>/dev/null || cat "$FILE"
-        echo ""
-        echo "=== Recent directory files ==="
-        CWD=$(cat "$FILE" | jq -r '.cwd' 2>/dev/null)
-        if [[ -n "$CWD" && -d "$CWD" ]]; then
-            ls -la "$CWD" 2>/dev/null | head -10
-        fi
-    fi
-}
-export -f preview_cmd
-
-# Run fzf
+# Run fzf with inline preview
 SELECTED=$(generate_list | fzf \
     --ansi \
     --delimiter='\t' \
     --with-nth=2 \
-    --preview="bash -c 'preview_cmd {1}'" \
+    --preview='[[ -f {1} ]] && jq -r "\"Session: \" + .session + \"\nWindow: \" + .window + \"\nType: \" + .event_type + \"\nPath: \" + .cwd" {1} 2>/dev/null || cat {1}' \
     --preview-window=right:40%:wrap \
     --header="Select pending Claude (Enter to jump, Ctrl-D to dismiss)" \
     --bind="ctrl-d:execute(rm -f {1})+reload(bash -c 'generate_list')" \
@@ -89,10 +73,7 @@ TARGET_SESSION=$(jq -r '.session' "$FILE_PATH" 2>/dev/null)
 TARGET_WINDOW_INDEX=$(jq -r '.window_index' "$FILE_PATH" 2>/dev/null)
 WORKSPACE=$(jq -r '.workspace // empty' "$FILE_PATH" 2>/dev/null || echo "")
 
-# Write target to temp file for post-popup navigation
-# Format: session:window_index:workspace
+# Write target to temp file for claude-picker to handle navigation
+# Navigation from popup context doesn't work reliably (tmux switch-client fails silently)
 TARGET_FILE="/tmp/claude-picker-target"
-echo "${TARGET_SESSION}:${TARGET_WINDOW_INDEX}:${WORKSPACE}" > "$TARGET_FILE"
-
-# The popup will close, and tmux will read the target file and navigate
-# This is handled by the tmux binding that calls this script
+echo "${TARGET_SESSION}:${TARGET_WINDOW_INDEX}:${WORKSPACE}:${FILE_PATH}" > "$TARGET_FILE"

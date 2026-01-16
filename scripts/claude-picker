@@ -46,20 +46,27 @@ else
     fi
 fi
 
+# Wait for popup to write target file (may take a moment)
+for i in {1..50}; do
+    [[ -f /tmp/claude-picker-target ]] && break
+    sleep 0.1
+done
+
 # After popup closes, navigate to selected target
-# Format: session:window_index:workspace
+# Format: session:window_index:workspace:queue_file_path
 if [[ -f /tmp/claude-picker-target ]]; then
     TARGET=$(cat /tmp/claude-picker-target)
     SESSION=$(echo "$TARGET" | cut -d: -f1)
     WINDOW_INDEX=$(echo "$TARGET" | cut -d: -f2)
     WORKSPACE=$(echo "$TARGET" | cut -d: -f3)
+    QUEUE_FILE=$(echo "$TARGET" | cut -d: -f4-)
 
-    # Switch AeroSpace workspace if specified and outside current workspace
+    # Switch AeroSpace workspace FIRST (must happen before tmux navigation)
     if [[ -n "$WORKSPACE" ]]; then
         CURRENT_WS=$(aerospace list-workspaces --focused 2>/dev/null || echo "")
         if [[ "$CURRENT_WS" != "$WORKSPACE" ]]; then
             aerospace workspace "$WORKSPACE" 2>/dev/null || true
-            sleep 0.1
+            sleep 0.2  # Give AeroSpace time to focus the workspace
         fi
     fi
 
@@ -70,6 +77,14 @@ if [[ -f /tmp/claude-picker-target ]]; then
     else
         tmux select-window -t "${SESSION}:${WINDOW_INDEX}" 2>/dev/null || true
     fi
+
+    # Clear the pending queue file we just navigated to
+    if [[ -n "$QUEUE_FILE" && -f "$QUEUE_FILE" ]]; then
+        rm -f "$QUEUE_FILE" 2>/dev/null || true
+    fi
+
+    # Trigger SketchyBar refresh
+    sketchybar --trigger claude_pending_change 2>/dev/null &
 
     rm -f /tmp/claude-picker-target
 fi

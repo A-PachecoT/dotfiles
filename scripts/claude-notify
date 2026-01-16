@@ -15,10 +15,6 @@ mkdir -p "$QUEUE_DIR"
 # Debug: log environment
 echo "$(date): TMUX='${TMUX:-}' PWD='$PWD'" >> "$QUEUE_DIR/notify-debug.log"
 
-# Get current AeroSpace workspace (with timeout to prevent hanging)
-# Aerospace can hang when called from hook context, so use short timeout + fallback
-WORKSPACE=$(perl -e 'alarm 1; exec @ARGV' aerospace list-workspaces --focused 2>/dev/null || echo "")
-
 # Get tmux context (if in tmux)
 if [[ -n "${TMUX:-}" ]]; then
     SESSION=$(tmux display-message -p '#S')
@@ -35,15 +31,15 @@ else
     LOCATION="$WINDOW"
 fi
 
-# Fallback: map session to workspace if aerospace didn't respond
-if [[ -z "$WORKSPACE" && -n "$SESSION" ]]; then
-    case "$SESSION" in
-        cofoundy) WORKSPACE="2" ;;
-        bilio)    WORKSPACE="3" ;;
-        personal|per|dotfiles) WORKSPACE="4" ;;
-        notes)    WORKSPACE="9" ;;
-    esac
-fi
+# Always derive workspace from session (aerospace detection unreliable in hook context)
+case "$SESSION" in
+    cofoundy) WORKSPACE="2" ;;
+    bilio)    WORKSPACE="3" ;;
+    personal|per|dotfiles) WORKSPACE="4" ;;
+    notes)    WORKSPACE="9" ;;
+    standalone) WORKSPACE="5" ;;
+    *)        WORKSPACE="" ;;
+esac
 
 # Create queue entry file
 # Format: timestamp_session_window_type
