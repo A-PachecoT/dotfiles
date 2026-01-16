@@ -209,7 +209,7 @@ local function update_workspaces()
 
       if pending_info and pending_info.count > 0 then
         if pending_info.has_question then
-          badge = " 🔔"  -- Question needs attention
+          badge = " 󰂞"  -- Question needs attention
           badge_color = colors.red or 0xfff7768e
         else
           badge = " ●"  -- Completed

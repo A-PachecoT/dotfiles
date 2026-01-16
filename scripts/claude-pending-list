@@ -56,7 +56,7 @@ case "$FORMAT" in
 
             # Icon for type
             if [[ "$TYPE" == "question" ]]; then
-                ICON="🔔"
+                ICON="󰂞"
             else
                 ICON="●"
             fi
@@ -74,7 +74,7 @@ case "$FORMAT" in
             TYPE=$(echo "$BASENAME" | cut -d'_' -f4)
 
             if [[ "$TYPE" == "question" ]]; then
-                ICON="🔔"
+                ICON="󰂞"
             else
                 ICON="●"
             fi

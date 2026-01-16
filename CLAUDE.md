@@ -85,7 +85,7 @@ Multi-Claude awareness system for knowing when Claude instances finish or need a
 
 **Features:**
 - Voice announcement when Claude finishes: "session window# name done"
-- Visual badges on tmux windows (`●` done, `🔔` question)
+- Visual badges on tmux windows (`●` done, `󰂞` question)
 - Visual badges on SketchyBar workspaces
 - Quick navigation to pending Claudes
 
@@ -103,7 +103,7 @@ Claude finishes/asks question
 Hook triggers claude-notify script
     ↓
 ├── Queue file created (~/.claude-pending/)
-├── tmux window badge set (● or 🔔)
+├── tmux window badge set (● or 󰂞)
 ├── SketchyBar workspace badge updated
 └── Sound + voice: "cofoundy 2 api done"
 

@@ -34,7 +34,7 @@ generate_list() {
 
         # Icon and color hint for type
         if [[ "$TYPE" == "question" ]]; then
-            ICON="🔔"
+            ICON="󰂞"
             TYPE_LABEL="question"
         else
             ICON="●"

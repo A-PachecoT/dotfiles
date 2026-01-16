@@ -89,7 +89,7 @@ say -v Samantha "$ANNOUNCEMENT" &
 if [[ -n "${TMUX:-}" ]]; then
     # Set @claude_pending option on the SPECIFIC window (not just current)
     # Use -t to target session:window_index explicitly
-    # "q" = question (🔔), "s" = stop (●)
+    # "q" = question (󰂞), "s" = stop (●)
     TARGET="${SESSION}:${WINDOW_INDEX}"
     if [[ "$EVENT_TYPE" == "question" ]]; then
         tmux set-option -t "$TARGET" -w @claude_pending "q" 2>/dev/null || true
