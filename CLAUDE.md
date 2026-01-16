@@ -79,6 +79,62 @@ AeroSpace routes Ghostty windows by title (session name).
 - `Cmd+1-9` - Switch project windows
 - `Alt+2/3/4/9` - Switch company workspaces
 
+### Claude Pending Notification System
+
+Multi-Claude awareness system for knowing when Claude instances finish or need attention across sessions.
+
+**Features:**
+- Voice announcement when Claude finishes: "session window# name done"
+- Visual badges on tmux windows (`●` done, `🔔` question)
+- Visual badges on SketchyBar workspaces
+- Quick navigation to pending Claudes
+
+**Hotkeys:**
+| Key | Action |
+|-----|--------|
+| `Ctrl+Alt+C` | Jump to oldest pending Claude (cycles if pressed within 3s) |
+| `Ctrl+Alt+Shift+C` | Open fzf picker to choose pending Claude |
+| `Prefix+C` | Jump to oldest pending (inside tmux) |
+
+**How It Works:**
+```
+Claude finishes/asks question
+    ↓
+Hook triggers claude-notify script
+    ↓
+├── Queue file created (~/.claude-pending/)
+├── tmux window badge set (● or 🔔)
+├── SketchyBar workspace badge updated
+└── Sound + voice: "cofoundy 2 api done"
+
+When you focus the window:
+    ↓
+├── Queue file cleared
+├── tmux badge cleared
+└── SketchyBar updated
+```
+
+**Scripts:**
+- `claude-notify` - Main hook (called by Claude Code)
+- `claude-pending-list` - List pending (`--simple`, `--fzf`, `--json`)
+- `claude-pending-count` - Count pending
+- `claude-pending-clear` - Clear pending (`--all`, `session:window`)
+- `claude-jump` - Navigate to pending
+- `claude-picker` - fzf popup selector
+
+**Setup:**
+```bash
+./install.sh claude  # Configure hooks in ~/.claude/settings.json
+```
+
+**Session → Workspace Mapping:**
+| Session | Workspace |
+|---------|-----------|
+| cofoundy | 2 |
+| bilio | 3 |
+| personal | 4 |
+| notes | 9 |
+
 ---
 
 ## Repository Architecture
