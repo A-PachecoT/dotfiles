@@ -11,13 +11,24 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__DOTFILES__/scripts/claude-active set"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "__DOTFILES__/scripts/claude-notify stop"
+            "command": "__DOTFILES__/scripts/claude-active clear && __DOTFILES__/scripts/claude-notify stop"
           }
         ]
       }
@@ -28,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "__DOTFILES__/scripts/claude-notify question"
+            "command": "__DOTFILES__/scripts/claude-active clear && __DOTFILES__/scripts/claude-notify question"
           }
         ]
       }

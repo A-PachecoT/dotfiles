@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# claude-active - Set/clear active Claude indicator
+#
+# Usage:
+#   claude-active set    # Mark window as having active Claude
+#   claude-active clear  # Clear active state
+
+ACTION="${1:-set}"
+SESSION=$(tmux display-message -p '#S' 2>/dev/null)
+WIN_IDX=$(tmux display-message -p '#I' 2>/dev/null)
+
+[[ -z "$SESSION" || -z "$WIN_IDX" ]] && exit 0
+
+TARGET="${SESSION}:${WIN_IDX}"
+
+if [[ "$ACTION" == "set" ]]; then
+    tmux set-option -t "$TARGET" -w @claude_active "a" 2>/dev/null || true
+else
+    tmux set-option -t "$TARGET" -w @claude_active "" 2>/dev/null || true
+fi
+
+tmux refresh-client -S 2>/dev/null || true
