@@ -11,6 +11,49 @@ local max_spaces = 10
 -- Get theme-aware card style
 local card_style = styles.card()
 
+-- Session to workspace mapping for Claude pending badges
+local session_workspace_map = {
+  cofoundy = 2,
+  bilio = 3,
+  personal = 4,
+  per = 4,
+  dotfiles = 4,
+  standalone = 5,  -- Ad-hoc sessions in workspace 5
+  notes = 9,
+}
+
+-- Function to get pending Claude events per workspace
+local function get_pending_by_workspace()
+  local pending = {}
+  local queue_dir = os.getenv("HOME") .. "/.claude-pending"
+
+  -- List files in queue directory using shell (io.open doesn't work reliably in SketchyBar Lua)
+  local handle = io.popen("ls -1 '" .. queue_dir .. "' 2>/dev/null")
+  if handle then
+    for file in handle:lines() do
+      -- Parse filename: timestamp_session_window_type
+      local session = file:match("^%d+_([^_]+)_")
+      local event_type = file:match("_([^_]+)$")
+      if session then
+        local ws = session_workspace_map[session]
+        if ws then
+          -- Track both count and whether any are questions
+          if not pending[ws] then
+            pending[ws] = { count = 0, has_question = false }
+          end
+          pending[ws].count = pending[ws].count + 1
+          if event_type == "question" then
+            pending[ws].has_question = true
+          end
+        end
+      end
+    end
+    handle:close()
+  end
+
+  return pending
+end
+
 -- Create spaces for each display
 for display = 1, 2 do
   for i = 1, max_spaces do
@@ -155,6 +198,9 @@ end
 
 -- Function to update workspace visibility and app icons
 local function update_workspaces()
+  -- Get pending Claude events
+  local claude_pending = get_pending_by_workspace()
+
   -- Get focused workspace
   local focused_ws = nil
   os.execute("aerospace list-workspaces --focused > /tmp/focused_ws.txt")
@@ -208,6 +254,25 @@ local function update_workspaces()
         space_brackets[display][i]:set({ drawing = should_show })
 
         if should_show then
+          -- Check for pending Claude in this workspace
+          local pending_info = claude_pending[i]
+          local badge = ""
+
+          if pending_info and pending_info.count > 0 then
+            if pending_info.has_question then
+              badge = " 󰂞"  -- Question needs attention
+            else
+              badge = " ●"  -- Completed
+            end
+          end
+
+          local icon_string = tostring(i) .. badge
+
+          -- Set icon string immediately (badge updates should be instant)
+          spaces[display][i]:set({
+            icon = { string = icon_string }
+          })
+
           -- Update selection state with animation
           sbar.animate("tanh", 10, function()
             spaces[display][i]:set({
@@ -277,6 +342,11 @@ end)
 
 -- Subscribe to front app change
 space_window_observer:subscribe("front_app_switched", function(env)
+  update_workspaces()
+end)
+
+-- Subscribe to Claude pending changes
+space_window_observer:subscribe("claude_pending_change", function(env)
   update_workspaces()
 end)
 
