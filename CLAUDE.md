@@ -713,7 +713,7 @@ AeroSpace routes each Ghostty window by matching the tmux session name in the wi
 Apps that auto-start via macOS (not controlled by AeroSpace):
 
 **Active:**
-- **Docker** - Launches hidden in background via `~/Library/LaunchAgents/com.docker.autostart.plist` (uses `--hide` flag)
+- **Docker** - Launches daemon only (no GUI) via `~/Library/LaunchAgents/com.docker.autostart.plist` (uses `-gja` flags)
 - **AeroSpace** - Window manager
 - **Flux** - Screen color temperature
 - **Hammerspoon** - Automation engine (audio switching, hotkeys)
