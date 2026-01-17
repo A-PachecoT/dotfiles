@@ -22,33 +22,44 @@ local session_workspace_map = {
   notes = 9,
 }
 
+-- Debounce state
+local last_update_time = 0
+local debounce_ms = 150  -- Minimum ms between updates
+local pending_update = false
+
+-- Helper: run command and return output directly (no temp files)
+local function exec(cmd)
+  local handle = io.popen(cmd .. " 2>/dev/null")
+  if not handle then return "" end
+  local result = handle:read("*a") or ""
+  handle:close()
+  return result
+end
+
 -- Function to get pending Claude events per workspace
 local function get_pending_by_workspace()
   local pending = {}
   local queue_dir = os.getenv("HOME") .. "/.claude-pending"
 
-  -- List files in queue directory using shell (io.open doesn't work reliably in SketchyBar Lua)
-  local handle = io.popen("ls -1 '" .. queue_dir .. "' 2>/dev/null")
-  if handle then
-    for file in handle:lines() do
-      -- Parse filename: timestamp_session_window_type
-      local session = file:match("^%d+_([^_]+)_")
-      local event_type = file:match("_([^_]+)$")
-      if session then
-        local ws = session_workspace_map[session]
-        if ws then
-          -- Track both count and whether any are questions
-          if not pending[ws] then
-            pending[ws] = { count = 0, has_question = false }
-          end
-          pending[ws].count = pending[ws].count + 1
-          if event_type == "question" then
-            pending[ws].has_question = true
-          end
+  -- List files in queue directory
+  local output = exec("ls -1 '" .. queue_dir .. "'")
+  for file in output:gmatch("[^\n]+") do
+    -- Parse filename: timestamp_session_window_type
+    local session = file:match("^%d+_([^_]+)_")
+    local event_type = file:match("_([^_]+)$")
+    if session then
+      local ws = session_workspace_map[session]
+      if ws then
+        -- Track both count and whether any are questions
+        if not pending[ws] then
+          pending[ws] = { count = 0, has_question = false }
+        end
+        pending[ws].count = pending[ws].count + 1
+        if event_type == "question" then
+          pending[ws].has_question = true
         end
       end
     end
-    handle:close()
   end
 
   return pending
@@ -196,48 +207,40 @@ for display = 1, 2 do
   end)
 end
 
--- Function to update workspace visibility and app icons
-local function update_workspaces()
+-- Function to update workspace visibility and app icons (optimized)
+local function do_update_workspaces()
   -- Get pending Claude events
   local claude_pending = get_pending_by_workspace()
 
-  -- Get focused workspace
-  local focused_ws = nil
-  os.execute("aerospace list-workspaces --focused > /tmp/focused_ws.txt")
-  local f = io.open("/tmp/focused_ws.txt", "r")
-  if f then
-    local focused_output = f:read("*a")
-    focused_ws = tonumber(focused_output:match("%d+"))
-    f:close()
-  end
+  -- Get focused workspace (direct read, no temp file)
+  local focused_output = exec("aerospace list-workspaces --focused")
+  local focused_ws = tonumber(focused_output:match("%d+"))
+
+  -- Cache for app lists per workspace (avoid duplicate queries)
+  local workspace_apps_cache = {}
 
   -- Update workspaces for each display
   for display = 1, 2 do
     local workspace_states = {}
 
-    -- Get all workspaces that exist on this monitor
-    os.execute("aerospace list-workspaces --monitor " .. display .. " > /tmp/occupied_ws_" .. display .. ".txt")
-    local f = io.open("/tmp/occupied_ws_" .. display .. ".txt", "r")
-    if f then
-      for line in f:lines() do
-        local ws_num = tonumber(line)
-        if ws_num then
-          workspace_states[ws_num] = { exists = true, has_windows = false }
-        end
+    -- Get all workspaces that exist on this monitor (direct read)
+    local monitor_output = exec("aerospace list-workspaces --monitor " .. display)
+    for ws_str in monitor_output:gmatch("%d+") do
+      local ws_num = tonumber(ws_str)
+      if ws_num then
+        workspace_states[ws_num] = { exists = true, has_windows = false }
       end
-      f:close()
     end
 
-    -- Check which workspaces actually have windows
+    -- Check which workspaces actually have windows (batch query, cache results)
     for ws_num, _ in pairs(workspace_states) do
-      os.execute("aerospace list-windows --workspace " .. ws_num .. " --format '%{app-name}' > /tmp/ws_check_" .. ws_num .. ".txt 2>/dev/null")
-      local check = io.open("/tmp/ws_check_" .. ws_num .. ".txt", "r")
-      if check then
-        local content = check:read("*a")
-        if content and content:match("%S") then  -- Has non-whitespace content
-          workspace_states[ws_num].has_windows = true
-        end
-        check:close()
+      if not workspace_apps_cache[ws_num] then
+        local apps_output = exec("aerospace list-windows --workspace " .. ws_num .. " --format '%{app-name}'")
+        workspace_apps_cache[ws_num] = apps_output
+      end
+      local content = workspace_apps_cache[ws_num]
+      if content and content:match("%S") then
+        workspace_states[ws_num].has_windows = true
       end
     end
 
@@ -285,21 +288,17 @@ local function update_workspaces()
             })
           end)
 
-          -- Get apps for this specific workspace (reuse the file we already created)
+          -- Get apps from cache (already fetched above)
           local icon_line = ""
           local has_apps = false
-
-          -- Count each app
           local app_count = {}
-          local apps_file = io.open("/tmp/ws_check_" .. i .. ".txt", "r")
-          if apps_file then
-            for app in apps_file:lines() do
-              if app and app ~= "" then
-                has_apps = true
-                app_count[app] = (app_count[app] or 0) + 1
-              end
+
+          local apps_content = workspace_apps_cache[i] or ""
+          for app in apps_content:gmatch("[^\n]+") do
+            if app and app ~= "" then
+              has_apps = true
+              app_count[app] = (app_count[app] or 0) + 1
             end
-            apps_file:close()
           end
 
           -- Build icon string
@@ -322,6 +321,27 @@ local function update_workspaces()
       end
     end
   end
+end
+
+-- Debounced wrapper for update_workspaces
+local function update_workspaces()
+  local now = os.clock() * 1000  -- Current time in ms
+
+  if now - last_update_time < debounce_ms then
+    -- Too soon, schedule update if not already pending
+    if not pending_update then
+      pending_update = true
+      sbar.exec("sleep 0.15", function()
+        pending_update = false
+        last_update_time = os.clock() * 1000
+        do_update_workspaces()
+      end)
+    end
+    return
+  end
+
+  last_update_time = now
+  do_update_workspaces()
 end
 
 -- Space window observer (hidden item for event subscriptions)
