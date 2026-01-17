@@ -47,9 +47,22 @@ fi
 #   - /abs/path.ts   → absolute path
 #   - Makefile       → files without extension
 #   - .gitignore     → dotfiles
+#   - n(~/.claude/plans/file.md) → ~/.claude/plans/file.md (wrapped paths)
+#   - Write(/path/to/file)       → /path/to/file (tool output format)
+#   - (path/in/parens)           → path/in/parens (bare parens)
 #
 # The regex strips :line and :line:col suffixes
 # =============================================================================
+
+# Extract path from wrapper patterns: name(path) or (path)
+# Handles: n(path), Write(path), Read(path), (path)
+if [[ "$input" =~ ^[a-zA-Z_]*\((.+)\)$ ]]; then
+    input="${BASH_REMATCH[1]}"
+fi
+
+# Expand ~ to $HOME (not auto-expanded in variables)
+input="${input/#\~/$HOME}"
+
 filepath=$(echo "$input" | sed -E 's/:[0-9]+(:[0-9]+)?$//')
 
 # Also extract line number if present (for editor fallback with +line)
@@ -150,8 +163,17 @@ file=$(basename "$resolved_path")
 # We find the yazi pane first, then use its pane ID to construct the socket name
 # -----------------------------------------------------------------------------
 
-# Find yazi pane in current tmux window
-yazi_pane=$(tmux list-panes -F '#{pane_id} #{pane_current_command}' 2>/dev/null | grep -iE '\byazi\b' | head -1 | awk '{print $1}' || true)
+# Find yazi pane in the SAME window as the triggering pane
+# TMUX_PANE tells us which pane tmux-fingers was triggered from
+# Without -t, list-panes can return wrong window in some contexts
+target_window=$(tmux display-message -t "${TMUX_PANE:-}" -p '#{session_name}:#{window_index}' 2>/dev/null || true)
+
+if [[ -n "$target_window" ]]; then
+    yazi_pane=$(tmux list-panes -t "$target_window" -F '#{pane_id} #{pane_current_command}' 2>/dev/null | grep -iE '\byazi\b' | head -1 | awk '{print $1}' || true)
+else
+    # Fallback: search current window (original behavior)
+    yazi_pane=$(tmux list-panes -F '#{pane_id} #{pane_current_command}' 2>/dev/null | grep -iE '\byazi\b' | head -1 | awk '{print $1}' || true)
+fi
 
 if [[ -n "$yazi_pane" ]]; then
     # Use pane ID as YAZI_ID (must be a number, matches --client-id in y() function)
