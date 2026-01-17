@@ -78,8 +78,13 @@ else
     ANNOUNCEMENT="${ANNOUNCEMENT} done"
 fi
 
-# Voice announcement (async, don't block)
-say -v Samantha "$ANNOUNCEMENT" &
+# Voice announcement at 30% volume, 50% faster (async, don't block)
+(
+    TEMP_AUDIO=$(mktemp /tmp/claude-notify-XXXXXX.aiff)
+    say -v Samantha -r 225 -o "$TEMP_AUDIO" "$ANNOUNCEMENT"
+    afplay --volume 0.3 "$TEMP_AUDIO"
+    rm -f "$TEMP_AUDIO"
+) &
 
 # Set tmux window option for badge display
 if [[ -n "${TMUX:-}" ]]; then
