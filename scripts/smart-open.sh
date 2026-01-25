@@ -117,12 +117,40 @@ fi
 
 # =============================================================================
 # FILE NOT FOUND HANDLING
-# Purpose: Provide clear feedback when file cannot be located
-# Uses tmux's display-message for non-intrusive notification
+# Purpose: Fuzzy-find fallback when exact path not found (hop recovery)
+# Uses fd + fzf to search for files matching the basename
 # =============================================================================
 if [[ -z "$resolved_path" ]]; then
-    tmux display-message "File not found: $filepath (searched from $pane_cwd)"
-    exit 0
+    # Extract basename for fuzzy search
+    search_term=$(basename "$filepath" 2>/dev/null || echo "$filepath")
+
+    # Try fuzzy find with fd, searching from home directory
+    if command -v fd &>/dev/null && command -v fzf &>/dev/null; then
+        candidates=$(fd -t f -H --max-depth 8 "$search_term" "$HOME" 2>/dev/null | head -50)
+
+        if [[ -n "$candidates" ]]; then
+            # Show fzf popup in tmux for selection
+            selected=$(echo "$candidates" | fzf-tmux -p 80%,60% \
+                --prompt="hop: " \
+                --header="Path not found: $filepath" \
+                --query="$search_term" \
+                --preview='head -50 {}' \
+                --preview-window=right:40%:wrap)
+
+            if [[ -n "$selected" ]]; then
+                resolved_path="$selected"
+            else
+                # User cancelled fzf
+                exit 0
+            fi
+        else
+            tmux display-message "hop: No matches for '$search_term'"
+            exit 0
+        fi
+    else
+        tmux display-message "hop: File not found: $filepath (install fd + fzf for fuzzy fallback)"
+        exit 0
+    fi
 fi
 
 # Normalize to absolute path (resolve symlinks, .., etc.)
@@ -179,6 +207,11 @@ if [[ -n "$yazi_pane" ]]; then
     # Use pane ID as YAZI_ID (must be a number, matches --client-id in y() function)
     # Strip the % prefix from tmux pane ID (e.g., %144 → 144)
     client_id="${yazi_pane#%}"
+
+    # If target is a hidden file (starts with .), ensure hidden files are visible
+    if [[ "$file" == .* ]]; then
+        YAZI_ID="$client_id" ya emit hidden show 2>/dev/null || true
+    fi
 
     if YAZI_ID="$client_id" ya emit reveal "$resolved_path" 2>/dev/null; then
         # Focus the yazi pane so user sees the result
