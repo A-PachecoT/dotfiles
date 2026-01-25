@@ -1,0 +1,4 @@
+[[mgr.prepend_keymap]]
+on   = "<Space>"
+run  = "shell '/Users/styreep/dotfiles/scripts/quicklook.sh %h' --block"
+desc = "Quick Look preview"
