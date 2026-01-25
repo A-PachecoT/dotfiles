@@ -200,7 +200,7 @@ tw() {
     /opt/homebrew/bin/tmux select-pane -t 1
     /opt/homebrew/bin/tmux split-window -v -c "$path" -p 20
     /opt/homebrew/bin/tmux send-keys -t 3 "cl -c" Enter
-    /opt/homebrew/bin/tmux send-keys -t 1 "yazi" Enter
+    /opt/homebrew/bin/tmux send-keys -t 1 "y" Enter
     /opt/homebrew/bin/tmux select-pane -t 3
 }
 
@@ -242,3 +242,4 @@ tp() {
         fzf --prompt="Project: " --preview 'ls -la {}')
     [[ -n "$project" ]] && { tmux new-window -c "$project" && tw "$project"; }
 }
+export PATH="$(brew --prefix)/opt/openjdk@25/bin:$PATH"
