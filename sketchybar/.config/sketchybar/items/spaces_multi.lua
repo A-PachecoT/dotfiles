@@ -27,7 +27,11 @@ local last_update_time = 0
 local debounce_ms = 150  -- Minimum ms between updates
 local pending_update = false
 
--- Helper: run command and return output directly (no temp files)
+-- Track current focused workspace (updated from trigger env)
+local current_focused_ws = nil
+local prev_focused_ws = nil
+
+-- Helper: run command and return output directly (used only for non-aerospace calls)
 local function exec(cmd)
   local handle = io.popen(cmd .. " 2>/dev/null")
   if not handle then return "" end
@@ -207,76 +211,44 @@ for display = 1, 2 do
   end)
 end
 
--- Function to update workspace visibility and app icons (optimized)
-local function do_update_workspaces()
-  -- Get pending Claude events
+-- Helper to apply workspace UI updates given parsed data
+local function apply_workspace_updates(focused_ws, ws_apps)
   local claude_pending = get_pending_by_workspace()
 
-  -- Get focused workspace (direct read, no temp file)
-  local focused_output = exec("aerospace list-workspaces --focused")
-  local focused_ws = tonumber(focused_output:match("%d+"))
+  -- Determine which workspaces are occupied (have apps)
+  local occupied = {}
+  for ws_num, _ in pairs(ws_apps) do
+    occupied[ws_num] = true
+  end
+  if focused_ws then
+    occupied[focused_ws] = true
+  end
 
-  -- Cache for app lists per workspace (avoid duplicate queries)
-  local workspace_apps_cache = {}
-
-  -- Update workspaces for each display
+  -- Update each display
   for display = 1, 2 do
-    local workspace_states = {}
-
-    -- Get all workspaces that exist on this monitor (direct read)
-    local monitor_output = exec("aerospace list-workspaces --monitor " .. display)
-    for ws_str in monitor_output:gmatch("%d+") do
-      local ws_num = tonumber(ws_str)
-      if ws_num then
-        workspace_states[ws_num] = { exists = true, has_windows = false }
-      end
-    end
-
-    -- Check which workspaces actually have windows (batch query, cache results)
-    for ws_num, _ in pairs(workspace_states) do
-      if not workspace_apps_cache[ws_num] then
-        local apps_output = exec("aerospace list-windows --workspace " .. ws_num .. " --format '%{app-name}'")
-        workspace_apps_cache[ws_num] = apps_output
-      end
-      local content = workspace_apps_cache[ws_num]
-      if content and content:match("%S") then
-        workspace_states[ws_num].has_windows = true
-      end
-    end
-
-    -- Update each space for this display
     for i = 1, max_spaces do
-      local state = workspace_states[i]
       local is_focused = (i == focused_ws)
-      -- Show if: has windows OR is currently focused
-      local should_show = (state and state.has_windows) or is_focused
+      local has_apps = ws_apps[i] ~= nil and next(ws_apps[i]) ~= nil
+      local should_show = has_apps or is_focused
 
-      -- Show/hide based on whether it should be shown
       if spaces[display] and spaces[display][i] then
         spaces[display][i]:set({ drawing = should_show })
         space_brackets[display][i]:set({ drawing = should_show })
 
         if should_show then
-          -- Check for pending Claude in this workspace
+          -- Claude pending badge
           local pending_info = claude_pending[i]
           local badge = ""
-
           if pending_info and pending_info.count > 0 then
             if pending_info.has_question then
-              badge = " 󰂞"  -- Question needs attention
+              badge = " 󰂞"
             else
-              badge = " ●"  -- Completed
+              badge = " ●"
             end
           end
 
-          local icon_string = tostring(i) .. badge
+          spaces[display][i]:set({ icon = { string = tostring(i) .. badge } })
 
-          -- Set icon string immediately (badge updates should be instant)
-          spaces[display][i]:set({
-            icon = { string = icon_string }
-          })
-
-          -- Update selection state with animation
           sbar.animate("tanh", 10, function()
             spaces[display][i]:set({
               icon = { highlight = is_focused },
@@ -288,32 +260,22 @@ local function do_update_workspaces()
             })
           end)
 
-          -- Get apps from cache (already fetched above)
+          -- Build app icon string
           local icon_line = ""
-          local has_apps = false
-          local app_count = {}
-
-          local apps_content = workspace_apps_cache[i] or ""
-          for app in apps_content:gmatch("[^\n]+") do
-            if app and app ~= "" then
-              has_apps = true
-              app_count[app] = (app_count[app] or 0) + 1
+          if has_apps then
+            for app, _ in pairs(ws_apps[i]) do
+              local lookup = app_icons[app]
+              local icon = lookup or app_icons["default"] or "?"
+              icon_line = icon_line .. icon .. " "
             end
           end
 
-          -- Build icon string
-          for app, _ in pairs(app_count) do
-            local lookup = app_icons[app]
-            local icon = lookup or app_icons["default"] or "?"
-            icon_line = icon_line .. icon .. " "
-          end
-
-          -- Only show dash for focused empty workspace
-          if not has_apps and is_focused then
+          if icon_line == "" and is_focused then
+            icon_line = " —"
+          elseif icon_line == "" then
             icon_line = " —"
           end
 
-          -- Update label with animation
           sbar.animate("tanh", 10, function()
             spaces[display][i]:set({ label = { string = icon_line } })
           end)
@@ -321,6 +283,36 @@ local function do_update_workspaces()
       end
     end
   end
+end
+
+-- ASYNC update: uses sbar.exec() so aerospace hangs don't freeze sketchybar
+-- Gets focused_ws from trigger env (no aerospace call needed)
+local function do_update_workspaces()
+  local focused_ws = current_focused_ws
+
+  -- If no focused_ws yet (startup), query it
+  if not focused_ws then
+    local focused_output = exec("aerospace list-workspaces --focused")
+    focused_ws = tonumber(focused_output:match("%d+"))
+    current_focused_ws = focused_ws
+  end
+
+  -- ONE async call to get all windows (if aerospace hangs, sketchybar stays alive)
+  sbar.exec("aerospace list-windows --all --format '%{workspace}|%{app-name}' 2>/dev/null", function(result)
+    local ws_apps = {}
+    for line in (result or ""):gmatch("[^\n]+") do
+      local ws_str, app_name = line:match("^(%d+)|(.+)$")
+      if ws_str and app_name and app_name ~= "" then
+        local ws_num = tonumber(ws_str)
+        if ws_num then
+          if not ws_apps[ws_num] then ws_apps[ws_num] = {} end
+          ws_apps[ws_num][app_name] = true
+        end
+      end
+    end
+
+    apply_workspace_updates(focused_ws, ws_apps)
+  end)
 end
 
 -- Debounced wrapper for update_workspaces
@@ -350,8 +342,47 @@ local space_window_observer = sbar.add("item", {
   updates = true,
 })
 
+-- Instant focus highlight update (no async, no aerospace call)
+local function update_focus_highlight(new_ws, old_ws)
+  for display = 1, 2 do
+    -- Unhighlight old workspace
+    if old_ws and spaces[display] and spaces[display][old_ws] then
+      spaces[display][old_ws]:set({
+        icon = { highlight = false },
+        label = { highlight = false },
+        background = { border_color = colors.bg2 }
+      })
+      space_brackets[display][old_ws]:set({
+        background = { border_color = colors.bg2 }
+      })
+    end
+    -- Highlight new workspace (ensure it's visible)
+    if new_ws and spaces[display] and spaces[display][new_ws] then
+      spaces[display][new_ws]:set({
+        drawing = true,
+        icon = { highlight = true },
+        label = { highlight = true },
+        background = { border_color = colors.black }
+      })
+      space_brackets[display][new_ws]:set({
+        drawing = true,
+        background = { border_color = colors.grey }
+      })
+    end
+  end
+end
+
 -- Subscribe to aerospace workspace change event
 space_window_observer:subscribe("aerospace_workspace_change", function(env)
+  -- Get focused workspace from trigger env (FREE, no aerospace call)
+  local ws = tonumber(env.FOCUSED_WORKSPACE)
+  if ws then
+    prev_focused_ws = current_focused_ws
+    current_focused_ws = ws
+    -- Instant highlight swap (no delay)
+    update_focus_highlight(ws, prev_focused_ws)
+  end
+  -- Full update (icons, occupancy) happens async
   update_workspaces()
 end)
 
@@ -371,4 +402,4 @@ space_window_observer:subscribe("claude_pending_change", function(env)
 end)
 
 -- Initial update
-update_workspaces()
+do_update_workspaces()
