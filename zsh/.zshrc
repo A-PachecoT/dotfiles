@@ -4,12 +4,15 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 # Add local bin to PATH
 export PATH="$HOME/.local/bin:$PATH"
 
+# Machine-local secrets and overrides (not in git)
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+
 # Default editor (neovim with LazyVim)
 export EDITOR="nvim"
 export VISUAL="nvim"
 
 # Claude CLI
-export PATH="/Users/styreep/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 
 # Note: tmux auto-attach handled by dev-startup.sh (AeroSpace startup)
 
@@ -25,7 +28,7 @@ alias nv="nvim"
 export PATH="$HOME/Library/TinyTeX/bin/universal-darwin:$PATH"
 
 # pnpm
-export PNPM_HOME="/Users/styreep/Library/pnpm"
+export PNPM_HOME="$HOME/Library/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME:"*) ;;
   *) export PATH="$PNPM_HOME:$PATH" ;;
@@ -131,14 +134,15 @@ function y() {
 }
 
 # Added by Antigravity
-export PATH="/Users/styreep/.antigravity/antigravity/bin:$PATH"
+export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
 
 # bun completions
-[ -s "/Users/styreep/.bun/_bun" ] && source "/Users/styreep/.bun/_bun"
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
 # bun
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
+
 
 # Android SDK
 export ANDROID_HOME=$HOME/Library/Android/sdk
