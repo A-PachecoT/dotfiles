@@ -3,8 +3,8 @@
 
 local M = {}
 
-local SCRIPT_PATH = "/Users/styreep/uni/52/infra/capture_screen_flexible.sh"
-local CONFIG_PATH = "/Users/styreep/uni/52/infra/capture_config.txt"
+local SCRIPT_PATH = os.getenv("HOME") .. "/uni/52/infra/capture_screen_flexible.sh"
+local CONFIG_PATH = os.getenv("HOME") .. "/uni/52/infra/capture_config.txt"
 local DEFAULT_FOLDER = "lab3"
 
 local function log(message)

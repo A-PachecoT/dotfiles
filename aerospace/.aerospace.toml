@@ -9,7 +9,7 @@ after-startup-command = [
     'exec-and-forget sketchybar',
     'exec-and-forget open -a "Obsidian"',
     'exec-and-forget open -a "Comet"',
-    'exec-and-forget /Users/styreep/dotfiles/scripts/dev-startup.sh'
+    'exec-and-forget $HOME/dotfiles/scripts/dev-startup.sh'
 ]
 
 # Normalizations for better tiling
@@ -35,7 +35,6 @@ default-root-container-orientation = 'auto'
 automatically-unhide-macos-hidden-apps = true
 
 # Notify SketchyBar about workspace changes
-# Removed '&' to prevent zombie process accumulation
 exec-on-workspace-change = ['/bin/bash', '-c',
     'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE'
 ]
@@ -180,8 +179,8 @@ run = 'move-node-to-workspace 5'
     
     # Reload config
     alt-shift-r = 'reload-config'
-    cmd-shift-r = 'exec-and-forget /Users/styreep/dotfiles/scripts/reload-all.sh'  # Reload SketchyBar, AeroSpace, and HammerSpoon
-    cmd-ctrl-shift-r = 'exec-and-forget /Users/styreep/dotfiles/scripts/hard-reset-all.sh'  # Hard reset: force quit and reopen all apps
+    cmd-shift-r = 'exec-and-forget $HOME/dotfiles/scripts/reload-all.sh'  # Reload SketchyBar, AeroSpace, and HammerSpoon
+    cmd-ctrl-shift-r = 'exec-and-forget $HOME/dotfiles/scripts/hard-reset-all.sh'  # Hard reset: force quit and reopen all apps
 
     # Terminal launch (using Ghostty)
     alt-enter = 'exec-and-forget open -a "Ghostty"'
@@ -195,11 +194,11 @@ run = 'move-node-to-workspace 5'
     alt-g = 'exec-and-forget open -a "GatherV2"'
     alt-s = 'exec-and-forget open -a "Ghostty"'
     alt-shift-s = 'exec-and-forget open -na "Ghostty"'
-    cmd-alt-s = 'exec-and-forget /Users/styreep/dotfiles/scripts/open-floating-terminal.sh'
+    cmd-alt-s = 'exec-and-forget $HOME/dotfiles/scripts/open-floating-terminal.sh'
 
     # Claude pending navigation (Ctrl+Alt avoids app conflicts)
-    ctrl-alt-c = 'exec-and-forget /bin/bash /Users/styreep/dotfiles/scripts/claude-jump'
-    ctrl-alt-shift-c = 'exec-and-forget /bin/bash /Users/styreep/dotfiles/scripts/claude-picker'
+    ctrl-alt-c = 'exec-and-forget /bin/bash $HOME/dotfiles/scripts/claude-jump'
+    ctrl-alt-shift-c = 'exec-and-forget /bin/bash $HOME/dotfiles/scripts/claude-picker'
 
     # Workspace navigation
     alt-tab = 'workspace-back-and-forth'
@@ -207,10 +206,10 @@ run = 'move-node-to-workspace 5'
     ctrl-right = 'workspace next'
 
     # Switch to next empty workspace (Hyprland-like)
-    alt-backtick = 'exec-and-forget /Users/styreep/dotfiles/scripts/switch-to-empty-workspace.sh'
+    alt-backtick = 'exec-and-forget $HOME/dotfiles/scripts/switch-to-empty-workspace.sh'
 
     # Start work session (lock screen + prevent sleep for 9 hours)
-    alt-shift-w = 'exec-and-forget /Users/styreep/dotfiles/scripts/work-session.sh'
+    alt-shift-w = 'exec-and-forget $HOME/dotfiles/scripts/work-session.sh'
     
     # Monitor focus
     alt-period = 'focus-monitor next'

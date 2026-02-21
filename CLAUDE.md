@@ -78,6 +78,8 @@ AeroSpace routes Ghostty windows by title (session name).
 - `y` - Launch yazi file manager (exits into browsed directory)
 - `Cmd+1-9` - Switch project windows
 - `Alt+2/3/4/9` - Switch company workspaces
+- `system-audit` - Quick resource audit (CPU, RAM, swap, top apps, Claude instances)
+- `system-audit --full` - Full audit with detailed process list
 
 ### Claude Pending Notification System
 
@@ -481,6 +483,26 @@ Cmd+x (pane) and Cmd+w (window) now automatically kill child processes, preventi
 | `Cmd+z` | Zoom pane |
 | `Cmd+x` | Close pane |
 | `Cmd+r` | Reload tmux config |
+| `Cmd+f` | **Hop** - jump to file/URL (see below) |
+
+**Hop (Quick File/URL Jump):**
+
+Press `Cmd+f` to enter hop mode - highlights clickable paths and URLs on screen with letter hints. Press a letter to:
+- **URLs**: Open in browser
+- **Files**: Navigate yazi to the file (or open in editor if no yazi)
+
+Supports paths with spaces via extension-anchored matching:
+- `/01. Personal/Postulation Hub/file.pdf` ✓
+- `~/Documents/my notes/todo.md` ✓
+- `"quoted/path with spaces"` ✓
+
+**Fallback:** If path not found, shows fzf popup to fuzzy-search by filename.
+
+**Shift+letter:** Paste the match instead of opening.
+
+**Scripts:**
+- `scripts/smart-open.sh` - Route to browser/yazi/editor
+- Patterns in `.tmux.conf` under `@fingers-pattern-*`
 
 **Session Persistence:**
 Sessions auto-save every 10 minutes and auto-restore on tmux start (via tmux-continuum plugin). On macOS restart, `dev-startup.sh` opens Ghostty windows that reconnect to saved sessions.
@@ -635,7 +657,7 @@ python -m ipykernel install --user --name=project-name
 
 ## Configuration Flow
 
-1. **Edit** files in `/Users/styreep/dotfiles/`
+1. **Edit** files in `~/dotfiles/`
 2. **Changes are live** immediately (symlinks)
 3. **Reload** applications to see changes
 4. **Commit** changes for version control
@@ -692,7 +714,7 @@ after-startup-command = [
     'exec-and-forget sketchybar',
     'exec-and-forget open -a "Obsidian"',                           # → workspace 9
     'exec-and-forget open -a "Comet"',                              # → workspace 1
-    'exec-and-forget /Users/styreep/dotfiles/scripts/dev-startup.sh' # → workspaces 2,3,4,9
+    'exec-and-forget $HOME/dotfiles/scripts/dev-startup.sh' # → workspaces 2,3,4,9
 ]
 ```
 
