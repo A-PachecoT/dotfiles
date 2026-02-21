@@ -8,6 +8,10 @@ local spaces = {}
 local space_brackets = {}
 local max_spaces = 10
 
+-- Aerospace monitor ID -> SketchyBar display ID mapping
+-- (they number monitors in opposite order)
+local aero_to_sbar_display = { [1] = 2, [2] = 1 }
+
 -- Get theme-aware card style
 local card_style = styles.card()
 
@@ -212,24 +216,18 @@ for display = 1, 2 do
 end
 
 -- Helper to apply workspace UI updates given parsed data
-local function apply_workspace_updates(focused_ws, ws_apps)
+-- ws_monitor maps workspace number -> monitor/display number
+local function apply_workspace_updates(focused_ws, ws_apps, ws_monitor)
   local claude_pending = get_pending_by_workspace()
-
-  -- Determine which workspaces are occupied (have apps)
-  local occupied = {}
-  for ws_num, _ in pairs(ws_apps) do
-    occupied[ws_num] = true
-  end
-  if focused_ws then
-    occupied[focused_ws] = true
-  end
 
   -- Update each display
   for display = 1, 2 do
     for i = 1, max_spaces do
       local is_focused = (i == focused_ws)
       local has_apps = ws_apps[i] ~= nil and next(ws_apps[i]) ~= nil
-      local should_show = has_apps or is_focused
+      local belongs_to_display = (ws_monitor[i] == display)
+      -- Show on this display only if workspace belongs here
+      local should_show = belongs_to_display and (has_apps or is_focused)
 
       if spaces[display] and spaces[display][i] then
         spaces[display][i]:set({ drawing = should_show })
@@ -297,21 +295,32 @@ local function do_update_workspaces()
     current_focused_ws = focused_ws
   end
 
-  -- ONE async call to get all windows (if aerospace hangs, sketchybar stays alive)
-  sbar.exec("aerospace list-windows --all --format '%{workspace}|%{app-name}' 2>/dev/null", function(result)
+  -- ONE async call to get all windows with monitor info
+  sbar.exec("aerospace list-windows --all --format '%{workspace}|%{app-name}|%{monitor-id}' 2>/dev/null", function(result)
     local ws_apps = {}
+    local ws_monitor = {}
     for line in (result or ""):gmatch("[^\n]+") do
-      local ws_str, app_name = line:match("^(%d+)|(.+)$")
+      local ws_str, app_name, mon_str = line:match("^(%d+)|(.+)|(%d+)$")
       if ws_str and app_name and app_name ~= "" then
         local ws_num = tonumber(ws_str)
+        local mon_num = tonumber(mon_str)
         if ws_num then
           if not ws_apps[ws_num] then ws_apps[ws_num] = {} end
           ws_apps[ws_num][app_name] = true
+          if mon_num then ws_monitor[ws_num] = aero_to_sbar_display[mon_num] or mon_num end
         end
       end
     end
 
-    apply_workspace_updates(focused_ws, ws_apps)
+    -- Focused workspace: if it has no windows, query its monitor
+    if focused_ws and not ws_monitor[focused_ws] then
+      local mon_out = exec("aerospace list-workspaces --focused --format '%{workspace}|%{monitor-id}'")
+      local _, mon_str = mon_out:match("^(%d+)|(%d+)")
+      local mon_num = tonumber(mon_str) or 1
+      ws_monitor[focused_ws] = aero_to_sbar_display[mon_num] or mon_num
+    end
+
+    apply_workspace_updates(focused_ws, ws_apps, ws_monitor)
   end)
 end
 
