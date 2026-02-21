@@ -16,7 +16,7 @@ sketchybar --add event audio_mode_change \
                 label.padding_left=0 \
                 background.drawing=off \
                 padding_right=8 \
-                click_script="hs -c 'toggleAudioMode()'" \
+                click_script="/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c 'toggleAudioMode()'" \
                 --subscribe audio_mode audio_mode_change mouse.entered mouse.exited
 
 # Initialize audio mode on startup

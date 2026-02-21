@@ -17,8 +17,8 @@ elif [[ "$SENDER" == "mouse.exited" ]]; then
                             icon.padding_right=0
 elif [[ "$SENDER" == "audio_mode_change" ]] || [[ "$SENDER" == "forced" ]]; then
     # Update the audio mode status
-    # Check current audio output device
-    CURRENT_OUTPUT=$(hs -c "hs.audiodevice.defaultOutputDevice():name()" 2>/dev/null || echo "Unknown")
+    # Check current audio output device (with 2s timeout using perl alarm)
+    CURRENT_OUTPUT=$(perl -e 'alarm 2; exec @ARGV' /Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c "hs.audiodevice.defaultOutputDevice():name()" 2>/dev/null || echo "Unknown")
 
     # Truncate device name if too long
     DISPLAY_NAME="$CURRENT_OUTPUT"

@@ -15,7 +15,7 @@ sketchybar --add event mic_toggle \
                 background.padding_right=4 \
                 background.corner_radius=4 \
                 padding_right=8 \
-                click_script="hs -c 'hs.eventtap.keyStroke({\"cmd\", \"shift\"}, \"m\")' && sleep 0.2 && sketchybar --trigger mic_toggle" \
+                click_script="/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c 'hs.eventtap.keyStroke({\"cmd\", \"shift\"}, \"m\")' && sleep 0.2 && sketchybar --trigger mic_toggle" \
                 --subscribe mic_status mic_toggle
 
 # Initialize mic status on startup

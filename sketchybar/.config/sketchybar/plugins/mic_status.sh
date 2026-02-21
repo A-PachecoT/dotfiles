@@ -5,7 +5,7 @@ NAME=${NAME:-"mic_status"}
 
 # Check if microphone is muted using HammerSpoon (with fallback)
 # Use perl timeout wrapper to prevent hanging
-MUTE_STATUS=$(perl -e 'alarm 1; exec @ARGV' hs -c "hs.audiodevice.defaultInputDevice():inputMuted()" 2>/dev/null || echo "false")
+MUTE_STATUS=$(perl -e 'alarm 1; exec @ARGV' /Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c "hs.audiodevice.defaultInputDevice():inputMuted()" 2>/dev/null || echo "false")
 
 if [[ "$MUTE_STATUS" == "true" ]]; then
     # Microphone is muted - red with background
