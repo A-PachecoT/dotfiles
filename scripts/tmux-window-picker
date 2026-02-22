@@ -1,0 +1,34 @@
+#!/bin/bash
+# Quick window switcher (Cmd+E) — command palette style
+# Shows all windows across all sessions, fzf filters, jump on select
+
+set -euo pipefail
+
+# List all windows: "session > #index: name   [path]"
+tmux list-windows -a -F '#{session_name}:#{window_index} #{session_name} > ##{window_index}: #{window_name}   #{pane_current_path}' | \
+    fzf --no-multi \
+        --prompt="  " \
+        --header="Switch window" \
+        --layout=reverse \
+        --height=100% \
+        --border=none \
+        --color="bg+:#33467c,fg:#c0caf5,fg+:#c0caf5,hl:#7aa2f7,hl+:#7aa2f7,prompt:#9ece6a,header:#565f89,pointer:#7aa2f7" \
+        --with-nth=2.. \
+        --delimiter=' ' \
+        --preview='
+            target={1}
+            session=$(echo "$target" | cut -d: -f1)
+            idx=$(echo "$target" | cut -d: -f2)
+            # Show panes in that window
+            echo -e "\033[1;34m Panes:\033[0m"
+            tmux list-panes -t "$session:$idx" -F "  #{pane_index}: #{pane_current_command}  #{pane_current_path}" 2>/dev/null
+        ' \
+        --preview-window=down,4,border-top | \
+    cut -d' ' -f1 > /tmp/tmux-window-target 2>/dev/null || true
+
+# Read and navigate
+if [[ -f /tmp/tmux-window-target && -s /tmp/tmux-window-target ]]; then
+    TARGET=$(cat /tmp/tmux-window-target)
+    tmux switch-client -t "$TARGET" 2>/dev/null || true
+    rm -f /tmp/tmux-window-target
+fi

@@ -9,6 +9,20 @@ Exit code 0 = allow the command
 import json
 import sys
 import re
+import os
+
+# Safe targets for rm -rf (basenames only)
+RM_RF_SAFE_TARGETS = {
+    "node_modules",
+    "package-lock.json",
+    ".cache",
+    "dist",
+    "build",
+    ".next",
+    ".astro",
+    "__pycache__",
+    ".turbo",
+}
 
 # Only block truly catastrophic commands
 BLOCKED_PATTERNS = [
@@ -55,6 +69,23 @@ def main():
             print(f"Reason: {description}", file=sys.stderr)
             print(f"{'='*50}", file=sys.stderr)
             sys.exit(2)
+
+    # Block rm -rf unless ALL targets are in the safe list
+    rm_rf_match = re.findall(r"rm\s+-[a-zA-Z]*r[a-zA-Z]*f?\s+(.+?)(?:\s*&&|$|\s*;|\s*\|)", command)
+    if not rm_rf_match:
+        rm_rf_match = re.findall(r"rm\s+-[a-zA-Z]*f[a-zA-Z]*\s+(.+?)(?:\s*&&|$|\s*;|\s*\|)", command)
+    for targets_str in rm_rf_match:
+        targets = targets_str.strip().split()
+        for target in targets:
+            basename = os.path.basename(target.rstrip("/"))
+            if basename not in RM_RF_SAFE_TARGETS:
+                print(f"", file=sys.stderr)
+                print(f"{'='*50}", file=sys.stderr)
+                print(f"GLOBAL SAFETY: BLOCKED rm -rf", file=sys.stderr)
+                print(f"Target '{basename}' not in safe list.", file=sys.stderr)
+                print(f"Safe: {', '.join(sorted(RM_RF_SAFE_TARGETS))}", file=sys.stderr)
+                print(f"{'='*50}", file=sys.stderr)
+                sys.exit(2)
 
     sys.exit(0)
 

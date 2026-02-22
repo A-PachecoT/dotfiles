@@ -8,6 +8,9 @@
 
 set -euo pipefail
 
+# Debug log for troubleshooting AeroSpace calls
+echo "$(date): claude-jump called, TMUX=${TMUX:-unset}" >> /tmp/claude-jump-debug.log
+
 QUEUE_DIR="$HOME/.claude-pending"
 STATE_FILE="$HOME/.claude-pending/.jump-state"
 MODE="${1:---auto}"
@@ -111,26 +114,29 @@ if ! tmux has-session -t "$TARGET_SESSION" 2>/dev/null; then
     exit 1
 fi
 
-# Switch AeroSpace workspace if needed (and if we know the mapping)
+# Switch AeroSpace workspace FIRST (must happen before tmux navigation)
 if [[ -n "$WORKSPACE" ]]; then
-    CURRENT_WORKSPACE=$(perl -e 'alarm 1; exec @ARGV' aerospace list-workspaces --focused 2>/dev/null || echo "")
-    if [[ "$CURRENT_WORKSPACE" != "$WORKSPACE" ]]; then
-        perl -e 'alarm 2; exec @ARGV' aerospace workspace "$WORKSPACE" 2>/dev/null || true
-        # Small delay for workspace switch
-        sleep 0.1
+    CURRENT_WS=$(aerospace list-workspaces --focused 2>/dev/null || echo "")
+    if [[ "$CURRENT_WS" != "$WORKSPACE" ]]; then
+        aerospace workspace "$WORKSPACE" 2>/dev/null || true
+        sleep 0.2  # Give AeroSpace time to focus the workspace
     fi
 fi
 
-# Switch tmux session and window (use window_index for accuracy)
+# Navigate tmux using window index
 if [[ -n "${TMUX:-}" ]]; then
-    # Inside tmux - use switch-client with window index
     tmux switch-client -t "${TARGET_SESSION}:${TARGET_WINDOW_INDEX}" 2>/dev/null || \
-    tmux switch-client -t "$TARGET_SESSION" 2>/dev/null
+    tmux switch-client -t "$TARGET_SESSION" 2>/dev/null || true
 else
-    # Outside tmux (e.g., from AeroSpace)
-    # Select the target window by index (works even when not attached)
-    tmux select-window -t "${TARGET_SESSION}:${TARGET_WINDOW_INDEX}" 2>/dev/null || true
-
-    # Focus Ghostty app to ensure the terminal window is in front
+    # Outside tmux (from AeroSpace) - select window and activate Ghostty
+    tmux select-window -t "${TARGET_SESSION}:${TARGET_WINDOW_INDEX}" 2>/dev/null || \
+    tmux select-window -t "${TARGET_SESSION}" 2>/dev/null || true
+    # Activate Ghostty to bring the terminal to foreground
     osascript -e 'tell application "Ghostty" to activate' 2>/dev/null || true
 fi
+
+# Clear the pending queue file we just navigated to
+rm -f "$TARGET" 2>/dev/null || true
+
+# Trigger SketchyBar refresh
+sketchybar --trigger claude_pending_change 2>/dev/null &

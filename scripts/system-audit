@@ -1,0 +1,144 @@
+#!/bin/bash
+# system-audit — Quick resource audit for macOS
+# Usage: system-audit [--quick | --full]
+# Default: --quick (summary only)
+
+set -euo pipefail
+
+BOLD='\033[1m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+DIM='\033[2m'
+RESET='\033[0m'
+
+MODE="${1:---quick}"
+
+header() { echo -e "\n${BOLD}${CYAN}═══ $1 ═══${RESET}"; }
+warn() { echo -e "${YELLOW}⚠  $1${RESET}"; }
+crit() { echo -e "${RED}✖  $1${RESET}"; }
+ok() { echo -e "${GREEN}✔  $1${RESET}"; }
+
+# ─── System Overview ──────────────────────────────────────
+header "System Overview"
+CORES=$(sysctl -n hw.ncpu)
+MEM_BYTES=$(sysctl -n hw.memsize)
+MEM_GB=$((MEM_BYTES / 1073741824))
+
+TOP_OUT=$(top -l 1 -n 1 -stats pid 2>/dev/null)
+LOAD_AVG=$(echo "$TOP_OUT" | grep "Load Avg" | sed 's/.*Load Avg: //')
+CPU_IDLE=$(echo "$TOP_OUT" | grep "CPU usage" | grep -oE '[0-9.]+% idle' | grep -oE '[0-9.]+')
+PHYS_MEM=$(echo "$TOP_OUT" | grep "PhysMem" | sed 's/.*PhysMem: //')
+
+echo "CPU: ${CORES} cores | Load: ${LOAD_AVG}"
+echo "RAM: ${MEM_GB} GB | ${PHYS_MEM}"
+
+# CPU health
+LOAD_1=$(echo "$LOAD_AVG" | cut -d',' -f1 | tr -d ' ')
+LOAD_INT=${LOAD_1%.*}
+if [ "$LOAD_INT" -gt "$((CORES * 2))" ]; then
+  crit "Load ${LOAD_1} is very high (>${CORES}x2 cores)"
+elif [ "$LOAD_INT" -gt "$CORES" ]; then
+  warn "Load ${LOAD_1} exceeds core count (${CORES})"
+else
+  ok "Load ${LOAD_1} is healthy"
+fi
+
+# ─── Memory Pressure ─────────────────────────────────────
+header "Memory Pressure"
+SWAP=$(sysctl vm.swapusage 2>/dev/null)
+SWAP_USED=$(echo "$SWAP" | grep -oE 'used = [0-9.]+M' | grep -oE '[0-9.]+')
+SWAP_TOTAL=$(echo "$SWAP" | grep -oE 'total = [0-9.]+M' | grep -oE '[0-9.]+')
+SWAP_USED_GB=$(echo "$SWAP_USED" | awk '{printf "%.1f", $1/1024}')
+SWAP_TOTAL_GB=$(echo "$SWAP_TOTAL" | awk '{printf "%.1f", $1/1024}')
+
+VM_STAT=$(vm_stat)
+PAGE_SIZE=16384
+COMPRESSOR_PAGES=$(echo "$VM_STAT" | grep "stored in compressor" | awk '{print $NF}' | tr -d '.')
+COMPRESSOR_FOOTPRINT=$(echo "$VM_STAT" | grep "occupied by compressor" | awk '{print $NF}' | tr -d '.')
+COMPRESSED_GB=$(echo "$COMPRESSOR_PAGES" | awk -v ps=$PAGE_SIZE '{printf "%.1f", $1*ps/1073741824}')
+COMPRESSOR_GB=$(echo "$COMPRESSOR_FOOTPRINT" | awk -v ps=$PAGE_SIZE '{printf "%.1f", $1*ps/1073741824}')
+
+echo "Swap: ${SWAP_USED_GB} GB / ${SWAP_TOTAL_GB} GB"
+echo "Compressor: ${COMPRESSED_GB} GB logical → ${COMPRESSOR_GB} GB physical"
+
+SWAP_USED_INT=${SWAP_USED_GB%.*}
+if [ "$SWAP_USED_INT" -gt 10 ]; then
+  crit "Swap ${SWAP_USED_GB} GB — system is thrashing disk hard"
+elif [ "$SWAP_USED_INT" -gt 2 ]; then
+  warn "Swap ${SWAP_USED_GB} GB — memory pressure is elevated"
+else
+  ok "Swap is low"
+fi
+
+# ─── Top Apps by Memory ──────────────────────────────────
+header "Top Apps by Memory (RSS)"
+ps -eo rss,comm | awk 'NR>1{
+  n=split($2,parts,"/"); app=parts[n];
+  mem[app]+=$1; cnt[app]++
+} END{
+  for(a in mem) if(mem[a]>50*1024)
+    printf "%8.0f MB  %3d procs  %s\n", mem[a]/1024, cnt[a], a
+}' | sort -rn | head -15
+
+TOTAL_RSS=$(ps -eo rss | awk 'NR>1{t+=$1} END{printf "%.1f", t/1024/1024}')
+echo -e "${DIM}Total RSS: ${TOTAL_RSS} GB across $(ps -e | wc -l | tr -d ' ') processes${RESET}"
+
+# ─── Top Apps by CPU ──────────────────────────────────────
+header "Top Apps by CPU"
+ps -eo pcpu,comm | awk 'NR>1{
+  n=split($2,parts,"/"); app=parts[n];
+  cpu[app]+=$1; cnt[app]++
+} END{
+  for(a in cpu) if(cpu[a]>2)
+    printf "%7.1f%%  %3d procs  %s\n", cpu[a], cnt[a], a
+}' | sort -rn | head -10
+
+# ─── Claude Code Instances ────────────────────────────────
+header "Claude Code Instances"
+CLAUDE_COUNT=$(ps -eo comm | grep -c "^claude$" 2>/dev/null || echo 0)
+CLAUDE_RSS=$(ps -eo rss,comm | grep "claude$" | awk '{t+=$1} END{printf "%.0f", t/1024}')
+MCP_NPM=$(ps -eo comm | grep -c "npm" 2>/dev/null || echo 0)
+MCP_NODE=$(ps -eo rss,comm | grep "node" | awk '{t+=$1; c++} END{printf "%d procs, %.0f MB", c, t/1024}')
+
+echo "Claude: ${CLAUDE_COUNT} processes (${CLAUDE_RSS:-0} MB)"
+echo "MCP npm: ${MCP_NPM} processes"
+echo "Node: ${MCP_NODE}"
+
+if [ "$CLAUDE_COUNT" -gt 10 ]; then
+  crit "${CLAUDE_COUNT} Claude instances — kill idle sessions to reclaim RAM"
+elif [ "$CLAUDE_COUNT" -gt 5 ]; then
+  warn "${CLAUDE_COUNT} Claude instances running"
+else
+  ok "Claude instance count is fine"
+fi
+
+# ─── Quick Checks ─────────────────────────────────────────
+header "Quick Checks"
+
+# Camera
+CAM_CPU=$(ps -eo pcpu,comm | grep cameracaptured | awk '{print $1}')
+if [ -n "$CAM_CPU" ] && [ "$(echo "$CAM_CPU > 5" | bc 2>/dev/null || echo 0)" -eq 1 ]; then
+  crit "cameracaptured using ${CAM_CPU}% CPU — stuck camera daemon (sudo kill $(pgrep cameracaptured))"
+else
+  ok "Camera daemon idle"
+fi
+
+# Docker
+if pgrep -q "com.docker"; then
+  DOCKER_RSS=$(ps -eo rss,comm | grep -E "docker|Docker" | awk '{t+=$1} END{printf "%.0f", t/1024}')
+  echo -e "  Docker: running (${DOCKER_RSS} MB)"
+fi
+
+if [ "$MODE" = "--full" ]; then
+  # ─── Detailed Process List ────────────────────────────
+  header "All Processes > 1% CPU"
+  ps -eo pid,pcpu,pmem,rss,comm -r | awk 'NR==1{printf "%-7s %6s %5s %8s  %s\n",$1,$2,$3,"RSS_MB",$5; next} $2>1{printf "%-7s %5.1f%% %4.1f%% %7.0fM  %s\n",$1,$2,$3,$4/1024,$5}' | head -30
+
+  # ─── Uptime ─────────────────────────────────────────────
+  header "System Uptime"
+  uptime
+fi
+
+echo ""

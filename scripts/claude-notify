@@ -2,36 +2,34 @@
 # Claude Code notification with voice announcement and queue management
 # Usage: claude-notify <event_type>
 #   event_type: "stop" or "question"
+#
+# IMPORTANT: This runs as a Claude Code hook - must NOT block or hang.
+# All external commands use timeouts and run detached from the script.
 
-set -euo pipefail
+# Don't use set -e (exit on error) - we want to continue even if commands fail
+set +e
 
 QUEUE_DIR="$HOME/.claude-pending"
 EVENT_TYPE="${1:-stop}"
 TIMESTAMP=$(date +%s)
 
 # Ensure queue directory exists
-mkdir -p "$QUEUE_DIR"
+mkdir -p "$QUEUE_DIR" 2>/dev/null || true
 
-# Debug: log environment
-echo "$(date): TMUX='${TMUX:-}' PWD='$PWD'" >> "$QUEUE_DIR/notify-debug.log"
-
-# Get tmux context (if in tmux)
+# Get tmux context (if in tmux) - with timeout
 if [[ -n "${TMUX:-}" ]]; then
-    SESSION=$(tmux display-message -p '#S')
-    WINDOW=$(tmux display-message -p '#W')
-    WINDOW_INDEX=$(tmux display-message -p '#I')
-    PANE_ID=$(tmux display-message -p '#D')
-    LOCATION="${SESSION} ${WINDOW}"
+    SESSION=$(timeout 1 tmux display-message -p '#S' 2>/dev/null) || SESSION="unknown"
+    WINDOW=$(timeout 1 tmux display-message -p '#W' 2>/dev/null) || WINDOW="unknown"
+    WINDOW_INDEX=$(timeout 1 tmux display-message -p '#I' 2>/dev/null) || WINDOW_INDEX="0"
+    PANE_ID=$(timeout 1 tmux display-message -p '#D' 2>/dev/null) || PANE_ID="0"
 else
-    # Fallback - not in tmux
     SESSION="standalone"
-    WINDOW=$(basename "$PWD")
+    WINDOW=$(basename "$PWD" 2>/dev/null) || WINDOW="unknown"
     WINDOW_INDEX="0"
     PANE_ID="0"
-    LOCATION="$WINDOW"
 fi
 
-# Always derive workspace from session (aerospace detection unreliable in hook context)
+# Derive workspace from session
 case "$SESSION" in
     cofoundy) WORKSPACE="2" ;;
     bilio)    WORKSPACE="3" ;;
@@ -41,12 +39,9 @@ case "$SESSION" in
     *)        WORKSPACE="" ;;
 esac
 
-# Create queue entry file
-# Format: timestamp_session_window_type
+# Create queue entry file (non-blocking)
 QUEUE_FILE="${QUEUE_DIR}/${TIMESTAMP}_${SESSION}_${WINDOW}_${EVENT_TYPE}"
-
-# Write metadata to file (JSON for future extensibility)
-cat > "$QUEUE_FILE" << EOF
+cat > "$QUEUE_FILE" 2>/dev/null << EOF || true
 {
   "timestamp": $TIMESTAMP,
   "session": "$SESSION",
@@ -59,49 +54,48 @@ cat > "$QUEUE_FILE" << EOF
 }
 EOF
 
-# Build announcement with window number
-# Format: "session window-number window-name done" e.g. "cofoundy 1 api done"
+# Build announcement
 if [[ -n "${TMUX:-}" ]]; then
     ANNOUNCEMENT="${SESSION} ${WINDOW_INDEX} ${WINDOW}"
 else
     ANNOUNCEMENT="${WINDOW}"
 fi
 
-# Play sound based on event type
+# Play sound (fire and forget, fully detached)
 if [[ "$EVENT_TYPE" == "question" ]]; then
-    # Question/notification - more attention-grabbing
-    afplay /System/Library/Sounds/Glass.aiff &
+    (afplay /System/Library/Sounds/Glass.aiff 2>/dev/null &)
     ANNOUNCEMENT="question ${ANNOUNCEMENT}"
 else
-    # Stop/completion - softer
-    afplay /System/Library/Sounds/Funk.aiff &
+    (afplay /System/Library/Sounds/Funk.aiff 2>/dev/null &)
     ANNOUNCEMENT="${ANNOUNCEMENT} done"
 fi
 
-# Voice announcement at 30% volume, 50% faster (async, don't block)
+# Voice announcement - fully detached with nohup, won't block script
+# Uses timeout to prevent hanging
 (
-    TEMP_AUDIO=$(mktemp /tmp/claude-notify-XXXXXX.aiff)
-    say -v Samantha -r 225 -o "$TEMP_AUDIO" "$ANNOUNCEMENT"
-    afplay --volume 0.3 "$TEMP_AUDIO"
-    rm -f "$TEMP_AUDIO"
+    nohup bash -c "
+        TEMP_AUDIO=\$(mktemp /tmp/claude-notify-XXXXXX.aiff 2>/dev/null) || exit 0
+        timeout 5 say -v Samantha -r 225 -o \"\$TEMP_AUDIO\" '$ANNOUNCEMENT' 2>/dev/null || exit 0
+        timeout 3 afplay --volume 0.3 \"\$TEMP_AUDIO\" 2>/dev/null || true
+        rm -f \"\$TEMP_AUDIO\" 2>/dev/null || true
+    " >/dev/null 2>&1 &
 ) &
+disown 2>/dev/null || true
 
-# Set tmux window option for badge display
+# Set tmux window option (with timeout)
 if [[ -n "${TMUX:-}" ]]; then
-    # Set @claude_pending option on the SPECIFIC window (not just current)
-    # Use -t to target session:window_index explicitly
-    # "q" = question (󰂞), "s" = stop (●)
     TARGET="${SESSION}:${WINDOW_INDEX}"
     if [[ "$EVENT_TYPE" == "question" ]]; then
-        tmux set-option -t "$TARGET" -w @claude_pending "q" 2>/dev/null || true
+        timeout 1 tmux set-option -t "$TARGET" -w @claude_pending "q" 2>/dev/null || true
     else
-        tmux set-option -t "$TARGET" -w @claude_pending "s" 2>/dev/null || true
+        timeout 1 tmux set-option -t "$TARGET" -w @claude_pending "s" 2>/dev/null || true
     fi
-    # Trigger status bar refresh
-    tmux refresh-client -S 2>/dev/null || true
+    timeout 1 tmux refresh-client -S 2>/dev/null || true
 fi
 
-# Trigger SketchyBar update for workspace badges
-sketchybar --trigger claude_pending_change 2>/dev/null &
+# Trigger SketchyBar - fully detached with timeout
+(nohup timeout 2 sketchybar --trigger claude_pending_change >/dev/null 2>&1 &) &
+disown 2>/dev/null || true
 
+# Exit immediately - don't wait for background jobs
 exit 0

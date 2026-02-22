@@ -9,9 +9,18 @@
 set -euo pipefail
 
 QUEUE_DIR="$HOME/.claude-pending"
+LOCK_FILE="$QUEUE_DIR/.clear.lock"
 
 # Ensure queue exists
 mkdir -p "$QUEUE_DIR"
+
+# For 'current' mode: use flock to prevent concurrent instances piling up
+if [[ "${1:-current}" == "current" ]]; then
+    exec 9>"$LOCK_FILE"
+    if ! flock -n 9; then
+        exit 0  # Another instance is running, skip
+    fi
+fi
 
 # Function to trigger SketchyBar refresh
 trigger_sketchybar() {
@@ -41,13 +50,13 @@ case "${1:-current}" in
         else
             exit 0  # Silent exit if not in tmux
         fi
-        # Find and remove files matching session + window_index (read from JSON)
+        # Find and remove files matching session + window_index
+        # Use grep instead of jq for speed (avoids spawning subprocess per file)
         CLEARED=0
         for f in "$QUEUE_DIR"/*_*_*_*; do
             [[ -f "$f" ]] || continue
-            FILE_SESSION=$(jq -r '.session // ""' "$f" 2>/dev/null)
-            FILE_WIN_IDX=$(jq -r '.window_index // ""' "$f" 2>/dev/null)
-            if [[ "$FILE_SESSION" == "$SESSION" && "$FILE_WIN_IDX" == "$WINDOW_INDEX" ]]; then
+            if grep -q "\"session\": \"$SESSION\"" "$f" 2>/dev/null &&
+               grep -q "\"window_index\": \"$WINDOW_INDEX\"" "$f" 2>/dev/null; then
                 rm -f "$f"
                 ((CLEARED++))
             fi

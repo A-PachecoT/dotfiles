@@ -105,4 +105,19 @@ return {
     "nvim-mini/mini.animate",
     enabled = false,
   },
+
+  -- Browser-based markdown preview (full HTML + images + GitHub styling)
+  {
+    "iamcco/markdown-preview.nvim",
+    cmd = { "MarkdownPreviewToggle", "MarkdownPreview", "MarkdownPreviewStop" },
+    ft = { "markdown" },
+    build = "cd app && npm install",
+    keys = {
+      { "<leader>mp", "<cmd>MarkdownPreviewToggle<cr>", desc = "Toggle Markdown Preview (browser)" },
+    },
+    init = function()
+      vim.g.mkdp_auto_close = 0 -- Don't close preview when switching buffers
+      vim.g.mkdp_theme = "dark"
+    end,
+  },
 }

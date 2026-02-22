@@ -245,5 +245,5 @@ if [[ -n "${EDITOR:-}" ]]; then
     exit 0
 fi
 
-# Last resort: Copy path and notify (user can paste wherever they want)
-tmux display-message "Path copied: $resolved_path (no yazi IPC, no \$EDITOR)"
+# Last resort: Open with macOS default handler (Preview for images/PDFs, etc.)
+open "$resolved_path"

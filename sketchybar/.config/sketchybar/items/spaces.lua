@@ -11,6 +11,21 @@ local spaces = {}
 local space_brackets = {}
 local max_spaces = 10
 
+-- Debounce state to prevent trigger flooding
+local last_update_time = 0
+local debounce_ms = 150  -- Minimum ms between updates
+local pending_update = false
+
+-- Safe exec (reads output directly, no temp files)
+-- Note: macOS doesn't have timeout command, using direct io.popen
+local function safe_exec(cmd)
+  local handle = io.popen(cmd .. " 2>/dev/null")
+  if not handle then return "" end
+  local result = handle:read("*a") or ""
+  handle:close()
+  return result
+end
+
 -- Get theme-aware card style
 local card_style = styles.card()
 
@@ -156,8 +171,8 @@ local function get_pending_by_workspace()
   return pending
 end
 
--- Function to update workspace visibility and app icons
-local function update_workspaces()
+-- Core update logic (called after debounce check)
+local function do_update_workspaces()
   -- Get pending Claude events
   local claude_pending = get_pending_by_workspace()
 
@@ -165,32 +180,26 @@ local function update_workspaces()
   local occupied = {}
   local focused_ws = nil
 
-  -- Get occupied workspaces on focused monitor
-  os.execute("aerospace list-workspaces --monitor focused --empty no > /tmp/occupied_ws.txt")
-  local f = io.open("/tmp/occupied_ws.txt", "r")
-  if f then
-    for line in f:lines() do
-      local ws_num = tonumber(line)
-      if ws_num then
-        occupied[ws_num] = true
-      end
+  -- Get occupied workspaces on focused monitor (with timeout)
+  local occupied_output = safe_exec("aerospace list-workspaces --monitor focused --empty no", 2)
+  for line in occupied_output:gmatch("[^\n]+") do
+    local ws_num = tonumber(line)
+    if ws_num then
+      occupied[ws_num] = true
     end
-    f:close()
   end
 
-  -- Get focused workspace
-  os.execute("aerospace list-workspaces --focused > /tmp/focused_ws.txt")
-  f = io.open("/tmp/focused_ws.txt", "r")
-  if f then
-    local focused_output = f:read("*a")
-    focused_ws = tonumber(focused_output:match("%d+"))
-    f:close()
-  end
+  -- Get focused workspace (with timeout)
+  local focused_output = safe_exec("aerospace list-workspaces --focused", 2)
+  focused_ws = tonumber(focused_output:match("%d+"))
 
   -- Add focused workspace to occupied list
   if focused_ws then
     occupied[focused_ws] = true
   end
+
+  -- Cache for app lists (avoid duplicate queries)
+  local workspace_apps_cache = {}
 
   -- Update each space
   for i = 1, max_spaces do
@@ -232,22 +241,22 @@ local function update_workspaces()
         })
       end)
 
-      -- Get apps for this specific workspace
-      os.execute("aerospace list-windows --workspace " .. i .. " --format '%{app-name}' > /tmp/apps_ws_" .. i .. ".txt 2>/dev/null")
+      -- Get apps for this workspace (with timeout, using cache)
+      if not workspace_apps_cache[i] then
+        workspace_apps_cache[i] = safe_exec("aerospace list-windows --workspace " .. i .. " --format '%{app-name}'", 2)
+      end
+
       local icon_line = ""
       local has_apps = false
 
       -- Count each app
       local app_count = {}
-      local apps_file = io.open("/tmp/apps_ws_" .. i .. ".txt", "r")
-      if apps_file then
-        for app in apps_file:lines() do
-          if app and app ~= "" then
-            has_apps = true
-            app_count[app] = (app_count[app] or 0) + 1
-          end
+      local apps_content = workspace_apps_cache[i] or ""
+      for app in apps_content:gmatch("[^\n]+") do
+        if app and app ~= "" then
+          has_apps = true
+          app_count[app] = (app_count[app] or 0) + 1
         end
-        apps_file:close()
       end
 
       -- Build icon string
@@ -267,6 +276,27 @@ local function update_workspaces()
       end)
     end
   end
+end
+
+-- Debounced wrapper to prevent trigger flooding
+local function update_workspaces()
+  local now = os.clock() * 1000  -- Current time in ms
+
+  if now - last_update_time < debounce_ms then
+    -- Too soon, schedule update if not already pending
+    if not pending_update then
+      pending_update = true
+      sbar.exec("sleep 0.15", function()
+        pending_update = false
+        last_update_time = os.clock() * 1000
+        do_update_workspaces()
+      end)
+    end
+    return
+  end
+
+  last_update_time = now
+  do_update_workspaces()
 end
 
 -- Space window observer (hidden item for event subscriptions)

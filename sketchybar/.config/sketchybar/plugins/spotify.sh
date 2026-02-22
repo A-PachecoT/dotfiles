@@ -5,41 +5,51 @@ PLUGIN_DIR="$HOME/.config/sketchybar/plugins"
 SPOTIFY_DISPLAY_CONTROLS="${1:-false}"
 COVER_PATH="/tmp/cover.jpg"
 MAX_LABEL_LENGTH=35
+
+# macOS-compatible timeout using perl alarm
+# Usage: run_with_timeout <seconds> <command> [args...]
+run_with_timeout() {
+  local timeout=$1
+  shift
+  perl -e 'alarm shift; exec @ARGV' "$timeout" "$@" 2>/dev/null
+}
+
 # Optional control functions (disabled by default)
+# All osascript calls wrapped with 2s timeout to prevent hanging
 next () {
-  osascript -e 'tell application "Spotify" to play next track'
+  run_with_timeout 2 osascript -e 'tell application "Spotify" to play next track'
   update
 }
 
 back () {
-  osascript -e 'tell application "Spotify" to play previous track'
+  run_with_timeout 2 osascript -e 'tell application "Spotify" to play previous track' 2>/dev/null
   update
 }
 
 play () {
-  osascript -e 'tell application "Spotify" to playpause'
+  run_with_timeout 2 osascript -e 'tell application "Spotify" to playpause' 2>/dev/null
   update
 }
 
 repeat_toggle () {
-  REPEAT=$(osascript -e 'tell application "Spotify" to get repeating')
+  REPEAT=$(run_with_timeout 2 osascript -e 'tell application "Spotify" to get repeating' 2>/dev/null || echo "false")
   if [ "$REPEAT" = "false" ]; then
     sketchybar -m --set spotify.repeat icon.highlight=on
-    osascript -e 'tell application "Spotify" to set repeating to true'
+    run_with_timeout 2 osascript -e 'tell application "Spotify" to set repeating to true' 2>/dev/null
   else
     sketchybar -m --set spotify.repeat icon.highlight=off
-    osascript -e 'tell application "Spotify" to set repeating to false'
+    run_with_timeout 2 osascript -e 'tell application "Spotify" to set repeating to false' 2>/dev/null
   fi
 }
 
 shuffle_toggle () {
-  SHUFFLE=$(osascript -e 'tell application "Spotify" to get shuffling')
+  SHUFFLE=$(run_with_timeout 2 osascript -e 'tell application "Spotify" to get shuffling' 2>/dev/null || echo "false")
   if [ "$SHUFFLE" = "false" ]; then
     sketchybar -m --set spotify.shuffle icon.highlight=on
-    osascript -e 'tell application "Spotify" to set shuffling to true'
+    run_with_timeout 2 osascript -e 'tell application "Spotify" to set shuffling to true' 2>/dev/null
   else
     sketchybar -m --set spotify.shuffle icon.highlight=off
-    osascript -e 'tell application "Spotify" to set shuffling to false'
+    run_with_timeout 2 osascript -e 'tell application "Spotify" to set shuffling to false' 2>/dev/null
   fi
 }
 
@@ -54,8 +64,14 @@ truncate_text() {
 }
 
 update() {
+  # Check if Spotify is running first (prevents hanging on unresponsive app)
+  if ! pgrep -x "Spotify" > /dev/null 2>&1; then
+    sketchybar -m --set spotify.anchor drawing=off popup.drawing=off
+    exit 0
+  fi
+
   local state
-  state=$(osascript -e 'tell application "Spotify" to get player state' 2>/dev/null)
+  state=$(run_with_timeout 2 osascript -e 'tell application "Spotify" to get player state' 2>/dev/null)
 
   if [ "$state" != "playing" ] && [ "$state" != "paused" ]; then
     sketchybar -m --set spotify.anchor drawing=off popup.drawing=off \
@@ -72,10 +88,10 @@ update() {
   fi
 
   local track artist album cover_url
-  track=$(osascript -e 'tell application "Spotify" to get name of current track')
-  artist=$(osascript -e 'tell application "Spotify" to get artist of current track')
-  album=$(osascript -e 'tell application "Spotify" to get album of current track')
-  cover_url=$(osascript -e 'tell application "Spotify" to get artwork url of current track')
+  track=$(run_with_timeout 2 osascript -e 'tell application "Spotify" to get name of current track' 2>/dev/null || echo "")
+  artist=$(run_with_timeout 2 osascript -e 'tell application "Spotify" to get artist of current track' 2>/dev/null || echo "")
+  album=$(run_with_timeout 2 osascript -e 'tell application "Spotify" to get album of current track' 2>/dev/null || echo "")
+  cover_url=$(run_with_timeout 2 osascript -e 'tell application "Spotify" to get artwork url of current track' 2>/dev/null || echo "")
   
   # Download cover image with fallback
   if curl -s --max-time 5 "$cover_url" -o "$COVER_PATH"; then
@@ -106,9 +122,9 @@ update() {
 
 scroll() {
   local duration_ms position time duration
-  duration_ms=$(osascript -e 'tell application "Spotify" to get duration of current track')
+  duration_ms=$(run_with_timeout 2 osascript -e 'tell application "Spotify" to get duration of current track' 2>/dev/null || echo "0")
   duration=$((duration_ms / 1000))
-  position=$(osascript -e 'tell application "Spotify" to get player position')
+  position=$(run_with_timeout 2 osascript -e 'tell application "Spotify" to get player position' 2>/dev/null || echo "0")
   time=${position%.*}
 
   sketchybar -m --animate linear 10 \
@@ -119,11 +135,11 @@ scroll() {
 
 scrubbing() {
   local duration_ms duration target
-  duration_ms=$(osascript -e 'tell application "Spotify" to get duration of current track')
+  duration_ms=$(run_with_timeout 2 osascript -e 'tell application "Spotify" to get duration of current track' 2>/dev/null || echo "0")
   duration=$((duration_ms / 1000))
   target=$((duration * PERCENTAGE / 100))
 
-  osascript -e "tell application \"Spotify\" to set player position to $target"
+  run_with_timeout 2 osascript -e "tell application \"Spotify\" to set player position to $target" 2>/dev/null
   sketchybar -m --set spotify.state slider.percentage=$PERCENTAGE
 }
 

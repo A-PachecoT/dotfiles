@@ -129,6 +129,9 @@ keybind = ctrl+shift+tab=text:\x02p
 keybind = cmd+f=unbind
 keybind = cmd+f=text:\x02F
 
+# Window picker (command palette) - sends prefix + E
+keybind = cmd+e=text:\x02E
+
 # Quick actions
 keybind = cmd+shift+enter=toggle_split_zoom
 keybind = cmd+enter=toggle_fullscreen
