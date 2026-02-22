@@ -287,8 +287,12 @@ done < <(tmux list-sessions -F "#{session_name}" 2>/dev/null)
 RELOAD
     chmod +x "$reload_script"
 
+    # Temp file for Ctrl-n (new session name)
+    local newname_file=$(mktemp)
+    rm -f "$newname_file"
+
     # Header
-    local header="Enter: attach │ Ctrl-k: kill session │ Ctrl-x: kill all detached │ Esc: exit"
+    local header="Enter: attach │ Ctrl-n: new session │ Ctrl-k: kill │ Ctrl-x: kill detached │ Esc: exit"
 
     # Run fzf
     local selected=$(echo -e "$session_list" | grep -v '^$' | \
@@ -298,18 +302,40 @@ RELOAD
             --preview-window=right:55%:wrap \
             --bind="ctrl-k:execute-silent($kill_script {})+reload($reload_script)" \
             --bind="ctrl-x:execute-silent($killall_script)+reload($reload_script)" \
+            --bind="ctrl-n:execute-silent(echo {q} > $newname_file)+abort" \
             --no-multi \
             --height=80% \
             --layout=reverse \
             --border=rounded \
             --prompt="tmux> " \
             --pointer="▶" \
-            --color="header:italic:dim")
+            --color="header:italic:dim") || true
 
     # Cleanup temp scripts
     rm -f "$preview_script" "$kill_script" "$killall_script" "$reload_script"
 
-    # Attach to selected session
+    # Ctrl-n: create new session from query
+    if [ -f "$newname_file" ]; then
+        local name=$(cat "$newname_file" | tr -cs 'a-zA-Z0-9_-' '-' | sed 's/^-//;s/-$//')
+        rm -f "$newname_file"
+        if [ -z "$name" ]; then
+            echo "Invalid session name"
+            exit 1
+        fi
+        if tmux has-session -t "$name" 2>/dev/null; then
+            echo "Session '$name' already exists"
+            exit 1
+        fi
+        if [ -n "$TMUX" ]; then
+            tmux new-session -d -s "$name"
+            tmux switch-client -t "$name"
+        else
+            tmux new-session -s "$name"
+        fi
+        exit 0
+    fi
+
+    # Normal selection — attach to session
     if [ -n "$selected" ]; then
         local session=$(echo "$selected" | awk '{print $1}')
         if tmux has-session -t "$session" 2>/dev/null; then
