@@ -50,11 +50,7 @@ hs.hotkey.bind({"alt", "shift"}, "A", function()
     screenshot.captureActiveWindow()
 end)
 
--- SketchyBar Reload
-hs.hotkey.bind({"cmd", "shift"}, "r", function()
-    hs.execute("/opt/homebrew/bin/sketchybar --reload", true)
-    hs.alert.show("SketchyBar reloaded", 0.5)
-end)
+-- NOTE: Cmd+Shift+R is handled by AeroSpace → reload-all.sh (SketchyBar + AeroSpace + HammerSpoon)
 
 -- ============================================================
 -- GLOBAL FUNCTIONS (for external access)
@@ -77,4 +73,4 @@ print("  Cmd+Alt+0        - Toggle HEADPHONE/SPEAKER mode")
 print("  Cmd+Shift+M      - Toggle microphone mute")
 print("  Cmd+Alt+C        - Center current window")
 print("  Alt+Shift+A      - Capture screenshot")
-print("  Cmd+Shift+R      - Reload SketchyBar")
+print("  Cmd+Shift+R      - Reload all (via AeroSpace → reload-all.sh)")

@@ -8,9 +8,37 @@ local spaces = {}
 local space_brackets = {}
 local max_spaces = 10
 
--- Aerospace monitor ID -> SketchyBar display ID mapping
--- (they number monitors in opposite order)
-local aero_to_sbar_display = { [1] = 2, [2] = 1 }
+-- Dynamic monitor configuration
+local MAX_DISPLAYS = 2  -- Maximum number of physical displays supported
+local current_display_count = 1  -- Detected at runtime
+local aero_to_sbar_display = {}  -- Built dynamically
+
+-- Build the aerospace-to-sketchybar display mapping based on monitor count
+local function rebuild_display_mapping(monitor_count)
+  aero_to_sbar_display = {}
+  if monitor_count >= 2 then
+    -- AeroSpace and SketchyBar number monitors in opposite order
+    aero_to_sbar_display[1] = 2
+    aero_to_sbar_display[2] = 1
+  else
+    -- Single monitor: everything maps to display 1
+    aero_to_sbar_display[1] = 1
+  end
+  current_display_count = monitor_count
+end
+
+-- Detect current monitor count from AeroSpace
+local function detect_monitor_count()
+  local handle = io.popen("aerospace list-monitors --count 2>/dev/null")
+  if not handle then return 1 end
+  local result = handle:read("*a") or ""
+  handle:close()
+  local count = tonumber(result:match("%d+"))
+  return count or 1
+end
+
+-- Initialize mapping at load time
+rebuild_display_mapping(detect_monitor_count())
 
 -- Get theme-aware card style
 local card_style = styles.card()
@@ -74,7 +102,7 @@ local function get_pending_by_workspace()
 end
 
 -- Create spaces for each display
-for display = 1, 2 do
+for display = 1, MAX_DISPLAYS do
   for i = 1, max_spaces do
     local space_name = "space." .. display .. "." .. i
 
@@ -158,7 +186,7 @@ end
 
 -- Spaces indicator toggle (one per display)
 local spaces_indicators = {}
-for display = 1, 2 do
+for display = 1, MAX_DISPLAYS do
   spaces_indicators[display] = sbar.add("item", {
     position = "left",
     display = display,
@@ -221,70 +249,88 @@ local function apply_workspace_updates(focused_ws, ws_apps, ws_monitor)
   local claude_pending = get_pending_by_workspace()
 
   -- Update each display
-  for display = 1, 2 do
-    for i = 1, max_spaces do
-      local is_focused = (i == focused_ws)
-      local has_apps = ws_apps[i] ~= nil and next(ws_apps[i]) ~= nil
-      local belongs_to_display = (ws_monitor[i] == display)
-      -- Show on this display only if workspace belongs here
-      local should_show = belongs_to_display and (has_apps or is_focused)
-
-      if spaces[display] and spaces[display][i] then
-        spaces[display][i]:set({ drawing = should_show })
-        space_brackets[display][i]:set({ drawing = should_show })
-
-        if should_show then
-          -- Claude pending badge
-          local pending_info = claude_pending[i]
-          local badge = ""
-          if pending_info and pending_info.count > 0 then
-            if pending_info.has_question then
-              badge = " 󰂞"
-            else
-              badge = " ●"
-            end
-          end
-
-          spaces[display][i]:set({ icon = { string = tostring(i) .. badge } })
-
-          sbar.animate("tanh", 10, function()
-            spaces[display][i]:set({
-              icon = { highlight = is_focused },
-              label = { highlight = is_focused },
-              background = { border_color = is_focused and colors.black or colors.bg2 }
-            })
-            space_brackets[display][i]:set({
-              background = { border_color = is_focused and colors.grey or colors.bg2 }
-            })
-          end)
-
-          -- Build app icon string
-          local icon_line = ""
-          if has_apps then
-            for app, _ in pairs(ws_apps[i]) do
-              local lookup = app_icons[app]
-              local icon = lookup or app_icons["default"] or "?"
-              icon_line = icon_line .. icon .. " "
-            end
-          end
-
-          if icon_line == "" and is_focused then
-            icon_line = " —"
-          elseif icon_line == "" then
-            icon_line = " —"
-          end
-
-          sbar.animate("tanh", 10, function()
-            spaces[display][i]:set({ label = { string = icon_line } })
-          end)
+  for display = 1, MAX_DISPLAYS do
+    -- If this display doesn't exist, hide everything on it
+    if display > current_display_count then
+      for i = 1, max_spaces do
+        if spaces[display] and spaces[display][i] then
+          spaces[display][i]:set({ drawing = false })
+          space_brackets[display][i]:set({ drawing = false })
         end
       end
+    else
+      for i = 1, max_spaces do
+        local is_focused = (i == focused_ws)
+        local has_apps = ws_apps[i] ~= nil and next(ws_apps[i]) ~= nil
+        local belongs_to_display = (ws_monitor[i] == display)
+        -- Show on this display only if workspace belongs here
+        local should_show = belongs_to_display and (has_apps or is_focused)
+
+        if spaces[display] and spaces[display][i] then
+          spaces[display][i]:set({ drawing = should_show })
+          space_brackets[display][i]:set({ drawing = should_show })
+
+          if should_show then
+            -- Claude pending badge
+            local pending_info = claude_pending[i]
+            local badge = ""
+            if pending_info and pending_info.count > 0 then
+              if pending_info.has_question then
+                badge = " 󰂞"
+              else
+                badge = " ●"
+              end
+            end
+
+            spaces[display][i]:set({ icon = { string = tostring(i) .. badge } })
+
+            sbar.animate("tanh", 10, function()
+              spaces[display][i]:set({
+                icon = { highlight = is_focused },
+                label = { highlight = is_focused },
+                background = { border_color = is_focused and colors.black or colors.bg2 }
+              })
+              space_brackets[display][i]:set({
+                background = { border_color = is_focused and colors.grey or colors.bg2 }
+              })
+            end)
+
+            -- Build app icon string
+            local icon_line = ""
+            if has_apps then
+              for app, _ in pairs(ws_apps[i]) do
+                local lookup = app_icons[app]
+                local icon = lookup or app_icons["default"] or "?"
+                icon_line = icon_line .. icon .. " "
+              end
+            end
+
+            if icon_line == "" and is_focused then
+              icon_line = " —"
+            elseif icon_line == "" then
+              icon_line = " —"
+            end
+
+            sbar.animate("tanh", 10, function()
+              spaces[display][i]:set({ label = { string = icon_line } })
+            end)
+          end
+        end
+      end
+    end
+  end
+
+  -- Show/hide indicators based on active displays
+  for display = 1, MAX_DISPLAYS do
+    if spaces_indicators[display] then
+      spaces_indicators[display]:set({ drawing = (display <= current_display_count) })
     end
   end
 end
 
 -- ASYNC update: uses sbar.exec() so aerospace hangs don't freeze sketchybar
 -- Gets focused_ws from trigger env (no aerospace call needed)
+-- Re-detects monitor count each update to handle connect/disconnect
 local function do_update_workspaces()
   local focused_ws = current_focused_ws
 
@@ -295,32 +341,40 @@ local function do_update_workspaces()
     current_focused_ws = focused_ws
   end
 
-  -- ONE async call to get all windows with monitor info
-  sbar.exec("aerospace list-windows --all --format '%{workspace}|%{app-name}|%{monitor-id}' 2>/dev/null", function(result)
-    local ws_apps = {}
-    local ws_monitor = {}
-    for line in (result or ""):gmatch("[^\n]+") do
-      local ws_str, app_name, mon_str = line:match("^(%d+)|(.+)|(%d+)$")
-      if ws_str and app_name and app_name ~= "" then
-        local ws_num = tonumber(ws_str)
-        local mon_num = tonumber(mon_str)
-        if ws_num then
-          if not ws_apps[ws_num] then ws_apps[ws_num] = {} end
-          ws_apps[ws_num][app_name] = true
-          if mon_num then ws_monitor[ws_num] = aero_to_sbar_display[mon_num] or mon_num end
+  -- First: re-detect monitor count (async)
+  sbar.exec("aerospace list-monitors --count 2>/dev/null", function(count_result)
+    local new_count = tonumber((count_result or ""):match("%d+")) or 1
+    if new_count ~= current_display_count then
+      rebuild_display_mapping(new_count)
+    end
+
+    -- Then: get all windows with monitor info
+    sbar.exec("aerospace list-windows --all --format '%{workspace}|%{app-name}|%{monitor-id}' 2>/dev/null", function(result)
+      local ws_apps = {}
+      local ws_monitor = {}
+      for line in (result or ""):gmatch("[^\n]+") do
+        local ws_str, app_name, mon_str = line:match("^(%d+)|(.+)|(%d+)$")
+        if ws_str and app_name and app_name ~= "" then
+          local ws_num = tonumber(ws_str)
+          local mon_num = tonumber(mon_str)
+          if ws_num then
+            if not ws_apps[ws_num] then ws_apps[ws_num] = {} end
+            ws_apps[ws_num][app_name] = true
+            if mon_num then ws_monitor[ws_num] = aero_to_sbar_display[mon_num] or 1 end
+          end
         end
       end
-    end
 
-    -- Focused workspace: if it has no windows, query its monitor
-    if focused_ws and not ws_monitor[focused_ws] then
-      local mon_out = exec("aerospace list-workspaces --focused --format '%{workspace}|%{monitor-id}'")
-      local _, mon_str = mon_out:match("^(%d+)|(%d+)")
-      local mon_num = tonumber(mon_str) or 1
-      ws_monitor[focused_ws] = aero_to_sbar_display[mon_num] or mon_num
-    end
+      -- Focused workspace: if it has no windows, query its monitor
+      if focused_ws and not ws_monitor[focused_ws] then
+        local mon_out = exec("aerospace list-workspaces --focused --format '%{workspace}|%{monitor-id}'")
+        local _, mon_str = mon_out:match("^(%d+)|(%d+)")
+        local mon_num = tonumber(mon_str) or 1
+        ws_monitor[focused_ws] = aero_to_sbar_display[mon_num] or 1
+      end
 
-    apply_workspace_updates(focused_ws, ws_apps, ws_monitor)
+      apply_workspace_updates(focused_ws, ws_apps, ws_monitor)
+    end)
   end)
 end
 
@@ -353,7 +407,7 @@ local space_window_observer = sbar.add("item", {
 
 -- Instant focus highlight update (no async, no aerospace call)
 local function update_focus_highlight(new_ws, old_ws)
-  for display = 1, 2 do
+  for display = 1, MAX_DISPLAYS do
     -- Unhighlight old workspace
     if old_ws and spaces[display] and spaces[display][old_ws] then
       spaces[display][old_ws]:set({
@@ -408,6 +462,19 @@ end)
 -- Subscribe to Claude pending changes
 space_window_observer:subscribe("claude_pending_change", function(env)
   update_workspaces()
+end)
+
+-- Subscribe to display change (monitor connect/disconnect/focus)
+space_window_observer:subscribe("display_change", function(env)
+  update_workspaces()
+end)
+
+-- Subscribe to system wake (monitors may have changed during sleep)
+space_window_observer:subscribe("system_woke", function(env)
+  -- Delay slightly to let display hardware initialize
+  sbar.exec("sleep 1", function()
+    update_workspaces()
+  end)
 end)
 
 -- Initial update
