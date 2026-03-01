@@ -81,6 +81,41 @@ AeroSpace routes Ghostty windows by title (session name).
 - `system-audit` - Quick resource audit (CPU, RAM, swap, top apps, Claude instances)
 - `system-audit --full` - Full audit with detailed process list
 
+### System Audit (`system-audit`)
+
+Resource monitoring script at `~/.local/bin/system-audit`. Use when Mac feels slow, fans are loud, or RAM seems exhausted.
+
+**Usage:**
+```bash
+system-audit          # Quick summary (default)
+system-audit --quick  # Same as above
+system-audit --full   # + all processes >1% CPU + uptime
+```
+
+**Sections reported:**
+| Section | What it shows |
+|---------|---------------|
+| System Overview | CPU cores, load average, RAM used/free, health status |
+| Memory Pressure | Swap usage, compressor stats (logical→physical), threshold warnings |
+| Top Apps by Memory | Top 15 apps by RSS, aggregated across all their processes |
+| Top Apps by CPU | Top 10 apps by CPU%, aggregated across all their processes |
+| Claude Code Instances | Claude process count + RAM, MCP npm/node process count + RAM |
+| Quick Checks | Camera daemon stuck check, Docker status |
+| All Processes >1% CPU | *(--full only)* PID, %CPU, %MEM, RSS for each process |
+| System Uptime | *(--full only)* Days since last reboot |
+
+**Thresholds & alerts:**
+- Load > cores: warning | Load > cores×2: critical
+- Swap > 2 GB: warning | Swap > 10 GB: critical
+- Claude instances > 5: warning | > 10: critical (kill idle sessions with `tm` → `Ctrl-x`)
+
+**Typical workflow when Mac is hot/slow:**
+1. Run `system-audit --full`
+2. Kill idle Claude sessions: `tm` → `Ctrl-x` (kills all detached)
+3. Close browser tabs (each tab = separate process)
+4. Close unused apps (Granola, PDFgear, etc.)
+5. If swap > 8 GB and uptime > 5 days, consider a reboot
+
 ### Claude Pending Notification System
 
 Multi-Claude awareness system for knowing when Claude instances finish or need attention across sessions.
