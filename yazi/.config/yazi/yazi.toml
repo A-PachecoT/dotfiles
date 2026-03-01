@@ -5,6 +5,15 @@ edit = [
 open = [
   { run = 'open "$@"', orphan = true, for = "macos" },
 ]
+pdf-skim = [
+  { run = 'open -a Skim "$@"', orphan = true, for = "macos", desc = "Skim (GUI, live reload)" },
+]
+pdf-tdf = [
+  { run = 'tdf "$@"', block = true, desc = "tdf (terminal, hot reload)" },
+]
+pdf-pdfgear = [
+  { run = 'open -a PDFgear "$@"', orphan = true, for = "macos", desc = "PDFgear (editor, firmas)" },
+]
 
 [open]
 rules = [
@@ -17,7 +26,9 @@ rules = [
   { mime = "image/*", use = "open" },
   { mime = "video/*", use = "open" },
   { mime = "audio/*", use = "open" },
-  { mime = "application/pdf", use = "open" },
+
+  # PDFs: Enter=Skim, O=picker (Skim / tdf / PDFgear)
+  { mime = "application/pdf", use = ["pdf-skim", "pdf-tdf", "pdf-pdfgear"] },
 
   # Text/code files → editor
   { mime = "text/*", use = "edit" },

@@ -4,6 +4,9 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 # Add local bin to PATH
 export PATH="$HOME/.local/bin:$PATH"
 
+# Rust/Cargo
+export PATH="$HOME/.cargo/bin:$PATH"
+
 # Machine-local secrets and overrides (not in git)
 [[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
 

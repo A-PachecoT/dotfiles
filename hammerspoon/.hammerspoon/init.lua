@@ -12,6 +12,7 @@ local audioPriority = require("audio-priority")
 local micMute = require("mic-mute")
 local windowManager = require("window-manager")
 local screenshot = require("screenshot")
+local pdfVim = require("pdf-vim")
 
 -- ============================================================
 -- MODULE INITIALIZATION
@@ -21,6 +22,7 @@ audioPriority.init()
 micMute.init()
 windowManager.init()
 screenshot.init()
+pdfVim.init()
 
 -- ============================================================
 -- HOTKEY BINDINGS
@@ -74,3 +76,8 @@ print("  Cmd+Shift+M      - Toggle microphone mute")
 print("  Cmd+Alt+C        - Center current window")
 print("  Alt+Shift+A      - Capture screenshot")
 print("  Cmd+Shift+R      - Reload all (via AeroSpace → reload-all.sh)")
+print("  [Skim] j/k       - Scroll down/up")
+print("  [Skim] d/u       - Half page down/up")
+print("  [Skim] gg/G      - First/last page")
+print("  [Skim] Ctrl+f/b  - Page down/up")
+print("  [Skim] /         - Search, i=insert mode, Esc=normal")
