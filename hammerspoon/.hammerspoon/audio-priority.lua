@@ -9,6 +9,9 @@ local M = {}
 -- Mode state - load from persistent storage
 M.speakerMode = hs.settings.get("audioMode.speakerMode") or false
 
+-- Manual pin: when user selects a device manually, don't override it
+M.manualPin = false
+
 local function log(message)
     print("🎧 Audio Priority: " .. message)
     hs.console.printStyledtext(hs.styledtext.new("🎧 " .. message, {color = {hex = "#7aa2f7"}}))
@@ -129,12 +132,19 @@ local function handleAudioDeviceChange(event)
     log("Available output devices: " .. table.concat(deviceNames, ", "))
 
     if event == "dev#" then
-        -- Device connected/disconnected - check and set priority devices
+        -- Device connected/disconnected - clear manual pin and re-apply priority
+        M.manualPin = false
+        log("Manual pin cleared (device change)")
         setOutputDevice()
         setInputDevice()
         showCurrentDevices()
         updateSketchyBarMode()
     elseif event == "dOut" then
+        if M.manualPin then
+            log("Skipping dOut override (manual pin active)")
+            updateSketchyBarMode()
+            return
+        end
         -- Default output changed - might need to override if wrong priority
         hs.timer.doAfter(0.5, function()
             setOutputDevice()
@@ -165,6 +175,7 @@ end
 
 function M.toggleMode()
     M.speakerMode = not M.speakerMode
+    M.manualPin = false
 
     -- Persist mode across restarts
     hs.settings.set("audioMode.speakerMode", M.speakerMode)
@@ -182,9 +193,22 @@ end
 
 function M.manualTrigger()
     log("Manual trigger activated!")
+    M.manualPin = false
     setOutputDevice()
     setInputDevice()
     showCurrentDevices()
+end
+
+function M.pinDevice(deviceName)
+    local device = deviceExists(deviceName, false)
+    if device then
+        M.manualPin = true
+        device:setDefaultOutputDevice()
+        log("📌 Manual pin: " .. device:name())
+        updateSketchyBarMode()
+    else
+        log("❌ Pin failed: device not found: " .. deviceName)
+    end
 end
 
 return M

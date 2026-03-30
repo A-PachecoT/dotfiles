@@ -148,7 +148,7 @@ local function volume_toggle_details(env)
             width = popup_width,
             align = "center",
             label = { string = device, color = color },
-            click_script = 'SwitchAudioSource -s "' .. device .. '" && sketchybar --set /volume.device\\.*/ label.color=' .. colors.grey .. ' --set $NAME label.color=' .. colors.white
+            click_script = '/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c \'pinAudioDevice("' .. device .. '")\' && sketchybar --set /volume.device\\.*/ label.color=' .. colors.grey .. ' --set $NAME label.color=' .. colors.white
 
           })
           counter = counter + 1
