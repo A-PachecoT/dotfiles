@@ -13,6 +13,7 @@ local micMute = require("mic-mute")
 local windowManager = require("window-manager")
 local screenshot = require("screenshot")
 local pdfVim = require("pdf-vim")
+local commsQueue = require("comms-queue")
 
 -- ============================================================
 -- MODULE INITIALIZATION
@@ -23,6 +24,7 @@ micMute.init()
 windowManager.init()
 screenshot.init()
 pdfVim.init()
+commsQueue.init()
 
 -- ============================================================
 -- HOTKEY BINDINGS
@@ -52,6 +54,11 @@ hs.hotkey.bind({"alt", "shift"}, "A", function()
     screenshot.captureActiveWindow()
 end)
 
+-- Comms Queue — Send next message
+hs.hotkey.bind({"ctrl", "alt"}, "n", function()
+    commsQueue.sendNext()
+end)
+
 -- NOTE: Cmd+Shift+R is handled by AeroSpace → reload-all.sh (SketchyBar + AeroSpace + HammerSpoon)
 
 -- ============================================================
@@ -61,6 +68,11 @@ end)
 -- Expose toggleAudioMode globally for SketchyBar click handler
 function toggleAudioMode()
     audioPriority.toggleMode()
+end
+
+-- Expose pinAudioDevice globally for SketchyBar volume popup
+function pinAudioDevice(deviceName)
+    audioPriority.pinDevice(deviceName)
 end
 
 -- ============================================================
@@ -75,6 +87,7 @@ print("  Cmd+Alt+0        - Toggle HEADPHONE/SPEAKER mode")
 print("  Cmd+Shift+M      - Toggle microphone mute")
 print("  Cmd+Alt+C        - Center current window")
 print("  Alt+Shift+A      - Capture screenshot")
+print("  Ctrl+Alt+N       - Comms: paste next message")
 print("  Cmd+Shift+R      - Reload all (via AeroSpace → reload-all.sh)")
 print("  [Skim] j/k       - Scroll down/up")
 print("  [Skim] d/u       - Half page down/up")
