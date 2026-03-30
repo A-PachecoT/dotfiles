@@ -96,6 +96,12 @@ run = 'move-node-to-workspace 9'
 # NOTE: No fallback for Ghostty - ad-hoc windows stay in current workspace
 # Only named sessions (cofoundy, bilio, personal, notes) get routed
 
+# Playwright launches "Google Chrome for Testing" (distinct from "Google Chrome")
+# Float these windows so they don't break tiling during agent automation
+[[on-window-detected]]
+if.app-name-regex-substring = 'Chrome for Testing'
+run = 'layout floating'
+
 [[on-window-detected]]
 if.app-name-regex-substring = 'cursor'
 run = 'move-node-to-workspace 5'
