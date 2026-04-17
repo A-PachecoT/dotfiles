@@ -143,12 +143,13 @@ local function volume_toggle_details(env)
           if current == device then
             color = colors.white
           end
+          local shell_safe = device:gsub("'", "'\\''")
           sbar.add("item", "volume.device." .. counter, {
             position = "popup." .. volume_bracket.name,
             width = popup_width,
             align = "center",
             label = { string = device, color = color },
-            click_script = '/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c \'pinAudioDevice("' .. device .. '")\' && sketchybar --set /volume.device\\.*/ label.color=' .. colors.grey .. ' --set $NAME label.color=' .. colors.white
+            click_script = '/Applications/Hammerspoon.app/Contents/Frameworks/hs/hs -c \'pinAudioDevice("' .. shell_safe .. '")\' && sketchybar --set /volume.device\\.*/ label.color=' .. colors.grey .. ' --set $NAME label.color=' .. colors.white
 
           })
           counter = counter + 1
