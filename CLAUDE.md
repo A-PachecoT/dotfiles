@@ -176,24 +176,35 @@ When you focus the window:
 
 ## Repository Architecture
 
-This is a **GNU Stow-managed dotfiles repository** that uses symlinks to create a Single Source of Truth (SSOT) for macOS configuration files. The architecture centers around:
+This is a **GNU Stow-managed multi-platform dotfiles repository** that
+uses symlinks to create a Single Source of Truth (SSOT) for configs
+across **macOS**, **Linux**, and **WSL**. Full structural reference:
+[docs/dotfiles-architecture.md](docs/dotfiles-architecture.md).
 
-- **Package-based organization**: Each application/tool has its own directory (aerospace/, sketchybar/, git/, zsh/)
-- **Symlink management**: GNU Stow creates symlinks from `~/.config/` to the repository
-- **Live configuration**: Changes in the repo are immediately reflected in the system via symlinks
-- **AeroSpace + SketchyBar integration**: Window manager with custom status bar showing occupied workspaces
+- **Platform-split layout**: `shared/` always stowed; `macos/` or
+  `linux/` stowed based on `uname -s`. `windows/wsl/` reserved for
+  future WSL-specific packages (WSL currently uses `linux/`).
+- **Package-based organization**: Each tool has its own directory
+  under the appropriate platform group (`macos/aerospace/`,
+  `linux/hyprland/`, `shared/nvim/`, etc.).
+- **Symlink management**: GNU Stow creates symlinks from `~/` and
+  `~/.config/` to the repository. `./install.sh` auto-detects platform.
+- **Live configuration**: Changes in the repo are immediately
+  reflected in the system via symlinks.
+- **AeroSpace + SketchyBar integration** (macOS-only): tiling WM
+  with custom status bar showing occupied workspaces.
 
 ## Critical Integration Points
 
 ### AeroSpace ↔ SketchyBar Integration
-The `aerospace/.aerospace.toml` contains `exec-on-workspace-change` that triggers SketchyBar updates:
+The `macos/aerospace/.aerospace.toml` contains `exec-on-workspace-change` that triggers SketchyBar updates:
 ```toml
-exec-on-workspace-change = ['/bin/bash', '-c', 
+exec-on-workspace-change = ['/bin/bash', '-c',
     'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE'
 ]
 ```
 
-SketchyBar listens for this event in `sketchybar/.config/sketchybar/plugins/aerospace.sh` to highlight active workspaces.
+SketchyBar listens for this event in `macos/sketchybar/.config/sketchybar/plugins/aerospace.sh` to highlight active workspaces.
 
 ### Hyprland-style Workspace Logic
 SketchyBar shows only **occupied workspaces** using:
@@ -699,19 +710,40 @@ python -m ipykernel install --user --name=project-name
 
 ## Package Structure Requirements
 
-Each package directory must mirror the home directory structure:
-- `aerospace/.aerospace.toml` → `~/.aerospace.toml`
-- `sketchybar/.config/sketchybar/` → `~/.config/sketchybar/`
-- `zellij/.config/zellij/` → `~/.config/zellij/`
-- `ghostty/.config/ghostty/` → `~/.config/ghostty/`
-- `nvim/.config/nvim/` → `~/.config/nvim/`
-- `tmux/.tmux.conf` → `~/.tmux.conf`
-- `git/.gitconfig` → `~/.gitconfig`
+Each package directory lives under its platform group (`shared/`,
+`macos/`, or `linux/`) and mirrors the home directory structure:
+
+**Shared (installed on all platforms):**
+- `shared/git/.gitconfig` → `~/.gitconfig`
+- `shared/tmux/.tmux.conf` → `~/.tmux.conf`
+- `shared/nvim/.config/nvim/` → `~/.config/nvim/`
+- `shared/ghostty/.config/ghostty/` → `~/.config/ghostty/`
+- `shared/yazi/.config/yazi/` → `~/.config/yazi/`
+- `shared/zellij/.config/zellij/` → `~/.config/zellij/`
+- `shared/starship/.config/starship.toml` → `~/.config/starship.toml`
+- `shared/claude/settings.template.json` → (consumed by `./install.sh claude`)
+
+**macOS-only:**
+- `macos/aerospace/.aerospace.toml` → `~/.aerospace.toml`
+- `macos/sketchybar/.config/sketchybar/` → `~/.config/sketchybar/`
+- `macos/hammerspoon/.hammerspoon/` → `~/.hammerspoon/`
+- `macos/zsh/.zshrc` → `~/.zshrc`
+- `macos/Brewfile`, `macos/bootstrap.sh` → (executed manually, not stowed)
+
+**Linux-only:**
+- `linux/hyprland/.config/hypr/` → `~/.config/hypr/`
+- `linux/waybar/.config/waybar/` → `~/.config/waybar/`
+- `linux/dunst/.config/dunst/` → `~/.config/dunst/`
+- `linux/kitty/.config/kitty/` → `~/.config/kitty/`
+- `linux/zsh/.config/zsh/` → `~/.config/zsh/` (HyDE ZDOTDIR convention)
+
+See [docs/dotfiles-architecture.md](docs/dotfiles-architecture.md) for the
+full layout rationale, script classification, and migration notes.
 
 ## Deprecated Packages
 
-- **skhd/**: DEPRECATED - App launch shortcuts now handled directly by AeroSpace for better integration and consistency across empty/occupied workspaces. The skhd service has been disabled from startup (LaunchAgent renamed to `.disabled`).
-- **yabai/**: NOT IN USE - AeroSpace has replaced yabai as the window manager. The yabai service has been disabled from startup (LaunchAgent renamed to `.disabled`).
+- **macos/skhd/**: DEPRECATED - App launch shortcuts now handled directly by AeroSpace for better integration and consistency across empty/occupied workspaces. The skhd service has been disabled from startup (LaunchAgent renamed to `.disabled`).
+- **yabai**: NOT IN USE - AeroSpace has replaced yabai as the window manager. The yabai service has been disabled from startup (LaunchAgent renamed to `.disabled`).
 
 ## Deprecated Projects (deprecated/)
 
