@@ -1,0 +1,6 @@
+# HyDE-managed files (DO NOT STOW)
+^/\.config/kitty/hyde\.conf$
+^/\.config/kitty/theme\.conf$
+
+# Ignore README
+^/README\.md$

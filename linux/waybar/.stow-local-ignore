@@ -1,0 +1,8 @@
+# HyDE-managed files (DO NOT STOW)
+^/\.config/waybar/theme\.css$
+^/\.config/waybar/includes/
+^/\.config/waybar/layouts/
+^/\.config/waybar/modules/
+
+# Ignore README
+^/README\.md$
