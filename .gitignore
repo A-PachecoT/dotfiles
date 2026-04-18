@@ -1,4 +1,7 @@
 backup/
 references/
 deprecated/
+deprecated-hyde/
 .DS_Store
+*.bak
+*.bak-*
