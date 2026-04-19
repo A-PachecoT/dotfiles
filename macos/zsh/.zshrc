@@ -250,3 +250,6 @@ tp() {
     [[ -n "$project" ]] && { tmux new-window -c "$project" && tw "$project"; }
 }
 export PATH="$(brew --prefix)/opt/openjdk@25/bin:$PATH"
+
+# Added by Antigravity
+export PATH="/Users/styreep/.antigravity/antigravity/bin:$PATH"
