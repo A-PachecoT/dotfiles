@@ -8,8 +8,10 @@
 # Reload AeroSpace configuration
 /opt/homebrew/bin/aerospace reload-config
 
-# Reload HammerSpoon (using AppleScript to avoid CLI port issues)
-osascript -e 'tell application "Hammerspoon" to reload' 2>/dev/null
+# Reload HammerSpoon via URL scheme
+# Avoids both `hs` CLI PATH conflicts (HubSpot CLI shadows it) and
+# the requirement for hs.allowAppleScript(true) in init.lua.
+open -g "hammerspoon://reload"
 
 # Show notification that reload is complete
 osascript -e 'display notification "SketchyBar, AeroSpace, and HammerSpoon reloaded" with title "Configuration Reloaded"'
