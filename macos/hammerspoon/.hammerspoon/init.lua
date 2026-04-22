@@ -13,6 +13,7 @@ local micMute = require("mic-mute")
 local windowManager = require("window-manager")
 local screenshot = require("screenshot")
 local pdfVim = require("pdf-vim")
+local sleepWake = require("sleep-wake")
 
 -- ============================================================
 -- MODULE INITIALIZATION
@@ -23,6 +24,7 @@ micMute.init()
 windowManager.init()
 screenshot.init()
 pdfVim.init()
+sleepWake.init()
 
 -- ============================================================
 -- HOTKEY BINDINGS
