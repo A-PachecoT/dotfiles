@@ -48,12 +48,19 @@ local theme_switcher = sbar.add("item", "theme_switcher", {
   }
 })
 
+-- Fixed popup width: prevents corner_radius from clipping the last glyph,
+-- and keeps items visually aligned regardless of theme name length.
+local popup_width = 140
+
 -- Create popup menu items for each theme
 for i, theme in ipairs(themes) do
   local theme_item = sbar.add("item", {
     position = "popup." .. theme_switcher.name,
     icon = {
       string = "  " .. theme.name,
+      width = popup_width,
+      padding_right = 12,
+      align = "left",
       font = {
         size = 14.0
       }
