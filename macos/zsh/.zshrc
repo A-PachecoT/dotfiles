@@ -21,7 +21,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 alias l="ls -la"
 alias proj="cd ~/projects"
-alias cl="claude --dangerously-skip-permissions"
+alias cl="claude --dangerously-skip-permissions --teammate-mode tmux"
 alias cu="cursor ."
 alias python="python3"
 alias py="python3"
