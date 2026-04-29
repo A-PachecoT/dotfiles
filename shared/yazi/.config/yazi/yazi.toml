@@ -9,7 +9,7 @@ pdf-skim = [
   { run = 'open -a Skim "$@"', orphan = true, for = "macos", desc = "Skim (GUI, live reload)" },
 ]
 pdf-tdf = [
-  { run = 'tdf "$@"', block = true, desc = "tdf (terminal, hot reload)" },
+  { run = 'open -na Ghostty --args --title="pdf-viewer" -e tdf "$@"', orphan = true, for = "macos", desc = "tdf (Ghostty flotante, hot reload)" },
 ]
 pdf-pdfgear = [
   { run = 'open -a PDFgear "$@"', orphan = true, for = "macos", desc = "PDFgear (editor, firmas)" },

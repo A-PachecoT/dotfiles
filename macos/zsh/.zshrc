@@ -155,6 +155,15 @@ export PATH=$PATH:$ANDROID_HOME/tools
 export PATH=$PATH:$ANDROID_HOME/tools/bin
 
 # ============================================================
+# pdf - Open PDF in floating Ghostty window (bypasses tmux for tdf)
+# ============================================================
+pdf() {
+    [[ -z "$1" ]] && { echo "uso: pdf <archivo.pdf>"; return 1; }
+    [[ ! -f "$1" ]] && { echo "no existe: $1"; return 1; }
+    open -na Ghostty --args --title="pdf-viewer" -e tdf "$(realpath "$1")"
+}
+
+# ============================================================
 # tmux - Power User Terminal Multiplexer
 # ============================================================
 # Architecture:

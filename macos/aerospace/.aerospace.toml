@@ -93,6 +93,12 @@ if.app-name-regex-substring = 'ghostty'
 if.window-title-regex-substring = 'notes'
 run = 'move-node-to-workspace 9'
 
+# PDF viewer: spawned via `pdf <file>` in zshrc - floats over current workspace
+[[on-window-detected]]
+if.app-name-regex-substring = 'ghostty'
+if.window-title-regex-substring = 'pdf-viewer'
+run = 'layout floating'
+
 # NOTE: No fallback for Ghostty - ad-hoc windows stay in current workspace
 # Only named sessions (cofoundy, bilio, personal, notes) get routed
 
