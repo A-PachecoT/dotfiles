@@ -8,6 +8,13 @@ set -euo pipefail
 RESULT_FILE="/tmp/tmux-window-target"
 rm -f "$RESULT_FILE"
 
+# Capture the originating pane BEFORE the popup's fzf steals focus.
+# Inside popups $TMUX_PANE is unset, so we rely on either:
+#   1. TMUX_TRIGGER_PANE (set by the binding via `-e TMUX_TRIGGER_PANE=#{pane_id}`)
+#   2. The attached client's currently-active pane (fallback)
+# This is needed so smart-open.sh can find the yazi pane in the right window.
+TRIGGER_PANE="${TMUX_TRIGGER_PANE:-$(tmux display-message -p '#{pane_id}' 2>/dev/null || true)}"
+
 # Get pane cwd for file search context
 PANE_CWD=$(tmux display-message -p '#{pane_current_path}' 2>/dev/null || echo "$HOME")
 
@@ -63,8 +70,12 @@ if [[ -f "$RESULT_FILE" && -s "$RESULT_FILE" ]]; then
         tmux switch-client -t "$TARGET" 2>/dev/null || true
     elif [[ "$TYPE" == "f" ]]; then
         # File: open with smart-open
+        # Run synchronously — tmux reaps popup children on close, so `&` would
+        # kill smart-open.sh before it can complete the yazi IPC call.
+        # Forward the captured trigger pane as TMUX_PANE so smart-open.sh
+        # targets the correct window's yazi pane.
         FILEPATH="${SELECTED#f:}"
-        echo -n "$FILEPATH" | ~/dotfiles/scripts/smart-open.sh &
+        echo -n "$FILEPATH" | TMUX_PANE="$TRIGGER_PANE" ~/dotfiles/scripts/smart-open.sh
     fi
 
     rm -f "$RESULT_FILE"

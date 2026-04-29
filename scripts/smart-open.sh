@@ -98,19 +98,19 @@ elif [[ -e "$pane_cwd/$filepath" ]]; then
     resolved_path="$pane_cwd/$filepath"
 
 # Strategy 3: Walk up directory tree looking for the file
-# Use case: Error shows "src/components/Button.tsx" but you're in src/components/
-# We walk up until we find .git or package.json (project root markers)
+# Walk from pane_cwd up to (and including) $HOME without stopping at project
+# roots. Portfolio folders like ~/cofoundy/ aren't git repos themselves, so
+# stopping at the first .git inside them would miss siblings like ~/cofoundy/legal/.
 else
     check_dir="$pane_cwd"
-    while [[ "$check_dir" != "/" ]]; do
+    while :; do
         if [[ -e "$check_dir/$filepath" ]]; then
             resolved_path="$check_dir/$filepath"
             break
         fi
-        # Stop at project root to avoid searching entire filesystem
-        if [[ -d "$check_dir/.git" ]] || [[ -f "$check_dir/package.json" ]] || [[ -f "$check_dir/Cargo.toml" ]]; then
-            break
-        fi
+        # Stop once we've checked $HOME — don't walk above the user's directory
+        [[ "$check_dir" == "$HOME" ]] && break
+        [[ "$check_dir" == "/" ]] && break
         check_dir=$(dirname "$check_dir")
     done
 fi
@@ -121,19 +121,23 @@ fi
 # Uses fd + fzf to search for files matching the basename
 # =============================================================================
 if [[ -z "$resolved_path" ]]; then
-    # Extract basename for fuzzy search
-    search_term=$(basename "$filepath" 2>/dev/null || echo "$filepath")
+    # Extract basename for fd's filename search; seed fzf with full relative
+    # path so directory context narrows results when basenames collide.
+    search_basename=$(basename "$filepath" 2>/dev/null || echo "$filepath")
 
     # Try fuzzy find with fd, searching from home directory
+    # -HI: include hidden AND gitignored. Legal drafts, private docs, and
+    # vendored material are exactly the files users hop to — don't silently
+    # skip them just because they're gitignored.
     if command -v fd &>/dev/null && command -v fzf &>/dev/null; then
-        candidates=$(fd -t f -H --max-depth 8 "$search_term" "$HOME" 2>/dev/null | head -50)
+        candidates=$(fd -t f -HI --max-depth 8 "$search_basename" "$HOME" 2>/dev/null | head -50)
 
         if [[ -n "$candidates" ]]; then
             # Show fzf popup in tmux for selection
             selected=$(echo "$candidates" | fzf-tmux -p 80%,60% \
                 --prompt="hop: " \
                 --header="Path not found: $filepath" \
-                --query="$search_term" \
+                --query="$filepath" \
                 --preview='head -50 {}' \
                 --preview-window=right:40%:wrap)
 
@@ -144,7 +148,7 @@ if [[ -z "$resolved_path" ]]; then
                 exit 0
             fi
         else
-            tmux display-message "hop: No matches for '$search_term'"
+            tmux display-message "hop: No matches for '$search_basename'"
             exit 0
         fi
     else
@@ -184,66 +188,69 @@ file=$(basename "$resolved_path")
 
 # -----------------------------------------------------------------------------
 # Tier 1: Try IPC first (most reliable)
-# ya emit reveal navigates to parent dir AND highlights the file atomically
-# This handles special characters, spaces, quotes, etc. safely
+# `ya emit-to <id> reveal` navigates to parent dir AND highlights the file
+# atomically, handling special chars/spaces/quotes safely.
 #
-# Socket naming: Each yazi instance uses "yazi-$TMUX_PANE" as socket name
-# We find the yazi pane first, then use its pane ID to construct the socket name
+# Client-id discovery: the naive assumption "tmux pane ID == yazi --client-id"
+# breaks in practice. y() stamps the client-id at launch, but pane IDs can
+# diverge over time (pane respawns, tmux server restarts, long-lived shells).
+# Instead of guessing, we walk the process tree:
+#   tmux pane → pane_pid → yazi child pid → parse `--client-id N` from ps
 # -----------------------------------------------------------------------------
 
 # Find yazi pane in the SAME window as the triggering pane
-# TMUX_PANE tells us which pane tmux-fingers was triggered from
-# Without -t, list-panes can return wrong window in some contexts
 target_window=$(tmux display-message -t "${TMUX_PANE:-}" -p '#{session_name}:#{window_index}' 2>/dev/null || true)
 
 if [[ -n "$target_window" ]]; then
     yazi_pane=$(tmux list-panes -t "$target_window" -F '#{pane_id} #{pane_current_command}' 2>/dev/null | grep -iE '\byazi\b' | head -1 | awk '{print $1}' || true)
 else
-    # Fallback: search current window (original behavior)
     yazi_pane=$(tmux list-panes -F '#{pane_id} #{pane_current_command}' 2>/dev/null | grep -iE '\byazi\b' | head -1 | awk '{print $1}' || true)
 fi
 
 if [[ -n "$yazi_pane" ]]; then
-    # Use pane ID as YAZI_ID (must be a number, matches --client-id in y() function)
-    # Strip the % prefix from tmux pane ID (e.g., %144 → 144)
-    client_id="${yazi_pane#%}"
+    # Resolve the real client-id from the running yazi process
+    pane_pid=$(tmux display-message -t "$yazi_pane" -p '#{pane_pid}' 2>/dev/null || true)
+    client_id=""
+    if [[ -n "$pane_pid" ]]; then
+        yazi_pid=$(pgrep -P "$pane_pid" yazi 2>/dev/null | head -1 || true)
+        if [[ -n "$yazi_pid" ]]; then
+            client_id=$(ps -o command= -p "$yazi_pid" 2>/dev/null | grep -oE -- '--client-id [0-9]+' | awk '{print $2}' || true)
+        fi
+    fi
 
-    # If target is a hidden file (starts with .), ensure hidden files are visible
+    # Fallback to pane-id heuristic if discovery failed (yazi launched raw)
+    [[ -z "$client_id" ]] && client_id="${yazi_pane#%}"
+
+    # If target is hidden (dotfile or dot-dir), ensure hidden entries are visible
     if [[ "$file" == .* ]]; then
-        YAZI_ID="$client_id" ya emit hidden show 2>/dev/null || true
+        ya emit-to "$client_id" hidden show 2>/dev/null || true
     fi
 
-    if YAZI_ID="$client_id" ya emit reveal "$resolved_path" 2>/dev/null; then
-        # Focus the yazi pane so user sees the result
-        tmux select-pane -t "$yazi_pane"
-        exit 0
-    fi
-fi
-
-# -----------------------------------------------------------------------------
-# Tier 2: Editor fallback (yazi IPC failed)
-#
-# WHY NO KEYSTROKE FALLBACK:
-# Yazi's `:` opens SHELL mode (external commands), not internal commands.
-# There's no `:cd /path` like vim - `cd` in a subshell doesn't change yazi's dir.
-# The only reliable way to control yazi externally is via IPC (`ya emit`),
-# which requires $YAZI_ID (set when using yazi's shell integration).
-#
-# If you want smart-open to navigate yazi, use the `y` shell wrapper
-# which enables IPC via $YAZI_ID.
-# -----------------------------------------------------------------------------
-
-# Open file in $EDITOR via new tmux split
-# Don't use send-keys (sends to wrong pane) - create a proper split instead
-if [[ -n "${EDITOR:-}" ]]; then
-    if [[ -n "$line_number" ]]; then
-        # Open editor in a new vertical split, then close when done
-        tmux split-window -h "$EDITOR +$line_number '$resolved_path'"
+    if [[ -d "$resolved_path" ]]; then
+        # Directory: cd yazi into it so the user sees the contents directly.
+        # No auto-open (yazi's opener for dirs is "enter", which cd already did).
+        if ya emit-to "$client_id" cd "$resolved_path" 2>/dev/null; then
+            tmux select-pane -t "$yazi_pane"
+            exit 0
+        fi
     else
-        tmux split-window -h "$EDITOR '$resolved_path'"
+        # File: reveal (cd to parent + highlight) + open (triggers yazi's
+        # configured opener — nvim for text files, loads inside the yazi pane).
+        if ya emit-to "$client_id" reveal "$resolved_path" 2>/dev/null; then
+            ya emit-to "$client_id" open 2>/dev/null || true
+            tmux select-pane -t "$yazi_pane"
+            exit 0
+        fi
     fi
-    exit 0
+
+    # ya emit-to failed — yazi's DDS registration is flaky when many instances
+    # accumulate (upstream yazi issue). Quickest fix: restart the yazi instance
+    # so it gets a fresh DDS registration.
+    tmux display-message "hop: yazi DDS not responding (id $client_id). Restart yazi: focus pane $yazi_pane, press q, then 'y'"
+    exit 1
 fi
 
-# Last resort: Open with macOS default handler (Preview for images/PDFs, etc.)
-open "$resolved_path"
+# No yazi pane visible in this window — don't spawn editors or external openers.
+# Hop is explicitly a yazi-navigation tool; if there's nowhere to reveal to, say so.
+tmux display-message "hop: no yazi pane in this window"
+exit 1
