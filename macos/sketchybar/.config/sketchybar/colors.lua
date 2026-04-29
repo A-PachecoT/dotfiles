@@ -1,2 +1,2 @@
--- Tokyo Night
-return require("themes.tokyonight")
+-- Nord
+return require("themes.nord")
