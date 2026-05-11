@@ -60,6 +60,7 @@ return {
       },
       quote = { enabled = true },
       pipe_table = { enabled = true, style = "full" },
+      latex = { enabled = false },
       callout = {
         note = { raw = "[!NOTE]", rendered = "󰋽 Note", highlight = "RenderMarkdownInfo" },
         tip = { raw = "[!TIP]", rendered = "󰌶 Tip", highlight = "RenderMarkdownSuccess" },
@@ -96,6 +97,28 @@ return {
     opts = {
       options = {
         theme = "tokyonight",
+      },
+    },
+  },
+
+  -- Inline image rendering (math/LaTeX, images in markdown via snacks.nvim)
+  {
+    "folke/snacks.nvim",
+    opts = {
+      image = {
+        doc = {
+          enabled = true,
+          inline = true,
+          conceal = function(lang, type)
+            return type == "math"
+          end,
+        },
+        math = {
+          enabled = true,
+          latex = {
+            packages = { "amsmath", "amssymb" },
+          },
+        },
       },
     },
   },
