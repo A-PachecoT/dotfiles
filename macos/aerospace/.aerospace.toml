@@ -60,6 +60,15 @@ if.app-name-regex-substring = 'iterm'
 run = 'layout floating'
 
 [[on-window-detected]]
+if.app-name-regex-substring = 'bitwarden'
+run = 'layout floating'
+
+# Bitwarden browser-extension popup (Comet/Chrome opens a window titled "Bitwarden")
+[[on-window-detected]]
+if.window-title-regex-substring = 'Bitwarden'
+run = 'layout floating'
+
+[[on-window-detected]]
 if.app-name-regex-substring = 'obsidian'
 run = 'move-node-to-workspace 9'
 
