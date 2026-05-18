@@ -189,6 +189,20 @@ EOF
         success "Created settings.json"
     fi
 
+    # Symlink personal skills from dotfiles into ~/.claude/skills/
+    local skills_src="$DOTFILES/shared/claude/skills"
+    local skills_dst="$claude_dir/skills"
+    if [[ -d "$skills_src" ]]; then
+        mkdir -p "$skills_dst"
+        for skill_path in "$skills_src"/*/; do
+            [[ -d "$skill_path" ]] || continue
+            local skill_name
+            skill_name=$(basename "$skill_path")
+            ln -sfn "${skill_path%/}" "$skills_dst/$skill_name"
+            success "Linked skill: $skill_name"
+        done
+    fi
+
     info "Restart Claude Code to apply hooks"
 }
 
