@@ -34,8 +34,9 @@ PANE_CWD=$(tmux display-message -p '#{pane_current_path}' 2>/dev/null || echo "$
         done &
 } | \
     fzf --no-multi \
+        --print-query \
         --prompt="  " \
-        --header="Switch window · Search files" \
+        --header="Switch window · Search files · Paste path to open directly" \
         --layout=reverse \
         --height=100% \
         --border=none \
@@ -56,26 +57,38 @@ PANE_CWD=$(tmux display-message -p '#{pane_current_path}' 2>/dev/null || echo "$
                 head -40 "$fpath" 2>/dev/null || echo "(binary or unreadable)"
             fi
         ' \
-        --preview-window=down,6,border-top | \
-    cut -d' ' -f1 > "$RESULT_FILE" 2>/dev/null || true
+        --preview-window=down,6,border-top > "$RESULT_FILE" 2>/dev/null || true
 
-# Handle selection
+# Handle selection.
+# With --print-query, fzf writes the query on line 1 and the selection (if any)
+# on line 2. If line 2 is empty but the query looks like a path that exists,
+# open it directly — this lets the user paste absolute paths that fall outside
+# the indexed scope of `fd`.
 if [[ -f "$RESULT_FILE" && -s "$RESULT_FILE" ]]; then
-    SELECTED=$(cat "$RESULT_FILE")
-    TYPE="${SELECTED%%:*}"
+    QUERY=$(sed -n '1p' "$RESULT_FILE")
+    SELECTED_LINE=$(sed -n '2p' "$RESULT_FILE")
+    SELECTED=$(echo "$SELECTED_LINE" | cut -d' ' -f1)
 
-    if [[ "$TYPE" == "w" ]]; then
-        # Window: switch to it
-        TARGET="${SELECTED#w:}"
-        tmux switch-client -t "$TARGET" 2>/dev/null || true
-    elif [[ "$TYPE" == "f" ]]; then
-        # File: open with smart-open
-        # Run synchronously — tmux reaps popup children on close, so `&` would
-        # kill smart-open.sh before it can complete the yazi IPC call.
-        # Forward the captured trigger pane as TMUX_PANE so smart-open.sh
-        # targets the correct window's yazi pane.
-        FILEPATH="${SELECTED#f:}"
-        echo -n "$FILEPATH" | TMUX_PANE="$TRIGGER_PANE" ~/dotfiles/scripts/smart-open.sh
+    if [[ -n "$SELECTED" ]]; then
+        TYPE="${SELECTED%%:*}"
+        if [[ "$TYPE" == "w" ]]; then
+            TARGET="${SELECTED#w:}"
+            tmux switch-client -t "$TARGET" 2>/dev/null || true
+        elif [[ "$TYPE" == "f" ]]; then
+            # Run synchronously — tmux reaps popup children on close, so `&` would
+            # kill smart-open.sh before it can complete the yazi IPC call.
+            FILEPATH="${SELECTED#f:}"
+            echo -n "$FILEPATH" | TMUX_PANE="$TRIGGER_PANE" ~/dotfiles/scripts/smart-open.sh
+        fi
+    elif [[ -n "$QUERY" ]]; then
+        # No match — try treating the query as a literal path.
+        # Expand leading ~ and strip surrounding quotes/whitespace.
+        CANDIDATE="${QUERY#\"}"; CANDIDATE="${CANDIDATE%\"}"
+        CANDIDATE="${CANDIDATE#\'}"; CANDIDATE="${CANDIDATE%\'}"
+        CANDIDATE="${CANDIDATE/#\~/$HOME}"
+        if [[ -e "$CANDIDATE" ]]; then
+            echo -n "$CANDIDATE" | TMUX_PANE="$TRIGGER_PANE" ~/dotfiles/scripts/smart-open.sh
+        fi
     fi
 
     rm -f "$RESULT_FILE"
