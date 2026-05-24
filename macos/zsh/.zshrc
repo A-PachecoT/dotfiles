@@ -262,3 +262,6 @@ export PATH="$(brew --prefix)/opt/openjdk@25/bin:$PATH"
 
 # Added by Antigravity
 export PATH="/Users/styreep/.antigravity/antigravity/bin:$PATH"
+
+# AWS SSO quick login (Cofoundy founders) — added 2026-05-20
+alias aws-login='aws sso login --sso-session cofoundy'
