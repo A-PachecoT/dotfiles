@@ -37,12 +37,14 @@ PANE_CWD=$(tmux display-message -p '#{pane_current_path}' 2>/dev/null || echo "$
         --print-query \
         --prompt="  " \
         --header="Switch window · Search files · Paste path to open directly" \
+        --info=inline-right \
         --layout=reverse \
         --height=100% \
         --border=none \
-        --color="bg+:#33467c,fg:#c0caf5,fg+:#c0caf5,hl:#7aa2f7,hl+:#7aa2f7,prompt:#9ece6a,header:#565f89,pointer:#7aa2f7" \
+        --color="bg+:#33467c,fg:#c0caf5,fg+:#c0caf5,hl:#7aa2f7,hl+:#7aa2f7,prompt:#9ece6a,header:#565f89,pointer:#7aa2f7,info:#565f89" \
         --with-nth=2.. \
         --delimiter=' ' \
+        --bind 'change:transform-header(p={q}; case "$p" in "~"*|/*|*/*) case "$p" in "~"*) p="$HOME${p#\~}" ;; esac ;; *) p="" ;; esac; if [ -n "$p" ] && [ -e "$p" ]; then printf "\033[32m↵ Press Enter to open: %s\033[0m" "$p"; else printf "Switch window · Search files · Paste path to open directly"; fi)' \
         --preview='
             item={1}
             type=${item%%:*}
