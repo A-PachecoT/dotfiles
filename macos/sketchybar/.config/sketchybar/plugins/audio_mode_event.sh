@@ -24,6 +24,8 @@ elif [[ "$SENDER" == "audio_mode_change" ]] || [[ "$SENDER" == "forced" ]]; then
     DISPLAY_NAME="$CURRENT_OUTPUT"
     if [[ "$CURRENT_OUTPUT" == "MacBook Pro Speakers" ]]; then
         DISPLAY_NAME="Built-in Speakers"
+    elif [[ "$CURRENT_OUTPUT" == "External Headphones" ]]; then
+        DISPLAY_NAME="Jack Headphones"
     elif [[ "$CURRENT_OUTPUT" == *"fifine"* ]]; then
         DISPLAY_NAME="Fifine Speaker"
     elif [[ "$CURRENT_OUTPUT" == *"Philips TAT1215"* ]]; then

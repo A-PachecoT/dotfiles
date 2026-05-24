@@ -1,6 +1,6 @@
 -- Audio Device Priority Manager
 -- Two Priority Modes:
--- HEADPHONE MODE: Philips TAT1215 > WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
+-- HEADPHONE MODE: External Headphones (jack) > Philips TAT1215 > WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
 -- SPEAKER MODE: Echo Dot > MacBook Pro Speakers (skips fifine/headphones)
 -- Input Priority: fifine Microphone > MacBook Pro Microphone (never WH-1000XM4)
 
@@ -30,6 +30,7 @@ end
 local function setOutputDevice()
     log("Setting output device...")
 
+    local external = deviceExists("External Headphones", false)
     local fifine = deviceExists("fifine", false)
     local philips = deviceExists("Philips TAT1215", false)
     local wh1000xm4 = deviceExists("WH-1000XM4", false)
@@ -37,6 +38,7 @@ local function setOutputDevice()
     local macbook = deviceExists("MacBook Pro Speakers", false)
 
     -- Debug output
+    log("Found External Headphones (jack): " .. (external and "YES" or "NO"))
     log("Found fifine: " .. (fifine and "YES" or "NO"))
     log("Found Philips TAT1215: " .. (philips and "YES" or "NO"))
     log("Found WH-1000XM4: " .. (wh1000xm4 and "YES" or "NO"))
@@ -58,8 +60,12 @@ local function setOutputDevice()
             log("❌ No suitable speaker device found")
         end
     else
-        -- HEADPHONE MODE: Philips TAT1215 > WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
-        if philips then
+        -- HEADPHONE MODE: External Headphones (jack) > Philips TAT1215 > WH-1000XM4 > fifine > Echo Dot > MacBook Pro Speakers
+        if external then
+            external:setDefaultOutputDevice()
+            log("✅ Output: External Headphones / jack (headphone mode)")
+            return
+        elseif philips then
             philips:setDefaultOutputDevice()
             log("✅ Output: Philips TAT1215 (headphone mode)")
             return
