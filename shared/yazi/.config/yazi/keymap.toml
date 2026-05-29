@@ -2,3 +2,8 @@
 on   = "<Space>"
 run  = 'shell "$HOME/dotfiles/scripts/quicklook.sh %h" --block'
 desc = "Quick Look preview"
+
+[[mgr.prepend_keymap]]
+on   = "<C-r>"
+run  = 'shell -- open -R "$@"'
+desc = "Reveal in Finder"
