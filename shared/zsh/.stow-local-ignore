@@ -1,0 +1,3 @@
+# Not a stow package: tmux-workflow.zsh is sourced by absolute repo path
+# from macOS .zshrc and Linux user.zsh, so it must NOT be symlinked into $HOME.
+^/tmux-workflow\.zsh$
