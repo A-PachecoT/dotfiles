@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/bash
+#!/usr/bin/env bash
 # Kill pane and redistribute remaining panes proportionally
 
 # Predefined ratios by column count (same as smart-split)

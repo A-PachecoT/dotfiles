@@ -5,5 +5,5 @@ desc = "Quick Look preview"
 
 [[mgr.prepend_keymap]]
 on   = "<C-r>"
-run  = 'shell -- open -R "$@"'
-desc = "Reveal in Finder"
+run  = 'shell -- "$HOME/dotfiles/scripts/reveal.sh" "$@"'
+desc = "Reveal in file manager"

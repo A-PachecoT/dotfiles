@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/bash
+#!/usr/bin/env bash
 # Smart horizontal split - adds column and redistributes proportionally
 #
 # Ratios follow "main pane priority" - leftmost pane stays largest,

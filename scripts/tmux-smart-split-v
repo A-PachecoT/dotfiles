@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/bash
+#!/usr/bin/env bash
 # Smart vertical split - adds row within current column and redistributes
 #
 # Only affects panes in the same column (same x range), preserving

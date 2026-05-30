@@ -30,6 +30,9 @@ fi
 
 # Zoxide configuration moved to conf.d/98-zoxide.zsh
 
+#   tmux + yazi dev workflow (cl, y, tm, tw, ts, tp, th) — portable, shared with macOS
+[[ -f "$HOME/dotfiles/shared/zsh/tmux-workflow.zsh" ]] && source "$HOME/dotfiles/shared/zsh/tmux-workflow.zsh"
+
 # Arduino CLI aliases
 alias acc='arduino-cli compile --fqbn arduino:avr:uno'
 alias acu='arduino-cli upload -p /dev/ttyACM0 --fqbn arduino:avr:uno'
