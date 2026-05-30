@@ -29,9 +29,7 @@ if [[ ${HYDE_ZSH_NO_PLUGINS} != "1" ]]; then
 fi
 
 # Zoxide configuration moved to conf.d/98-zoxide.zsh
-
-#   tmux + yazi dev workflow (cl, y, tm, tw, ts, tp, th) — portable, shared with macOS
-[[ -f "$HOME/dotfiles/shared/zsh/tmux-workflow.zsh" ]] && source "$HOME/dotfiles/shared/zsh/tmux-workflow.zsh"
+# tmux + yazi dev workflow loaded via conf.d/99-tmux-workflow.zsh (HyDE may shadow this file)
 
 # Arduino CLI aliases
 alias acc='arduino-cli compile --fqbn arduino:avr:uno'
