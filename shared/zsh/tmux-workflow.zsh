@@ -15,6 +15,17 @@
 # cl - Claude Code launcher used by the dev layout (tw)
 alias cl="claude --dangerously-skip-permissions --teammate-mode tmux"
 
+# etc - Connect to the remote box via Eternal Terminal (et).
+# et gives mosh-like roaming/reconnect BUT carries OSC52, so tmux copy reaches the
+# LOCAL clipboard (mosh drops OSC52). Run from the mac. Server side: ./install.sh et
+# Override target host with $ET_REMOTE.
+#   etc          -> attach/create tmux session "cofoundy"
+#   etc bilio    -> session "bilio"
+etc() {
+    local session="${1:-cofoundy}"
+    et "${ET_REMOTE:-andre@andre-arch}" -c "tmux new -A -s ${session}"
+}
+
 # tm - TUI session manager (shows CPU, allows killing sessions)
 alias tm="$HOME/dotfiles/scripts/tm"
 alias tma="tmux attach -t"

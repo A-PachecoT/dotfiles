@@ -206,6 +206,47 @@ EOF
     info "Restart Claude Code to apply hooks"
 }
 
+# ── Eternal Terminal (Linux server) ─────────────────────────
+# et = re-connectable remote shell with mosh-like IP roaming that, UNLIKE mosh,
+# carries OSC52 — so tmux copy reaches the LOCAL clipboard over the network.
+# This sets up the Linux SERVER side. On macOS just install the client: brew install et
+setup_et() {
+    if [[ "$(detect_platform)" != "linux" ]]; then
+        warning "et server setup is Linux-only. On macOS install the client: brew install et"
+        return 0
+    fi
+    info "Setting up Eternal Terminal server..."
+
+    # 1. Install the et server/client package
+    if ! command -v etserver &>/dev/null; then
+        if command -v yay &>/dev/null; then
+            info "Installing eternalterminal from AUR..."
+            yay -S --noconfirm eternalterminal
+        else
+            warning "Install an AUR helper (yay/paru) or follow https://eternalterminal.dev/download/"
+            return 1
+        fi
+    else
+        success "eternalterminal present ($(et --version 2>&1 | head -1))"
+    fi
+
+    # 2. Ghostty terminfo: et passes the client's real TERM=xterm-ghostty, which
+    #    many Linux boxes lack (garbles output). Alias it to xterm-256color.
+    if ! infocmp xterm-ghostty &>/dev/null; then
+        info "Installing xterm-ghostty terminfo alias..."
+        printf 'xterm-ghostty|ghostty alias to xterm-256color,\n\tuse=xterm-256color,\n' \
+            | sudo tic -x -o /usr/share/terminfo - && success "terminfo alias installed"
+    else
+        success "xterm-ghostty terminfo already present"
+    fi
+
+    # 3. Disable telemetry + enable the service (listens on :2022)
+    [[ -f /etc/et.cfg ]] && sudo sed -i 's/^telemetry = true/telemetry = false/' /etc/et.cfg
+    sudo systemctl enable --now et.service && success "etserver running on port 2022"
+
+    info "From macOS: brew install et  &&  etc   (clipboard works over the network)"
+}
+
 # ── Usage ───────────────────────────────────────────────────
 usage() {
     cat <<EOF
@@ -218,6 +259,7 @@ Commands:
   list      Show packages that would be stowed on this platform
   jupyter   Create global Jupyter env at ~/.jupyter-env
   claude    Configure Claude Code hooks from shared/claude/
+  et        Set up Eternal Terminal server (Linux): clipboard-friendly mosh alt
   help      Show this help
 
 Platform detected: $(detect_platform)$(is_wsl && echo ' (WSL)')
@@ -233,6 +275,7 @@ case "${1:-install}" in
     list)     list_all ;;
     jupyter)  setup_jupyter ;;
     claude)   setup_claude_hooks ;;
+    et)       setup_et ;;
     help|-h|--help) usage ;;
     *)
         error "Unknown command: $1"
