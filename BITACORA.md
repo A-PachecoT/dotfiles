@@ -10,10 +10,10 @@
 
 El repo ya tiene split `shared/`, `macos/`, `linux/` y scripts planos, pero macOS sigue siendo la implementacion mas completa.
 Arch daily driver existe como capa HyDE/Hyprland parcial: falta bootstrap reproducible y paridad de UX personal.
-El dev sandbox Linux existe como flujo Mac -> Arch via ET/tmux/clipboard bridge, pero no esta empaquetado como setup replicable.
+El dev sandbox Mac -> Arch via ET/tmux ya tiene bridge de clipboard bidireccional: texto funciona por `mac-clipboard`, `clip-copy`, `clip-paste`, y shims scoped para Claude Code; imagenes funcionan nativamente en Claude Code via shims y por path en Codex via `clip-img`.
 Yazi ya abre archivos de texto con `nvim` desde el launcher compartido `y()`, sin depender de `EDITOR` externo.
-Siguiente foco: mantener fixes cross-platform en `shared/` y estabilizar el dev sandbox handoffeable.
-Hay cambios no relacionados sin commit en `shared/nvim/.config/nvim/lazy-lock.json`, `shared/zsh/tmux-workflow.zsh`, `scripts/claude-clipboard-shims/` y `scripts/mac-clipboard`.
+Siguiente foco: mantener fixes cross-platform en `shared/` y empaquetar health checks/setup replicable para el dev sandbox.
+Hay cambios sin commit en `shared/nvim/.config/nvim/lazy-lock.json`; el bridge clipboard queda listo para commit separado.
 
 ---
 
@@ -23,6 +23,8 @@ Hay cambios no relacionados sin commit en `shared/nvim/.config/nvim/lazy-lock.js
 - **Todo script compartido debe degradar por plataforma antes de llamarse desde tmux/zsh compartido.** - source: [roadmap](bitacora/2026-06-01-roadmap-arch-linux-dev-sandbox.md)
 - **El sandbox replicable necesita health check ejecutable, no solo documentacion.** - source: [roadmap](bitacora/2026-06-01-roadmap-arch-linux-dev-sandbox.md)
 - **Los defaults de herramientas TUI compartidas deben fijarse en el launcher shared cuando shells remotos pueden traer variables host-specific.** - source: [yazi nvim shared launcher](bitacora/2026-06-01-yazi-nvim-shared-launcher.md)
+- **Para clipboard remoto, preferir shims scoped al proceso antes que reemplazar binarios globales.** - source: [clipboard bridge](bitacora/2026-06-01-clipboard-bridge-mac-arch.md)
+- **Codex necesita flujo por archivo para imagenes hasta que exponga un hook de clipboard externo.** - source: [clipboard bridge](bitacora/2026-06-01-clipboard-bridge-mac-arch.md)
 
 ---
 
@@ -30,5 +32,6 @@ Hay cambios no relacionados sin commit en `shared/nvim/.config/nvim/lazy-lock.js
 
 | Fecha | Titulo | Resumen |
 |-------|--------|---------|
+| 2026-06-01 | [Clipboard bridge Mac -> Arch](bitacora/2026-06-01-clipboard-bridge-mac-arch.md) | Implementa bridge de clipboard por SSH, shims scoped para Claude Code y helpers manuales para texto/imagenes. |
 | 2026-06-01 | [Yazi nvim shared launcher](bitacora/2026-06-01-yazi-nvim-shared-launcher.md) | Fija `nvim` para `yazi` desde `shared/zsh/tmux-workflow.zsh` y pushea el fix DRY a `main`. |
 | 2026-06-01 | [Roadmap Arch Linux + dev sandbox](bitacora/2026-06-01-roadmap-arch-linux-dev-sandbox.md) | Divide el trabajo en Arch daily driver y sandbox Linux replicable, con prioridades para multiples sesiones. |

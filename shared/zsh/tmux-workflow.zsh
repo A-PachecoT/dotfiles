@@ -6,14 +6,29 @@
 #   - tmux window  = Project (switch with Cmd+1-9 on macOS / Alt+1-9 elsewhere)
 #   - Dev layout   = yazi + console + Claude Code
 #
-# Single source of truth for: cl, y, tw, ts, tp, th + tm aliases.
+# Single source of truth for: cl, co, y, tw, ts, tp, th + tm aliases.
 # Keep this file free of platform-specific binaries: use `tmux` (on PATH),
 # not `/opt/homebrew/bin/tmux`. Platform GUI bits (pdf, open -a) stay in the
 # per-platform rc files.
 # -----------------------------------------------------------------------------
 
 # cl - Claude Code launcher used by the dev layout (tw)
-alias cl="claude --dangerously-skip-permissions --teammate-mode tmux"
+#
+# When Claude runs on the Arch box through ET/SSH, image paste and clipboard writes
+# would otherwise hit Arch's headless X11/Wayland clipboard. Scope clipboard shims
+# to Claude only so Cmd+V image paste can pull from the mac on demand, and agent
+# shell commands like `wl-copy` can write back to the mac clipboard.
+function cl {
+    local shim_dir="$HOME/dotfiles/scripts/claude-clipboard-shims"
+    (
+        unset SSH_CONNECTION SSH_CLIENT SSH_TTY
+        export PATH="$shim_dir:$PATH"
+        command claude --dangerously-skip-permissions --teammate-mode tmux "$@"
+    )
+}
+
+# co - Codex launcher
+alias co="codex"
 
 # etc - Connect to the remote box via Eternal Terminal (et).
 # et gives mosh-like roaming/reconnect BUT carries OSC52, so tmux copy reaches the
@@ -24,6 +39,40 @@ alias cl="claude --dangerously-skip-permissions --teammate-mode tmux"
 etc() {
     local session="${1:-cofoundy}"
     et "${ET_REMOTE:-andre@andre-arch}" -c "tmux new -A -s ${session}"
+}
+
+# clip-img - Pull the image from the MAC's clipboard into a local file, print its path.
+# Image clipboards do NOT traverse the terminal (OSC52 carries text only) and the remote
+# box is headless ($DISPLAY empty), so CLI image-paste fails with "X11 ... timed out".
+# This bridges over the reverse SSH link instead. Paste the printed path into Claude/Codex.
+# Needs `pngpaste` on the mac (brew install pngpaste). Override source with $CLIP_REMOTE.
+#   clip-img            -> saves to ~/.cache/clip-img/<ts>.png, prints path
+#   clip-img out.png    -> saves to out.png
+function clip-img {
+    local remote="${CLIP_REMOTE:-styreep@100.73.150.52}"
+    local out="${1:-$HOME/.cache/clip-img/img-$(date +%Y%m%d-%H%M%S).png}"
+    mkdir -p -- "$(dirname -- "$out")"
+    if CLIP_REMOTE="$remote" "$HOME/dotfiles/scripts/mac-clipboard" paste-image > "$out" && [ -s "$out" ]; then
+        printf '%s\n' "$out"
+    else
+        rm -f -- "$out"
+        echo "clip-img: no image on $remote clipboard (or pngpaste missing on mac: brew install pngpaste)" >&2
+        return 1
+    fi
+}
+
+# clip-copy / clip-paste - Text clipboard bridge for headless Arch sessions.
+# Useful when wl-copy/xclip cannot reach a local display.
+clip-copy() {
+    if [ "$#" -gt 0 ]; then
+        printf '%s' "$*"
+    else
+        cat
+    fi | "$HOME/dotfiles/scripts/mac-clipboard" copy-text
+}
+
+clip-paste() {
+    "$HOME/dotfiles/scripts/mac-clipboard" paste-text
 }
 
 # tm - TUI session manager (shows CPU, allows killing sessions)
@@ -53,6 +102,9 @@ th() {
     echo -e "\033[1mtw .\033[0m        Setup dev layout (yazi + console + claude)"
     echo -e "\033[1mts NAME\033[0m     Switch/create session"
     echo -e "\033[1mtp\033[0m          Project picker → new window with layout"
+    echo -e "\033[1mclip-img\033[0m    Pull image clipboard from mac into a local PNG"
+    echo -e "\033[1mclip-copy\033[0m   Copy stdin/text to mac clipboard"
+    echo -e "\033[1mclip-paste\033[0m  Print mac clipboard text"
     echo -e "\033[1mtml\033[0m         List sessions"
     echo -e "\033[1mtmka\033[0m        Kill ALL sessions"
 }

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+mode="copy"
+target=""
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -o|-out)
+            mode="paste"
+            ;;
+        -t|-target)
+            shift
+            target="${1:-}"
+            ;;
+    esac
+    shift || true
+done
+
+bridge="${DOTFILES:-$HOME/dotfiles}/scripts/mac-clipboard"
+
+if [ "$mode" = "paste" ]; then
+    case "$target" in
+        TARGETS)
+            printf '%s\n' TARGETS UTF8_STRING text/plain image/png
+            exit 0
+            ;;
+        image/*|image/png|PNG)
+            exec "$bridge" paste-image
+            ;;
+        *)
+            exec "$bridge" paste-text
+            ;;
+    esac
+fi
+
+exec "$bridge" copy-text

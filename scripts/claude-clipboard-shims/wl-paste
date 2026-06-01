@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+target=""
+list_types=0
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -l|--list-types)
+            list_types=1
+            ;;
+        -t|--type)
+            shift
+            target="${1:-}"
+            ;;
+        --type=*)
+            target="${1#--type=}"
+            ;;
+    esac
+    shift || true
+done
+
+bridge="${DOTFILES:-$HOME/dotfiles}/scripts/mac-clipboard"
+
+if [ "$list_types" -eq 1 ]; then
+    printf '%s\n' text/plain image/png
+    exit 0
+fi
+
+case "$target" in
+    image/*|image/png|PNG)
+        exec "$bridge" paste-image
+        ;;
+    *)
+        exec "$bridge" paste-text
+        ;;
+esac

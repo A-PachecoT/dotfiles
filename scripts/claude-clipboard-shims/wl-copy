@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+bridge="${DOTFILES:-$HOME/dotfiles}/scripts/mac-clipboard"
+exec "$bridge" copy-text
