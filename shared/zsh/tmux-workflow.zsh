@@ -39,7 +39,7 @@ function y() {
     local tmp="$(mktemp -t yazi-cwd.XXXXXX)" cwd
     # TMUX_PANE is like "%144"; strip the % to get a numeric client id for IPC.
     local client_id="${TMUX_PANE#%}"
-    yazi "$@" --cwd-file="$tmp" --client-id "${client_id:-$$}"
+    EDITOR="${YAZI_EDITOR:-nvim}" VISUAL="${YAZI_EDITOR:-nvim}" yazi "$@" --cwd-file="$tmp" --client-id "${client_id:-$$}"
     if cwd="$(cat -- "$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
         builtin cd -- "$cwd"
     fi
