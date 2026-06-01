@@ -900,3 +900,7 @@ The `references/` folder contains other dotfiles configurations for inspiration:
 - **dotfiles-felixkratz-creator-sketchybar**: From the creator of SketchyBar, featuring beautiful design patterns
 - **dotfiles-full-aerospace-and-sketchybar-falleco**: Complete AeroSpace + SketchyBar setup
 - **dotfiles-omerxx**: Additional configuration examples
+
+## Bitácora
+
+This repo keeps a `BITACORA.md`. **At session close after non-trivial work**, proactively append a dated session entry (contexto, qué shipeó, validación, decisiones, learnings) AND refresh any stale docs this repo owns (PRD/README rosters, status/version lines), then commit — don't wait to be asked. Run `/bitacora` to append. <!-- bitacora-maintenance-rule -->
