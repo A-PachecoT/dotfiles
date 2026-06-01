@@ -22,7 +22,7 @@ rules = [
   # Directories - let yazi handle natively (no rule needed, this is just documentation)
 
   # Markdown → always editor (before text/html rule catches them)
-  { name = "*.md", use = "edit" },
+  { url = "*.md", use = "edit" },
 
   # Web files → browser (before text/* catches them)
   { mime = "text/html", use = "open" },
