@@ -1,0 +1,12 @@
+[Unit]
+Description=Kill runaway headless chrome (leaked playwright-mcp/firecrawl browsers)
+Documentation=https://github.com/A-PachecoT/dotfiles
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/chrome-guardian
+Nice=10
+# Tunables (uncomment to override script defaults):
+# Environment=CHROME_GUARDIAN_THRESHOLD=200
+# Environment=CHROME_GUARDIAN_STRIKES=3
+# Environment=CHROME_GUARDIAN_DRY_RUN=1

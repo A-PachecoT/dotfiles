@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# chrome-guardian — kill runaway *headless* chrome processes.
+#
+# Why: leaked playwright-mcp / firecrawl browsers on this headless Arch box fall
+# back to SwiftShader (software GL) and can peg several CPU cores indefinitely,
+# cooking the laptop. This watcher samples instantaneous CPU and kills only
+# headless chrome that stays hot for several consecutive checks. Interactive
+# browsers are never touched (must match --headless in the cmdline).
+#
+# Run periodically via the chrome-guardian.timer systemd --user unit.
+# no `-u`: empty associative arrays (no candidates) break under nounset; all
+# variable reads below already use ${VAR:-default} guards.
+set -eo pipefail
+
+# --- config (override via env / systemd unit) -------------------------------
+THRESHOLD_PCT="${CHROME_GUARDIAN_THRESHOLD:-200}"  # sustained CPU% (>100 = multi-core)
+STRIKES_TO_KILL="${CHROME_GUARDIAN_STRIKES:-3}"    # consecutive hot checks before kill
+SAMPLE_SECS="${CHROME_GUARDIAN_SAMPLE:-3}"         # window to measure instantaneous CPU
+MATCH="${CHROME_GUARDIAN_MATCH:---headless}"       # only target processes whose cmdline has this
+DRY_RUN="${CHROME_GUARDIAN_DRY_RUN:-0}"            # 1 = log what it would kill, don't kill
+
+STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/chrome-guardian"
+STATE_FILE="$STATE_DIR/strikes"
+LOG_FILE="${CHROME_GUARDIAN_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/chrome-guardian.log}"
+
+CLK_TCK=$(getconf CLK_TCK 2>/dev/null || echo 100)
+
+mkdir -p "$STATE_DIR" "$(dirname "$LOG_FILE")"
+touch "$STATE_FILE"
+
+log() { printf '%s %s\n' "$(date '+%F %T')" "$*" >>"$LOG_FILE"; }
+
+# --- helpers ----------------------------------------------------------------
+
+# instantaneous CPU ticks (utime+stime, aggregated over all threads) for a pid.
+# Reads /proc/<pid>/stat safely (comm may contain spaces/parens → split after ')').
+cpu_ticks() {
+    local stat rest
+    stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+    rest=${stat#*) }            # drop "<pid> (comm) "
+    # fields now: state ppid pgrp ... utime(12) stime(13) ...
+    set -- $rest
+    echo $(( $12 + $13 ))
+}
+
+# parent pid via /proc/<pid>/stat (robust against spaces in comm).
+ppid_of() {
+    local stat rest
+    stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+    rest=${stat#*) }
+    set -- $rest
+    echo "$2"
+}
+
+comm_of() { cat "/proc/$1/comm" 2>/dev/null || echo ""; }
+
+is_chrome_comm() { case "$1" in *chrome*|*chromium*) return 0 ;; *) return 1 ;; esac; }
+
+# walk up to the topmost chrome ancestor so we kill the whole browser, not just
+# the hot gpu-process (which chrome would just relaunch).
+top_chrome_ancestor() {
+    local pid=$1 parent pcomm
+    while :; do
+        parent=$(ppid_of "$pid") || break
+        [ -n "$parent" ] && [ "$parent" -gt 1 ] || break
+        pcomm=$(comm_of "$parent")
+        is_chrome_comm "$pcomm" || break
+        pid=$parent
+    done
+    echo "$pid"
+}
+
+# candidate pids: chrome/chromium processes whose cmdline contains $MATCH.
+candidates() {
+    local d pid comm
+    for d in /proc/[0-9]*; do
+        pid=${d#/proc/}
+        comm=$(comm_of "$pid") || continue
+        is_chrome_comm "$comm" || continue
+        tr '\0' ' ' <"$d/cmdline" 2>/dev/null | grep -q -- "$MATCH" && echo "$pid"
+    done
+}
+
+# --- measure ----------------------------------------------------------------
+declare -A T0
+for pid in $(candidates); do
+    t=$(cpu_ticks "$pid") && T0[$pid]=$t
+done
+
+[ "${#T0[@]}" -eq 0 ] && { : >"$STATE_FILE"; exit 0; }   # nothing headless → clear strikes
+
+sleep "$SAMPLE_SECS"
+
+# load previous strike counts
+declare -A STRIKES
+while read -r p s; do [ -n "${p:-}" ] && STRIKES[$p]=$s; done <"$STATE_FILE"
+
+declare -A NEW
+for pid in "${!T0[@]}"; do
+    t1=$(cpu_ticks "$pid") || continue           # died during sample → forget it
+    delta=$(( t1 - ${T0[$pid]} ))
+    [ "$delta" -lt 0 ] && delta=0
+    pct=$(( 100 * delta / CLK_TCK / SAMPLE_SECS ))
+
+    if [ "$pct" -ge "$THRESHOLD_PCT" ]; then
+        strikes=$(( ${STRIKES[$pid]:-0} + 1 ))
+        NEW[$pid]=$strikes
+        if [ "$strikes" -ge "$STRIKES_TO_KILL" ]; then
+            root=$(top_chrome_ancestor "$pid")
+            cmd=$(tr '\0' ' ' <"/proc/$root/cmdline" 2>/dev/null | cut -c1-80)
+            if [ "$DRY_RUN" = "1" ]; then
+                log "DRY-RUN would kill hot headless chrome: hot_pid=$pid ${pct}% strikes=$strikes root=$root [$cmd]"
+            else
+                log "KILL runaway headless chrome: hot_pid=$pid ${pct}% strikes=$strikes root=$root [$cmd]"
+                pkill -TERM -P "$root" 2>/dev/null || true
+                kill -TERM "$root" 2>/dev/null || true
+                sleep 2
+                kill -KILL "$root" 2>/dev/null || true
+                pkill -KILL -P "$root" 2>/dev/null || true
+            fi
+            unset 'NEW[$pid]'                    # reset after action
+        fi
+    fi
+    # below threshold → strike not carried over (NEW stays unset = reset)
+done
+
+# persist only surviving strike counts (dead/cooled pids drop out)
+: >"$STATE_FILE"
+for pid in "${!NEW[@]}"; do echo "$pid ${NEW[$pid]}" >>"$STATE_FILE"; done
+
+exit 0
