@@ -43,3 +43,12 @@ rules = [
   # Fallback for unknown files → system default
   { mime = "*", use = "open" },
 ]
+
+[plugin]
+# Image previews via chafa over remote (tmux + Eternal Terminal + Ghostty).
+# yazi's native Kitty-unicode-placeholder adapter is mangled in transit on this
+# chain and shows nothing; the chafa.yazi plugin renders colored text symbols
+# that survive, and defers to the built-in `image` previewer when run locally.
+prepend_previewers = [
+  { mime = "image/*", run = "chafa" },
+]
