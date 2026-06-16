@@ -25,6 +25,8 @@ Hay cambios sin commit en `shared/nvim/.config/nvim/lazy-lock.json`; el bridge c
 - **Los defaults de herramientas TUI compartidas deben fijarse en el launcher shared cuando shells remotos pueden traer variables host-specific.** - source: [yazi nvim shared launcher](bitacora/2026-06-01-yazi-nvim-shared-launcher.md)
 - **Para clipboard remoto, preferir shims scoped al proceso antes que reemplazar binarios globales.** - source: [clipboard bridge](bitacora/2026-06-01-clipboard-bridge-mac-arch.md)
 - **Codex necesita flujo por archivo para imagenes hasta que exponga un hook de clipboard externo.** - source: [clipboard bridge](bitacora/2026-06-01-clipboard-bridge-mac-arch.md)
+- **Sobre tmux+ET+Ghostty el transporte aguanta gráficos Kitty de placement directo y texto, pero NO unicode-placeholders ni sixel.** - source: [yazi image preview remoto](bitacora/2026-06-16-yazi-image-preview-remote.md)
+- **Un previewer que sondea el terminal (`chafa` abre `/dev/tty`) compite con el TUI padre por el stdin; desactivar el sondeo (`--probe=off`) evita que respuestas-escape se cuelen como teclas.** - source: [yazi image preview remoto](bitacora/2026-06-16-yazi-image-preview-remote.md)
 
 ---
 
@@ -35,3 +37,4 @@ Hay cambios sin commit en `shared/nvim/.config/nvim/lazy-lock.json`; el bridge c
 | 2026-06-01 | [Clipboard bridge Mac -> Arch](bitacora/2026-06-01-clipboard-bridge-mac-arch.md) | Implementa bridge de clipboard por SSH, shims scoped para Claude Code y helpers manuales para texto/imagenes. |
 | 2026-06-01 | [Yazi nvim shared launcher](bitacora/2026-06-01-yazi-nvim-shared-launcher.md) | Fija `nvim` para `yazi` desde `shared/zsh/tmux-workflow.zsh` y pushea el fix DRY a `main`. |
 | 2026-06-01 | [Roadmap Arch Linux + dev sandbox](bitacora/2026-06-01-roadmap-arch-linux-dev-sandbox.md) | Divide el trabajo en Arch daily driver y sandbox Linux replicable, con prioridades para multiples sesiones. |
+| 2026-06-16 | [Yazi image preview remoto](bitacora/2026-06-16-yazi-image-preview-remote.md) | Previewer chafa (sextantes) + visor on-demand Kitty (`i`) para que las imágenes se vean sobre tmux+ET+Ghostty; fija el modal "Find next:" con `chafa --probe=off`. |
