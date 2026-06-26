@@ -72,33 +72,34 @@ local function exec(cmd)
   return result
 end
 
--- Function to get pending Claude events per workspace
-local function get_pending_by_workspace()
+-- Function to get pending Claude events per workspace (async — never blocks
+-- the event loop; a synchronous ls here piles up under rapid workspace switching)
+local function get_pending_by_workspace(callback)
   local pending = {}
   local queue_dir = os.getenv("HOME") .. "/.claude-pending"
 
-  -- List files in queue directory
-  local output = exec("ls -1 '" .. queue_dir .. "'")
-  for file in output:gmatch("[^\n]+") do
-    -- Parse filename: timestamp_session_window_type
-    local session = file:match("^%d+_([^_]+)_")
-    local event_type = file:match("_([^_]+)$")
-    if session then
-      local ws = session_workspace_map[session]
-      if ws then
-        -- Track both count and whether any are questions
-        if not pending[ws] then
-          pending[ws] = { count = 0, has_question = false }
-        end
-        pending[ws].count = pending[ws].count + 1
-        if event_type == "question" then
-          pending[ws].has_question = true
+  -- List files in queue directory asynchronously
+  sbar.exec("ls -1 '" .. queue_dir .. "' 2>/dev/null", function(output)
+    for file in (output or ""):gmatch("[^\n]+") do
+      -- Parse filename: timestamp_session_window_type
+      local session = file:match("^%d+_([^_]+)_")
+      local event_type = file:match("_([^_]+)$")
+      if session then
+        local ws = session_workspace_map[session]
+        if ws then
+          -- Track both count and whether any are questions
+          if not pending[ws] then
+            pending[ws] = { count = 0, has_question = false }
+          end
+          pending[ws].count = pending[ws].count + 1
+          if event_type == "question" then
+            pending[ws].has_question = true
+          end
         end
       end
     end
-  end
-
-  return pending
+    callback(pending)
+  end)
 end
 
 -- Create spaces for each display
@@ -245,9 +246,7 @@ end
 
 -- Helper to apply workspace UI updates given parsed data
 -- ws_monitor maps workspace number -> monitor/display number
-local function apply_workspace_updates(focused_ws, ws_apps, ws_monitor)
-  local claude_pending = get_pending_by_workspace()
-
+local function apply_workspace_updates(focused_ws, ws_apps, ws_monitor, claude_pending)
   -- Update each display
   for display = 1, MAX_DISPLAYS do
     -- If this display doesn't exist, hide everything on it
@@ -331,15 +330,21 @@ end
 -- ASYNC update: uses sbar.exec() so aerospace hangs don't freeze sketchybar
 -- Gets focused_ws from trigger env (no aerospace call needed)
 -- Re-detects monitor count each update to handle connect/disconnect
+local focused_ws_queried = false
 local function do_update_workspaces()
-  local focused_ws = current_focused_ws
-
-  -- If no focused_ws yet (startup), query it
-  if not focused_ws then
-    local focused_output = exec("aerospace list-workspaces --focused")
-    focused_ws = tonumber(focused_output:match("%d+"))
-    current_focused_ws = focused_ws
+  -- If no focused_ws yet (startup), query it ASYNC then re-enter. A synchronous
+  -- aerospace call here blocks the event loop and stalls queued --trigger clients.
+  -- Guarded by focused_ws_queried so an empty/missing result never re-queries forever.
+  if not current_focused_ws and not focused_ws_queried then
+    focused_ws_queried = true
+    sbar.exec("aerospace list-workspaces --focused 2>/dev/null", function(focused_output)
+      current_focused_ws = tonumber((focused_output or ""):match("%d+"))
+      do_update_workspaces()
+    end)
+    return
   end
+
+  local focused_ws = current_focused_ws
 
   -- First: re-detect monitor count (async)
   sbar.exec("aerospace list-monitors --count 2>/dev/null", function(count_result)
@@ -365,15 +370,26 @@ local function do_update_workspaces()
         end
       end
 
-      -- Focused workspace: if it has no windows, query its monitor
-      if focused_ws and not ws_monitor[focused_ws] then
-        local mon_out = exec("aerospace list-workspaces --focused --format '%{workspace}|%{monitor-id}'")
-        local _, mon_str = mon_out:match("^(%d+)|(%d+)")
-        local mon_num = tonumber(mon_str) or 1
-        ws_monitor[focused_ws] = aero_to_sbar_display[mon_num] or 1
+      -- Fetch Claude pending badges (async), then apply all UI updates
+      local function finish()
+        get_pending_by_workspace(function(claude_pending)
+          apply_workspace_updates(focused_ws, ws_apps, ws_monitor, claude_pending)
+        end)
       end
 
-      apply_workspace_updates(focused_ws, ws_apps, ws_monitor)
+      -- Focused workspace: if it has no windows, query its monitor ASYNC.
+      -- (Was a synchronous aerospace call on the hot path — focusing an empty
+      -- workspace would block the event loop and freeze the bar.)
+      if focused_ws and not ws_monitor[focused_ws] then
+        sbar.exec("aerospace list-workspaces --focused --format '%{workspace}|%{monitor-id}' 2>/dev/null", function(mon_out)
+          local _, mon_str = (mon_out or ""):match("^(%d+)|(%d+)")
+          local mon_num = tonumber(mon_str) or 1
+          ws_monitor[focused_ws] = aero_to_sbar_display[mon_num] or 1
+          finish()
+        end)
+      else
+        finish()
+      end
     end)
   end)
 end
