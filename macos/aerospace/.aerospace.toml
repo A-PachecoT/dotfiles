@@ -29,10 +29,14 @@ on-focus-changed = ['move-mouse window-lazy-center']
 # Automatically unhide hidden apps
 automatically-unhide-macos-hidden-apps = true
 
-# Notify SketchyBar about workspace changes
+# Notify SketchyBar about workspace changes.
+# Backgrounded (& + detached output) so AeroSpace NEVER blocks waiting on
+# SketchyBar to ack the trigger. Without this, a busy/slow SketchyBar makes
+# AeroSpace block here, while SketchyBar's own `aerospace list-windows` calls
+# block waiting on AeroSpace -> mutual deadlock -> navbar freezes hard (triggers
+# pile up). Decoupling the two processes removes the deadlock entirely.
 exec-on-workspace-change = ['/bin/bash', '-c',
-    'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE'
-]
+    'sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE=$AEROSPACE_FOCUSED_WORKSPACE >/dev/null 2>&1 &']
 
 # Window detection rules - auto-float certain apps
 [[on-window-detected]]
