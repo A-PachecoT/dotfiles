@@ -54,7 +54,7 @@ hs.hotkey.bind({"alt", "shift"}, "A", function()
     screenshot.captureActiveWindow()
 end)
 
--- NOTE: Cmd+Shift+R is handled by AeroSpace → reload-all.sh (SketchyBar + AeroSpace + HammerSpoon)
+-- NOTE: Cmd+Ctrl+Shift+R is handled by AeroSpace → hard-reset-all.sh (hard-restart SketchyBar + HammerSpoon)
 
 -- ============================================================
 -- GLOBAL FUNCTIONS (for external access)
@@ -82,7 +82,7 @@ print("  Cmd+Alt+0        - Toggle HEADPHONE/SPEAKER mode")
 print("  Cmd+Shift+M      - Toggle microphone mute")
 print("  Cmd+Alt+C        - Center current window")
 print("  Alt+Shift+A      - Capture screenshot")
-print("  Cmd+Shift+R      - Reload all (via AeroSpace → reload-all.sh)")
+print("  Cmd+Ctrl+Shift+R - Hard reset SketchyBar + HammerSpoon (hard-reset-all.sh)")
 print("  [Skim] j/k       - Scroll down/up")
 print("  [Skim] d/u       - Half page down/up")
 print("  [Skim] gg/G      - First/last page")

@@ -199,8 +199,7 @@ run = 'move-node-to-workspace 5'
     
     # Reload config
     alt-shift-r = 'reload-config'
-    cmd-shift-r = 'exec-and-forget $HOME/dotfiles/scripts/reload-all.sh'  # Reload SketchyBar, AeroSpace, and HammerSpoon
-    cmd-ctrl-shift-r = 'exec-and-forget $HOME/dotfiles/scripts/hard-reset-all.sh'  # Hard reset: force quit and reopen all apps
+    cmd-ctrl-shift-r = 'exec-and-forget $HOME/dotfiles/scripts/hard-reset-all.sh'  # Hard reset: force quit and reopen SketchyBar + HammerSpoon (not AeroSpace)
 
     # Terminal launch (using Ghostty)
     alt-enter = 'exec-and-forget open -a "Ghostty"'
