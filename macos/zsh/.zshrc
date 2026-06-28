@@ -168,3 +168,6 @@ export PATH="/Users/styreep/.antigravity/antigravity/bin:$PATH"
 
 # AWS SSO quick login (Cofoundy founders) — added 2026-05-20
 alias aws-login='aws sso login --sso-session cofoundy'
+
+# Codex CLI
+alias co=codex
