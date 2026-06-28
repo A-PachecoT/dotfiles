@@ -6,7 +6,7 @@
 [merge]
     tool = vimdiff
 [diff]
-    tool = vimdiff
+	tool = vscode
 [core]
     editor = vim
     fileMode = false
@@ -44,3 +44,5 @@
 	insteadOf = https://github.com/
 [url "https://github.com/"]
 	insteadOf = ssh://git@github.com/
+[difftool "vscode"]
+	cmd = code --wait --diff \"$LOCAL\" \"$REMOTE\"
