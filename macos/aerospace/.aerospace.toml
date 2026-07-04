@@ -9,6 +9,7 @@ after-startup-command = [
     'exec-and-forget sketchybar',
     'exec-and-forget open -a "Obsidian"',
     'exec-and-forget open -a "Comet"',
+    'exec-and-forget open -a "Bitwarden"',
     'exec-and-forget $HOME/dotfiles/scripts/dev-startup.sh'
 ]
 
@@ -65,7 +66,7 @@ run = 'layout floating'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'bitwarden'
-run = 'layout floating'
+run = 'move-node-to-workspace 8'
 
 # Bitwarden browser-extension popup (Comet/Chrome opens a window titled "Bitwarden")
 [[on-window-detected]]
@@ -88,16 +89,6 @@ run = 'move-node-to-workspace 2'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'ghostty'
-if.window-title-regex-substring = 'bilio'
-run = 'move-node-to-workspace 3'
-
-[[on-window-detected]]
-if.app-name-regex-substring = 'ghostty'
-if.window-title-regex-substring = 'personal|dotfiles'
-run = 'move-node-to-workspace 4'
-
-[[on-window-detected]]
-if.app-name-regex-substring = 'ghostty'
 if.window-title-regex-substring = 'notes'
 run = 'move-node-to-workspace 9'
 
@@ -107,18 +98,17 @@ if.app-name-regex-substring = 'ghostty'
 if.window-title-regex-substring = 'pdf-viewer'
 run = 'layout floating'
 
-# NOTE: No fallback for Ghostty - ad-hoc windows stay in current workspace
-# Only named sessions (cofoundy, bilio, personal, notes) get routed
+# NOTE: No fallback for Ghostty - ad-hoc windows stay in current workspace.
+# Only cofoundy/notes are statically routed by title (pinned). Every other
+# tmux session (bilio, personal, and anything else) is routed dynamically
+# by scripts/dev-startup.sh via `aerospace move-node-to-workspace` right
+# after launch — see docs/superpowers/specs/2026-07-04-dynamic-tmux-session-restore-design.md
 
 # Playwright launches "Google Chrome for Testing" (distinct from "Google Chrome")
 # Float these windows so they don't break tiling during agent automation
 [[on-window-detected]]
 if.app-name-regex-substring = 'Chrome for Testing'
 run = 'layout floating'
-
-[[on-window-detected]]
-if.app-name-regex-substring = 'cursor'
-run = 'move-node-to-workspace 5'
 
 # Gaps configuration (Hyprland-like aesthetics)
 [gaps]
