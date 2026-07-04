@@ -13,32 +13,41 @@ local MAX_DISPLAYS = 2  -- Maximum number of physical displays supported
 local current_display_count = 1  -- Detected at runtime
 local aero_to_sbar_display = {}  -- Built dynamically
 
--- Build the aerospace-to-sketchybar display mapping based on monitor count
-local function rebuild_display_mapping(monitor_count)
+-- Command that maps each AeroSpace monitor-id to the NSScreen id SketchyBar
+-- uses for its `display` property. Never hardcode this mapping — it depends
+-- on the macOS display arrangement and silently flips when it changes.
+local MONITOR_MAP_CMD =
+  "aerospace list-monitors --format '%{monitor-id}|%{monitor-appkit-nsscreen-screens-id}' 2>/dev/null"
+
+-- Parse MONITOR_MAP_CMD output ("1|1\n2|2\n") into the mapping table.
+-- Also derives monitor count from the line count (saves a separate call).
+local function rebuild_display_mapping(output)
   aero_to_sbar_display = {}
-  if monitor_count >= 2 then
-    -- AeroSpace and SketchyBar number monitors in opposite order
-    aero_to_sbar_display[1] = 2
-    aero_to_sbar_display[2] = 1
-  else
-    -- Single monitor: everything maps to display 1
-    aero_to_sbar_display[1] = 1
+  local count = 0
+  for line in (output or ""):gmatch("[^\n]+") do
+    local aero_id, sbar_id = line:match("^(%d+)|(%d+)$")
+    if aero_id and sbar_id then
+      aero_to_sbar_display[tonumber(aero_id)] = tonumber(sbar_id)
+      count = count + 1
+    end
   end
-  current_display_count = monitor_count
+  if count == 0 then
+    aero_to_sbar_display[1] = 1
+    count = 1
+  end
+  current_display_count = count
 end
 
--- Detect current monitor count from AeroSpace
-local function detect_monitor_count()
-  local handle = io.popen("aerospace list-monitors --count 2>/dev/null")
-  if not handle then return 1 end
+-- Initialize mapping at load time (synchronous is OK here, before event loop)
+local function detect_monitor_mapping()
+  local handle = io.popen(MONITOR_MAP_CMD)
+  if not handle then return "" end
   local result = handle:read("*a") or ""
   handle:close()
-  local count = tonumber(result:match("%d+"))
-  return count or 1
+  return result
 end
 
--- Initialize mapping at load time
-rebuild_display_mapping(detect_monitor_count())
+rebuild_display_mapping(detect_monitor_mapping())
 
 -- Get theme-aware card style
 local card_style = styles.card()
@@ -346,12 +355,10 @@ local function do_update_workspaces()
 
   local focused_ws = current_focused_ws
 
-  -- First: re-detect monitor count (async)
-  sbar.exec("aerospace list-monitors --count 2>/dev/null", function(count_result)
-    local new_count = tonumber((count_result or ""):match("%d+")) or 1
-    if new_count ~= current_display_count then
-      rebuild_display_mapping(new_count)
-    end
+  -- First: re-detect monitor mapping (async). Rebuilt every update so both
+  -- monitor connect/disconnect AND arrangement changes are picked up.
+  sbar.exec(MONITOR_MAP_CMD, function(map_result)
+    rebuild_display_mapping(map_result)
 
     -- Then: get all windows with monitor info
     sbar.exec("aerospace list-windows --all --format '%{workspace}|%{app-name}|%{monitor-id}' 2>/dev/null", function(result)
