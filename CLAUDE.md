@@ -194,6 +194,31 @@ across **macOS**, **Linux**, and **WSL**. Full structural reference:
 - **AeroSpace + SketchyBar integration** (macOS-only): tiling WM
   with custom status bar showing occupied workspaces.
 
+## Multi-Machine Sync (macOS ↔ Arch) — auto-push, don't ask
+
+This repo runs on **both** André's macOS machine and his headless Arch
+box, kept in sync through the `main` branch. Both machines push and
+pull. Rules for agents working here:
+
+- **Auto-commit and push dotfiles changes without asking.** After any
+  non-trivial change to this repo, commit in logical blocks
+  (conventional commits) and `git push` — proactively, don't wait to be
+  prompted. André's standing default is "keep both machines in sync."
+  Only pause to ask when the change is risky, incomplete, secret-bearing,
+  or you're unsure it's correct.
+- **`git pull --rebase` before pushing** — the other machine may have
+  pushed since. A plain push often rejects. If uncommitted local changes
+  block the rebase: stash (`-u` to include untracked) → rebase → pop, and
+  verify nothing was lost.
+- **`shared/` must be platform-portable** — it is stowed on both OSes.
+  Never hardcode platform paths (e.g. `/opt/homebrew/bin/gh` vs
+  `/usr/bin/gh`); use PATH-relative commands (`!gh`) or split into
+  `macos/` vs `linux/`. A hardcoded path causes a sync ping-pong where
+  each machine "fixes" it and re-breaks the other.
+- **Cross-platform shell code** lives in `shared/zsh/*.zsh`, sourced from
+  both `macos/zsh/.zshrc` and a Linux `conf.d/*.zsh` loader (e.g.
+  `vi-mode.zsh`, `tmux-workflow.zsh`).
+
 ## Critical Integration Points
 
 ### AeroSpace ↔ SketchyBar Integration
