@@ -234,6 +234,21 @@ Features:
 
 See the [comprehensive audio system documentation](docs/audio-priority-system.md) for architecture details, debugging, troubleshooting, and implementation specifics.
 
+### Clipboard Integration (macOS ↔ Headless Arch Bridge)
+
+Because the Arch Linux environment runs headless, the clipboard is bridged to the macOS host via a reverse SSH connection.
+- **Bridge Script:** [scripts/mac-clipboard](file:///home/andre/dotfiles/scripts/mac-clipboard) (uses `CLIP_REMOTE` to run `pngpaste` or `pbpaste`/`pbcopy` on macOS).
+- **Clipboard Shims:** Located in [scripts/claude-clipboard-shims/](file:///home/andre/dotfiles/scripts/claude-clipboard-shims/).
+- **Pasting Images:** To save a clipboard image to a file in the headless session:
+  ```bash
+  ~/dotfiles/scripts/mac-clipboard paste-image > output.png
+  # Or via wl-paste shim:
+  ~/dotfiles/scripts/claude-clipboard-shims/wl-paste --type image/png > output.png
+  ```
+- **Text Clipboard:**
+  - Paste text: `~/dotfiles/scripts/mac-clipboard paste-text`
+  - Copy text: `echo "hello" | ~/dotfiles/scripts/mac-clipboard copy-text`
+
 ## Hardware Setup
 
 ### Physical Configuration
