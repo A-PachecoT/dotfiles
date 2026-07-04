@@ -13,6 +13,7 @@ Arch daily driver existe como capa HyDE/Hyprland parcial: falta bootstrap reprod
 El dev sandbox Mac -> Arch via ET/tmux ya tiene bridge de clipboard bidireccional: texto funciona por `mac-clipboard`, `clip-copy`, `clip-paste`, y shims scoped para Claude Code; imagenes funcionan nativamente en Claude Code via shims y por path en Codex via `clip-img`.
 Yazi ya abre archivos de texto con `nvim` desde el launcher compartido `y()`, sin depender de `EDITOR` externo.
 El box Arch quedó **endurecido contra OOM** (2026-07-04): `systemd-oomd` + caps de memoria en los 9 runners + idle-reap de `agent-browser`; el CI de las 3 landings migró a GitHub-hosted para desacoplar la salud del box de cada push del agente.
+La Mac ya tiene **auto-resume de Claude tras reboot** (2026-07-04, `tmux-assistant-resurrect`, `@continuum-save-interval`=1min) y `dev-startup.sh` fue reescrito para **descubrimiento dinámico de sesiones tmux** (local vía snapshot de resurrect, remoto vía SSH al Arch box) con asignación estable de workspaces AeroSpace, reemplazando el modelo viejo de 4 sesiones hardcodeadas.
 Siguiente foco: mantener fixes cross-platform en `shared/` y empaquetar health checks/setup replicable para el dev sandbox.
 
 ---
@@ -32,6 +33,10 @@ Siguiente foco: mantener fixes cross-platform en `shared/` y empaquetar health c
 - **Atribuir un OOM por el cgroup del victim (`task_memcg`) separa al leaker real de la víctima antes de culpar al proceso equivocado.** - source: [OOM freeze hardening](bitacora/2026-07-04-oom-freeze-hardening.md)
 - **CI self-hosted acopla la salud del hardware a cada push del agente; migrar a hosted lo desacopla (cuando el billing lo permite).** - source: [OOM freeze hardening](bitacora/2026-07-04-oom-freeze-hardening.md)
 - **Un guardián por CPU no cubre leaks por RAM, y un unit symlinkeado sin `enable --now` es no-op (`chrome-guardian`).** - source: [OOM freeze hardening](bitacora/2026-07-04-oom-freeze-hardening.md)
+- **`aerospace move-node-to-workspace` sin `--window-id` actúa sobre la ventana con foco actual, no la recién creada — es una carrera real, no teórica.** - source: [tmux dynamic session restore](bitacora/2026-07-04-dynamic-tmux-session-restore.md)
+- **Nunca llamar un binario con IPC propio (ej. `aerospace`) dentro de un `while read` alimentado por pipe: puede drenarle el stdin al loop sin error visible.** - source: [tmux dynamic session restore](bitacora/2026-07-04-dynamic-tmux-session-restore.md)
+- **Un conteo de reintentos no reemplaza un timeout real: si la llamada puede colgarse indefinidamente (aerospace↔SketchyBar deadlock), hace falta matar por PID tras un plazo, no solo reintentar.** - source: [tmux dynamic session restore](bitacora/2026-07-04-dynamic-tmux-session-restore.md)
+- **Ante señal ambigua de posible pérdida de datos en una máquina con actividad concurrente real, parar y preguntar es más rápido y correcto que seguir investigando en soledad.** - source: [tmux dynamic session restore](bitacora/2026-07-04-dynamic-tmux-session-restore.md)
 
 ---
 
@@ -44,3 +49,4 @@ Siguiente foco: mantener fixes cross-platform en `shared/` y empaquetar health c
 | 2026-06-01 | [Roadmap Arch Linux + dev sandbox](bitacora/2026-06-01-roadmap-arch-linux-dev-sandbox.md) | Divide el trabajo en Arch daily driver y sandbox Linux replicable, con prioridades para multiples sesiones. |
 | 2026-06-16 | [Yazi image preview remoto](bitacora/2026-06-16-yazi-image-preview-remote.md) | Previewer chafa (sextantes) + visor on-demand Kitty (`i`) para que las imágenes se vean sobre tmux+ET+Ghostty; fija el modal "Find next:" con `chafa --probe=off`. |
 | 2026-07-04 | [OOM freeze hardening](bitacora/2026-07-04-oom-freeze-hardening.md) | Box se congeló ~3am por livelock OOM (CTO nocturno fugó browsers headless + CI en cada push). Fixes: systemd-oomd, MemoryMax en runners, idle-reap de agent-browser, y migración de 3 landings a GitHub-hosted. |
+| 2026-07-04 | [tmux dynamic session restore](bitacora/2026-07-04-dynamic-tmux-session-restore.md) | Instala `tmux-assistant-resurrect` en la Mac (auto-resume de Claude tras reboot, merge aditivo validado) y reescribe `dev-startup.sh` para descubrimiento dinámico de sesiones (local + Arch remoto) con workspaces AeroSpace estables. Rehearsal en vivo encontró y arregló 3 bugs reales (carrera de foco, pipe que come stdin, deadlock aerospace↔SketchyBar). |
