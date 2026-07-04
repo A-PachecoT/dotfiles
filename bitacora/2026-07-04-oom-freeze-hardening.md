@@ -106,5 +106,8 @@ blanda del agente (incluso exceptuada "si el parent pide mantener la sesión").
 - Pushes: `cofoundy/basalt-landing@8fc4d3a`, `cofoundy/landing-page-v3@1fe99c0`,
   `cofoundy/xgodel-landing@4ebe217` (`runs-on: self-hosted → ubuntu-latest`)
 - Memoria: `arch-box-oom-hardening.md`
-- Pendientes: subir zram/swap; dar dimensión RAM a `chrome-guardian` (o retirarlo);
-  reiniciar `hermes-*` en algún momento para que hereden la var (no urgente).
+
+**Addendum (misma sesión):**
+- **zram 4G→16G**: `/etc/systemd/zram-generator.conf` → `zram-size = min(ram / 2, 16384)`, zstd. `zramctl` confirma 15.5G de swap activo; `oomctl` lo ve.
+- **chrome-guardian**: le agregué **dimensión de RAM** (`linux/chrome-guardian/.local/bin/chrome-guardian`) — ahora mata un headless chrome cuyo árbol de procesos supera `CHROME_GUARDIAN_RAM_MB` (default 2048) por N strikes, además del check de CPU. `tree_rss_mb` validado vs suma recursiva (diff 0). Y lo **activé** (`enable --now chrome-guardian.timer`, cada 2 min) — estaba symlinkeado pero inactivo.
+- Pendiente único: reiniciar `hermes-*` en algún momento para que herede la var (no urgente).
