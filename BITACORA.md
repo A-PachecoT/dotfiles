@@ -12,8 +12,8 @@ El repo ya tiene split `shared/`, `macos/`, `linux/` y scripts planos, pero macO
 Arch daily driver existe como capa HyDE/Hyprland parcial: falta bootstrap reproducible y paridad de UX personal.
 El dev sandbox Mac -> Arch via ET/tmux ya tiene bridge de clipboard bidireccional: texto funciona por `mac-clipboard`, `clip-copy`, `clip-paste`, y shims scoped para Claude Code; imagenes funcionan nativamente en Claude Code via shims y por path en Codex via `clip-img`.
 Yazi ya abre archivos de texto con `nvim` desde el launcher compartido `y()`, sin depender de `EDITOR` externo.
+El box Arch quedó **endurecido contra OOM** (2026-07-04): `systemd-oomd` + caps de memoria en los 9 runners + idle-reap de `agent-browser`; el CI de las 3 landings migró a GitHub-hosted para desacoplar la salud del box de cada push del agente.
 Siguiente foco: mantener fixes cross-platform en `shared/` y empaquetar health checks/setup replicable para el dev sandbox.
-Hay cambios sin commit en `shared/nvim/.config/nvim/lazy-lock.json`; el bridge clipboard queda listo para commit separado.
 
 ---
 
@@ -27,6 +27,11 @@ Hay cambios sin commit en `shared/nvim/.config/nvim/lazy-lock.json`; el bridge c
 - **Codex necesita flujo por archivo para imagenes hasta que exponga un hook de clipboard externo.** - source: [clipboard bridge](bitacora/2026-06-01-clipboard-bridge-mac-arch.md)
 - **Sobre tmux+ET+Ghostty el transporte aguanta gráficos Kitty de placement directo y texto, pero NO unicode-placeholders ni sixel.** - source: [yazi image preview remoto](bitacora/2026-06-16-yazi-image-preview-remote.md)
 - **Un previewer que sondea el terminal (`chafa` abre `/dev/tty`) compite con el TUI padre por el stdin; desactivar el sondeo (`--probe=off`) evita que respuestas-escape se cuelen como teclas.** - source: [yazi image preview remoto](bitacora/2026-06-16-yazi-image-preview-remote.md)
+- **`agent-browser` persiste el browser indefinidamente salvo que se setee `AGENT_BROWSER_IDLE_TIMEOUT_MS`; en runs autónomas largas los browsers se fugan y agotan RAM.** - source: [OOM freeze hardening](bitacora/2026-07-04-oom-freeze-hardening.md)
+- **En el box headless, `systemd-oomd` (PSI/cgroup-aware) es obligatorio: el OOM-killer del kernel llega tarde en cargas anon-heavy y produce livelock.** - source: [OOM freeze hardening](bitacora/2026-07-04-oom-freeze-hardening.md)
+- **Atribuir un OOM por el cgroup del victim (`task_memcg`) separa al leaker real de la víctima antes de culpar al proceso equivocado.** - source: [OOM freeze hardening](bitacora/2026-07-04-oom-freeze-hardening.md)
+- **CI self-hosted acopla la salud del hardware a cada push del agente; migrar a hosted lo desacopla (cuando el billing lo permite).** - source: [OOM freeze hardening](bitacora/2026-07-04-oom-freeze-hardening.md)
+- **Un guardián por CPU no cubre leaks por RAM, y un unit symlinkeado sin `enable --now` es no-op (`chrome-guardian`).** - source: [OOM freeze hardening](bitacora/2026-07-04-oom-freeze-hardening.md)
 
 ---
 
@@ -38,3 +43,4 @@ Hay cambios sin commit en `shared/nvim/.config/nvim/lazy-lock.json`; el bridge c
 | 2026-06-01 | [Yazi nvim shared launcher](bitacora/2026-06-01-yazi-nvim-shared-launcher.md) | Fija `nvim` para `yazi` desde `shared/zsh/tmux-workflow.zsh` y pushea el fix DRY a `main`. |
 | 2026-06-01 | [Roadmap Arch Linux + dev sandbox](bitacora/2026-06-01-roadmap-arch-linux-dev-sandbox.md) | Divide el trabajo en Arch daily driver y sandbox Linux replicable, con prioridades para multiples sesiones. |
 | 2026-06-16 | [Yazi image preview remoto](bitacora/2026-06-16-yazi-image-preview-remote.md) | Previewer chafa (sextantes) + visor on-demand Kitty (`i`) para que las imágenes se vean sobre tmux+ET+Ghostty; fija el modal "Find next:" con `chafa --probe=off`. |
+| 2026-07-04 | [OOM freeze hardening](bitacora/2026-07-04-oom-freeze-hardening.md) | Box se congeló ~3am por livelock OOM (CTO nocturno fugó browsers headless + CI en cada push). Fixes: systemd-oomd, MemoryMax en runners, idle-reap de agent-browser, y migración de 3 landings a GitHub-hosted. |
