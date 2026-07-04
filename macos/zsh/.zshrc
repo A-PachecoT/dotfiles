@@ -161,6 +161,9 @@ pdf() {
 #
 # cl, y, tm, tw, ts, tp, th live in the PORTABLE workflow file (shared by Linux):
 source "$HOME/dotfiles/shared/zsh/tmux-workflow.zsh"
+
+# Vi mode for the command line (Esc -> NORMAL). Shared with Linux.
+source "$HOME/dotfiles/shared/zsh/vi-mode.zsh"
 export PATH="$(brew --prefix)/opt/openjdk@25/bin:$PATH"
 
 # Added by Antigravity
