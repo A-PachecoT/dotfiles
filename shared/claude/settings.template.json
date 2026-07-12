@@ -53,6 +53,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__DOTFILES__/scripts/ssot-sync.sh push",
+            "timeout": 25
+          }
+        ]
+      }
     ]
   }
 }
