@@ -189,6 +189,20 @@ EOF
         success "Created settings.json"
     fi
 
+    # Symlink the global CLAUDE.md (SSOT = shared/claude/CLAUDE.md — same brain on
+    # every box; reconciled 2026-07-12 after Arch/macOS drifted for 3 weeks).
+    # A pre-existing REGULAR file is backed up, never clobbered.
+    local claude_md_src="$DOTFILES/shared/claude/CLAUDE.md"
+    local claude_md_dst="$claude_dir/CLAUDE.md"
+    if [[ -f "$claude_md_src" ]]; then
+        if [[ -f "$claude_md_dst" && ! -L "$claude_md_dst" ]]; then
+            mv "$claude_md_dst" "$claude_md_dst.pre-dotfiles.$(date +%Y%m%d%H%M%S)"
+            warning "Existing CLAUDE.md backed up (~/.claude/CLAUDE.md.pre-dotfiles.*)"
+        fi
+        ln -sfn "$claude_md_src" "$claude_md_dst"
+        success "Linked global CLAUDE.md → shared/claude/CLAUDE.md"
+    fi
+
     # Symlink personal skills from dotfiles into ~/.claude/skills/
     local skills_src="$DOTFILES/shared/claude/skills"
     local skills_dst="$claude_dir/skills"
