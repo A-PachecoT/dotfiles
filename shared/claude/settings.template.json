@@ -43,6 +43,16 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__DOTFILES__/scripts/ssot-sync.sh"
+          }
+        ]
+      }
     ]
   }
 }

@@ -1,9 +1,12 @@
 # André's Artificial General Intelligence
 
 > **SSOT: `~/dotfiles/shared/claude/CLAUDE.md`**, symlinked como `~/.claude/CLAUDE.md`
-> en TODAS las cajas (Arch + macOS). Editá ACÁ y `git push` en dotfiles; nunca edites
-> una copia local suelta — así fue como driftearon dos cerebros distintos por 3 semanas.
-> (Conciliado 2026-07-12: unión de Arch@jun-19 + macOS@jul-12; originales en
+> en TODAS las cajas (Arch + macOS). **Tratalo como un archivo normal**: editás
+> cualquiera de los dos paths y es el mismo archivo. El loop de sync está cerrado
+> por infra, no por disciplina — el hook `ssot-sync` (SessionStart) pullea dotfiles
+> y el toolkit al inicio de cada sesión, y avisa si dejaste ediciones sin commitear.
+> Tras editar: commit+push dotfiles (auto-OK por git-autonomy §abajo). (Conciliado
+> 2026-07-12: unión de Arch@jun-19 + macOS@jul-12; originales en
 > `dotfiles/backup/claude-md/`.) Secciones marcadas [macOS]/[Arch] aplican solo en esa caja.
 
 ## User data
