@@ -1,0 +1,59 @@
+# ~/.config/herdr/config.toml — TRIAL (André)
+# Objetivo: que Herdr se sienta EXACTO como tu tmux, sin tocar Ghostty.
+#
+# Cómo funciona el truco prefix-less:
+#   Ghostty ya traduce  cmd+h  ->  text:\x02h  (= Ctrl-B + h = "prefix+h").
+#   El prefix default de Herdr TAMBIÉN es ctrl+b.
+#   => tus cmd+... ya llegan como prefix+... y solo remapeo las ACCIONES aquí.
+#
+# Modelo mental (idéntico a tu tmux, 3 niveles):
+#   session  = EMPRESA   (cofoundy / bilio / personal / notes)  <- ruteada por AeroSpace, 1 ventana Ghostty c/u
+#   tab      = PROYECTO  (= tus tmux windows)                    <- cmd+1-9 salta, cmd+c nuevo, cmd+w cierra
+#   pane     = dev layout (yazi + console + claude)              <- cmd+hjkl, cmd+d split, cmd+z zoom, cmd+x cierra
+#   workspace= capa opcional que IGNORAS (1 por session)         <- por si algún día quieres agrupar proyectos
+
+[keys]
+prefix = "ctrl+b"
+
+# --- PANES (coinciden 1:1 con tu tmux, cero remap necesario, van explícitos por claridad) ---
+focus_pane_left  = "prefix+h"       # cmd+h
+focus_pane_down  = "prefix+j"       # cmd+j
+focus_pane_up    = "prefix+k"       # cmd+k
+focus_pane_right = "prefix+l"       # cmd+l
+zoom             = "prefix+z"       # cmd+z
+close_pane       = ["prefix+w", "prefix+x"]  # cmd+w (macOS: cierra lo enfocado) + cmd+x (tu viejo hábito tmux)
+
+# --- SPLITS (remap: en tu tmux cmd+d = split derecha, cmd+shift+d = split abajo) ---
+split_vertical   = "prefix+d"       # cmd+d       (default era prefix+v)
+split_horizontal = "prefix+shift+d" # cmd+shift+d (default era prefix+minus)
+
+# --- PROYECTOS = TABS (= tus tmux windows; ya coinciden con los defaults) ---
+new_tab     = "prefix+c"            # cmd+c   nuevo proyecto  (tmux: new window)
+switch_tab  = "prefix+1..9"         # cmd+1-9 saltar proyecto (tmux: cmd+1-9)
+next_tab    = "prefix+n"            # ctrl+b n
+previous_tab= "prefix+p"            # ctrl+b p
+close_tab   = "prefix+shift+w"      # cmd+shift+w  cerrar proyecto (escalación: shift = mata todo el proyecto)
+rename_tab  = "prefix+shift+t"
+
+# --- capa workspace: desactivo lo que chocaría con mis splits; la ignoras en el trial ---
+close_workspace = ""                # liberar prefix+shift+d (lo uso para split abajo)
+workspace_picker = ""               # liberado (cmd+shift+w ahora cierra proyecto); salta con goto (ctrl+b g)
+
+# --- SISTEMA ---
+toggle_sidebar = "prefix+b"         # ctrl+b b  -> EL panel de estados de agentes (blocked/working/done). Lo más importante.
+goto           = "prefix+g"         # ctrl+b g  -> command palette / fuzzy jump (tu antiguo `tp`)
+resize_mode    = "prefix+r"         # cmd+r     (ojo: en tmux era reload; reload ahora = `herdr server reload-config`)
+detach         = "prefix+q"         # ctrl+b q
+help           = "prefix+?"         # ctrl+b ?
+copy_mode      = "prefix+["         # ctrl+b [   (edit_scrollback en prefix+e también sirve)
+
+# --- HOP -> yazi (portamos la ÚNICA parte de tu hop que valías: saltar a archivos con yazi) ---
+# cmd+f ya te manda prefix+shift+f. Abre yazi en un pane temporal; al salir (q) se cierra.
+[[keys.command]]
+key = "prefix+shift+f"
+type = "pane"
+command = "yazi"
+
+# --- móvil: Herdr captura el mouse/touch para navegar (tap-to-focus). ---
+[ui]
+mouse_capture = true
