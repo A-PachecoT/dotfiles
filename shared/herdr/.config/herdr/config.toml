@@ -46,7 +46,7 @@ close_workspace    = ""                # sin binding (prefix+shift+d lo usa spli
 
 # --- SISTEMA ---
 toggle_sidebar = "prefix+b"         # ctrl+b b  -> EL panel de estados de agentes (blocked/working/done). Lo más importante.
-goto           = "prefix+g"         # ctrl+b g  -> command palette / fuzzy jump (tu antiguo `tp`)
+goto           = "prefix+g"         # cmd+p / ctrl+b g -> NAVIGATOR: fuzzy jumper vim (j/k mover, h/l nivel, / buscar, Enter saltar, b/w/i/d/a estados). Tu viejo `tp`.
 resize_mode    = "prefix+r"         # cmd+r     (ojo: en tmux era reload; reload ahora = `herdr server reload-config`)
 detach         = "prefix+q"         # ctrl+b q
 help           = "prefix+?"         # ctrl+b ?
