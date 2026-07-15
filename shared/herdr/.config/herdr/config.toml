@@ -1,3 +1,4 @@
+onboarding = false   # herdr lo auto-escribe al descartar el onboarding; trackeado para no ensuciar el repo en cada caja
 # ~/.config/herdr/config.toml — TRIAL (André)
 # Objetivo: que Herdr se sienta EXACTO como tu tmux, sin tocar Ghostty.
 #
