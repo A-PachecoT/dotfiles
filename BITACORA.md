@@ -14,7 +14,9 @@ El dev sandbox Mac -> Arch via ET/tmux ya tiene bridge de clipboard bidirecciona
 Yazi ya abre archivos de texto con `nvim` desde el launcher compartido `y()`, sin depender de `EDITOR` externo.
 El box Arch quedó **endurecido contra OOM** (2026-07-04): `systemd-oomd` + caps de memoria en los 9 runners + idle-reap de `agent-browser`; el CI de las 3 landings migró a GitHub-hosted para desacoplar la salud del box de cada push del agente.
 La Mac ya tiene **auto-resume de Claude tras reboot** (2026-07-04, `tmux-assistant-resurrect`, `@continuum-save-interval`=1min) y `dev-startup.sh` fue reescrito para **descubrimiento dinámico de sesiones tmux** (local vía snapshot de resurrect, remoto vía SSH al Arch box) con asignación estable de workspaces AeroSpace, reemplazando el modelo viejo de 4 sesiones hardcodeadas.
-Siguiente foco: mantener fixes cross-platform en `shared/` y empaquetar health checks/setup replicable para el dev sandbox.
+**Herdr en trial** (2026-07-14) en paralelo a tmux: config compartido en `shared/herdr/`, server en ambos workers, keybinds 1:1 vía el passthrough Ghostty existente. Decisión de migración pendiente (validar sidebar de agentes vs Claude Pending System).
+**Device mesh 4-way activo** (2026-07-14): SSH full-mesh sobre Tailscale entre Mac, Arch, celu y tablet (matriz 12/12, key por dispositivo). Transporte estándar: **ET** (touch ✓ + reconexión ✓; mosh rompe el mouse). Aliases únicos `h`/`ha` en las 4 cajas. Ver `docs/device-mesh.md`.
+Siguiente foco: cerrar el trial de Herdr, mantener fixes cross-platform en `shared/` y empaquetar health checks/setup replicable para el dev sandbox.
 
 ---
 
@@ -42,6 +44,12 @@ Siguiente foco: mantener fixes cross-platform en `shared/` y empaquetar health c
 - **Secure Input ciega los event taps (ven `flagsChanged`, nunca `keyDown`) pero NO bloquea los hotkeys Carbon; confundir ambas capas cuesta horas.** - source: [alt hotkeys muertos](bitacora/2026-07-09-alt-hotkeys-dead-obsidian-password-field.md)
 - **AeroSpace re-ejecuta `after-startup-command` en cada reinicio del WM, no solo en boot: todo script de arranque que lance ventanas debe ser idempotente.** - source: [alt hotkeys muertos](bitacora/2026-07-09-alt-hotkeys-dead-obsidian-password-field.md)
 - **Cuando el usuario contradice una hipótesis desde su experiencia ("siempre lo usé así"), esa objeción es evidencia, no ruido.** - source: [alt hotkeys muertos](bitacora/2026-07-09-alt-hotkeys-dead-obsidian-password-field.md)
+- **mosh no pasa mouse-tracking (virtual terminal propio); para TUIs mouse-first en remoto/móvil usar ET: passthrough fiel + reconexión automática.** - source: [herdr trial + mesh](bitacora/2026-07-14-herdr-trial-device-mesh.md)
+- **Todo binario que deba resolverse en shells no-interactivos (`ssh host cmd`, `et -c`) va en `.zshenv`, no en `.zshrc`.** - source: [herdr trial + mesh](bitacora/2026-07-14-herdr-trial-device-mesh.md)
+- **Credential helpers de git son platform-specific: van per-box en `~/.config/git/config` (XDG, no stowed), jamás en el `.gitconfig` de `shared/`.** - source: [herdr trial + mesh](bitacora/2026-07-14-herdr-trial-device-mesh.md)
+- **`connection refused` = host vivo sin listener; `timeout` = capa de red (en Android: Tailscale dormido — batería sin restricciones para Termux Y Tailscale).** - source: [herdr trial + mesh](bitacora/2026-07-14-herdr-trial-device-mesh.md)
+- **El `pkg install` de Termux se come las líneas pegadas después: los bloques de setup móvil van siempre en 2 pastes (install / configure).** - source: [herdr trial + mesh](bitacora/2026-07-14-herdr-trial-device-mesh.md)
+- **`nohup … &` dentro de `ssh host '…'` muere con la sesión; usar `setsid` para desacoplar de verdad.** - source: [herdr trial + mesh](bitacora/2026-07-14-herdr-trial-device-mesh.md)
 
 ---
 
@@ -56,3 +64,4 @@ Siguiente foco: mantener fixes cross-platform en `shared/` y empaquetar health c
 | 2026-07-04 | [OOM freeze hardening](bitacora/2026-07-04-oom-freeze-hardening.md) | Box se congeló ~3am por livelock OOM (CTO nocturno fugó browsers headless + CI en cada push). Fixes: systemd-oomd, MemoryMax en runners, idle-reap de agent-browser, y migración de 3 landings a GitHub-hosted. |
 | 2026-07-04 | [tmux dynamic session restore](bitacora/2026-07-04-dynamic-tmux-session-restore.md) | Instala `tmux-assistant-resurrect` en la Mac (auto-resume de Claude tras reboot, merge aditivo validado) y reescribe `dev-startup.sh` para descubrimiento dinámico de sesiones (local + Arch remoto) con workspaces AeroSpace estables. Rehearsal en vivo encontró y arregló 3 bugs reales (carrera de foco, pipe que come stdin, deadlock aerospace↔SketchyBar). |
 | 2026-07-09 | [Alt hotkeys muertos: campo de contraseña de Obsidian](bitacora/2026-07-09-alt-hotkeys-dead-obsidian-password-field.md) | Los `alt+` de AeroSpace morían porque un prompt de contraseña de Obsidian retenía el foco del teclado y se tragaba `Option`+carácter como texto. Se descartaron 6 hipótesis con evidencia (Secure Input, Karabiner, teclado AULA, superwhisper, layout, conflicto Carbon). Ship: `hotkey-inventory.py`, `hotkey-canary.sh`, y `dev-startup.sh` idempotente. |
+| 2026-07-14 | [Herdr trial + device mesh 4-way](bitacora/2026-07-14-herdr-trial-device-mesh.md) | Evaluación Herdr vs tmux → trial paralelo con keybinds 1:1 (gratis vía el passthrough Ghostty). Touch móvil moría con mosh (no pasa mouse-tracking); ET lo resuelve + reconecta solo. Mesh SSH 12/12 entre Mac/Arch/celu/tablet sobre Tailscale, herdr en ambos workers, aliases `h`/`ha` únicos, y fix de raíz al ping-pong del `.gitconfig` (credential helper per-box en XDG). Ship: `shared/herdr/`, `mesh.zsh`, `.zshenv`, `termux-bootstrap.sh`, `docs/device-mesh.md`. |
