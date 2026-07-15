@@ -5,3 +5,8 @@ deprecated-hyde/
 .DS_Store
 *.bak
 *.bak-*
+
+# npm accidental (instalar MCPs con cwd aquí genera esto)
+node_modules/
+package.json
+package-lock.json
