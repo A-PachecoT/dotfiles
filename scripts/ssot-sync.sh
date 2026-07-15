@@ -13,11 +13,18 @@
 MODE="${1:-pull}"
 DOTS="$HOME/dotfiles"
 
+# timeout portable: usa timeout/gtimeout si existen; en macOS sin coreutils
+# degrada a correr sin límite (mejor que fallar con 127 y no pushear/pullear).
+if command -v timeout >/dev/null 2>&1; then _to(){ timeout "$@"; }
+elif command -v gtimeout >/dev/null 2>&1; then _to(){ gtimeout "$@"; }
+else _to(){ shift; "$@"; }
+fi
+
 case "$MODE" in
   pull)
     for repo in "$DOTS" "$HOME/cofoundy/plugins/cofoundy-toolkit"; do
       [ -d "$repo/.git" ] || continue
-      timeout 8 git -C "$repo" pull --ff-only --autostash -q >/dev/null 2>&1 || true
+      _to 8 git -C "$repo" pull --ff-only --autostash -q >/dev/null 2>&1 || true
       dirty=$(git -C "$repo" status --porcelain -- shared/claude templates/workspace-CLAUDE.md 2>/dev/null)
       ahead=$(git -C "$repo" rev-list --count '@{u}..HEAD' 2>/dev/null || echo 0)
       if [ -n "$dirty" ] || [ "${ahead:-0}" -gt 0 ]; then
@@ -34,13 +41,19 @@ case "$MODE" in
     fi
     ahead=$(git rev-list --count '@{u}..HEAD' 2>/dev/null || echo 0)
     [ "${ahead:-0}" -eq 0 ] && exit 0
-    if ! timeout 15 git push -q 2>/dev/null; then
-      if timeout 10 git pull --rebase --autostash -q 2>/dev/null; then
-        timeout 15 git push -q 2>/dev/null || echo "ssot-sync: push de dotfiles falló (¿offline?) — queda local, se reintenta"
-      else
-        git rebase --abort 2>/dev/null
-        echo "ssot-sync: CONFLICTO en dotfiles shared/claude — dos máquinas editaron lo mismo; resolvé con git pull --rebase en ~/dotfiles"
-      fi
+    pushed=0
+    if _to 15 git push -q 2>/dev/null; then
+      pushed=1
+    elif _to 10 git pull --rebase --autostash -q 2>/dev/null; then
+      _to 15 git push -q 2>/dev/null && pushed=1 || echo "ssot-sync: push de dotfiles falló (¿offline?) — queda local, se reintenta"
+    else
+      git rebase --abort 2>/dev/null
+      echo "ssot-sync: CONFLICTO en dotfiles shared/claude — dos máquinas editaron lo mismo; resolvé con git pull --rebase en ~/dotfiles"
+    fi
+    # fan-out event-driven: si pusheamos, avisar al otro worker (pull+reload herdr)
+    # en background, best-effort. Peer offline lo agarra el SessionStart pull.
+    if [ "$pushed" -eq 1 ] && [ -x "$DOTS/scripts/mesh-fanout.sh" ]; then
+      nohup "$DOTS/scripts/mesh-fanout.sh" >/dev/null 2>&1 &
     fi
     ;;
 esac
