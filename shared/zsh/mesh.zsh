@@ -21,3 +21,9 @@ case "$(uname -s)" in
     alias ha="herdr"
     ;;
 esac
+
+# Fan-out del mesh: pull dotfiles + reload herdr en AMBOS workers de un comando.
+# Corré `mu` tras pushear cambios de config y las dos cajas quedan a la última,
+# con los keybinds de herdr live. Ver scripts/mesh-update.sh.
+alias mu="$HOME/dotfiles/scripts/mesh-update.sh"
+alias mesh-update="$HOME/dotfiles/scripts/mesh-update.sh"
