@@ -11,7 +11,10 @@ set -uo pipefail
 
 MESH_MAC="styreep@100.73.150.52"    # Tailscale
 MESH_ARCH="andre@100.84.249.22"     # Tailscale
-SSH_OPTS=(-o ConnectTimeout=8 -o BatchMode=yes)
+# IdentityAgent=none → ignora cualquier ssh-agent y usa las keys ed25519 directo.
+# Blinda contra el cuelgue Arch→Mac por SSH_AUTH_SOCK ET-forwarded vivo-pero-mudo
+# (ver clipboard-bridge en CLAUDE.md). Las keys del mesh son passphraseless.
+SSH_OPTS=(-o ConnectTimeout=8 -o BatchMode=yes -o IdentityAgent=none)
 
 # Lógica que corre EN una caja (local o vía ssh): fast-forward + reload herdr si
 # hay server. Heredoc quoted → nada se expande acá; todo corre en la caja destino.
