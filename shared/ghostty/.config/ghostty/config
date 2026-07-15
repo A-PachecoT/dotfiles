@@ -127,6 +127,13 @@ keybind = cmd+digit_9=text:\x02\x39
 keybind = ctrl+tab=text:\x02n
 keybind = ctrl+shift+tab=text:\x02p
 
+# Herdr WORKSPACES: familia cmd+shift = capa sobre proyectos (agrupa tabs).
+# Sin índice directo (cmd+shift+3/4/5 = screenshots macOS); nav por picker.
+keybind = cmd+shift+c=text:\x02C
+keybind = cmd+shift+g=text:\x02G
+keybind = cmd+shift+n=text:\x02N
+keybind = cmd+shift+p=text:\x02P
+
 # Smart open URLs/files (tmux-fingers) - sends prefix + F
 keybind = cmd+f=unbind
 keybind = cmd+f=text:\x02F

@@ -10,7 +10,7 @@
 #   session  = EMPRESA   (cofoundy / bilio / personal / notes)  <- ruteada por AeroSpace, 1 ventana Ghostty c/u
 #   tab      = PROYECTO  (= tus tmux windows)                    <- cmd+1-9 salta, cmd+c nuevo, cmd+w cierra
 #   pane     = dev layout (yazi + console + claude)              <- cmd+hjkl, cmd+d split, cmd+z zoom, cmd+x cierra
-#   workspace= capa opcional que IGNORAS (1 por session)         <- por si algún día quieres agrupar proyectos
+#   workspace= AGRUPA proyectos dentro de una empresa (cmd+shift)  <- habilitado 2026-07-14, nav por picker
 
 [keys]
 prefix = "ctrl+b"
@@ -35,9 +35,14 @@ previous_tab= "prefix+p"            # ctrl+b p
 close_tab   = "prefix+shift+w"      # cmd+shift+w  cerrar proyecto (escalación: shift = mata todo el proyecto)
 rename_tab  = "prefix+shift+t"
 
-# --- capa workspace: desactivo lo que chocaría con mis splits; la ignoras en el trial ---
-close_workspace = ""                # liberar prefix+shift+d (lo uso para split abajo)
-workspace_picker = ""               # liberado (cmd+shift+w ahora cierra proyecto); salta con goto (ctrl+b g)
+# --- WORKSPACES = capa SOBRE proyectos (agrupa tabs dentro de una empresa/session) ---
+# Habilitado 2026-07-14. Familia cmd+shift = capa workspace. Nav por picker, SIN
+# índice directo: cmd+shift+3/4/5 son screenshots de macOS y el OS los intercepta.
+new_workspace      = "prefix+shift+c"  # cmd+shift+c  nuevo workspace (espejo de cmd+c = nuevo tab)
+workspace_picker   = "prefix+shift+g"  # cmd+shift+g  fuzzy jump entre workspaces
+next_workspace     = "prefix+shift+n"  # cmd+shift+n  siguiente workspace
+previous_workspace = "prefix+shift+p"  # cmd+shift+p  workspace anterior
+close_workspace    = ""                # sin binding (prefix+shift+d lo usa split_horizontal); cerrá desde el picker
 
 # --- SISTEMA ---
 toggle_sidebar = "prefix+b"         # ctrl+b b  -> EL panel de estados de agentes (blocked/working/done). Lo más importante.
