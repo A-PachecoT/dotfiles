@@ -164,6 +164,9 @@ source "$HOME/dotfiles/shared/zsh/tmux-workflow.zsh"
 
 # Vi mode for the command line (Esc -> NORMAL). Shared with Linux.
 source "$HOME/dotfiles/shared/zsh/vi-mode.zsh"
+
+# Mesh: h (herdr Mac) / ha (herdr Arch) desde cualquier caja. Shared with Linux.
+source "$HOME/dotfiles/shared/zsh/mesh.zsh"
 export PATH="$(brew --prefix)/opt/openjdk@25/bin:$PATH"
 
 # Added by Antigravity
