@@ -63,3 +63,4 @@ command = "yazi"
 # --- móvil: Herdr captura el mouse/touch para navegar (tap-to-focus). ---
 [ui]
 mouse_capture = true
+agent_panel_sort = "priority"
