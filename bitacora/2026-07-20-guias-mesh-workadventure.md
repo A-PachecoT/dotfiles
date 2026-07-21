@@ -10,7 +10,7 @@
 
 - **`docs/guides/codea-desde-el-celular.md`** (nuevo, versionado en el repo) — guía de replicación del mesh: Tailscale (4 devices + topología), Herdr (config real, keybinds 1:1), transporte ET vs mosh, aliases `h`/`ha`/`mu`, bootstrap Termux, Wispr Flow para dictado, flujo diario, troubleshooting, checklist. Fuente: `docs/device-mesh.md` + `shared/zsh/mesh.zsh` + `scripts/termux-bootstrap.sh` + `shared/herdr/`.
 - **PDF branded del mesh** (17 pág, vía `md2pdf`) → Discord DM.
-- **`~/workadventure/README-SELFHOST.md`** en la caja Arch (archivo local, untracked; NO se tocó el git upstream de WA) — guía de self-hosting de WorkAdventure aterrizada en el deployment real de André.
+- **`docs/guides/self-host-workadventure.md`** (versionado en el repo) — guía de self-hosting de WorkAdventure aterrizada en el deployment real de André. También copiada a `~/workadventure/README-SELFHOST.md` en la Arch (local, junto al deployment, untracked; sin tocar el git upstream de WA).
 - **PDF branded de WorkAdventure** (14 pág) → Discord DM.
 - **`agent_panel_sort = "priority"`** en `shared/herdr/.config/herdr/config.toml` (cambio pre-existente sin commitear, incluido en el cierre).
 
@@ -22,7 +22,7 @@
 ## Decisiones
 
 - **La 1ª guía de "Gather" se descartó**: André aclaró que no era un clon casero sino **WorkAdventure self-hosteado**. Se rehízo desde cero anclada en la config real (subagente + `wa-real-config.txt` extraído por SSH).
-- Guía del mesh **sí** se versiona en el repo (onboarding reutilizable); la de WA queda **local en la Arch** porque su repo es el upstream oficial de WorkAdventure (no se le pushea).
+- **Ambas guías se versionan en `docs/guides/`** (onboarding reutilizable). La de WA se copia además a `~/workadventure/README-SELFHOST.md` en la Arch como conveniencia junto al deployment, pero el canónico vive en el repo dotfiles (no se pushea al git upstream de WorkAdventure).
 - Diagramas de red en **ASCII dentro de code blocks**, no mermaid — renderizan más fiel la topología en md2pdf.
 
 ## Learnings
