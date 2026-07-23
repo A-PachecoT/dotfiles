@@ -1,0 +1,462 @@
+% ===========================================================================
+%  Ficha XGodel — Operadores Matemáticos · Primero de Secundaria
+%  Compilar:  xelatex ficha-operadores-matematicos.tex
+% ===========================================================================
+\documentclass{xgodel-ficha}
+
+\marca{XGodel}
+\sitio{www.XGodel.com}
+\grado{Primero de Secundaria}
+\curso{Raz. Matemático}
+\titulo{Operadores Matemáticos}
+
+\begin{document}
+\portada
+
+\begin{ficha}
+
+% --------------------------- COLUMNA IZQUIERDA ---------------------------
+\begin{pensamiento}
+Hoy veremos el capítulo más sencillo del 1\textsuperscript{er} Bimestre,
+sólo tienes que tener en cuenta las 4 operaciones fundamentales.
+\end{pensamiento}
+
+\concepto{Operación Matemática}
+\lineas{3}
+
+\concepto{Operador Matemático}
+\lineas{3}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{25mm}|>{\centering\arraybackslash}p{21mm}|}
+\hline
+\textbf{OPERACIÓN} & \textbf{OPERADOR} \\ \hline
+Suma            & $+$      \\
+Resta           & $-$      \\
+Multiplicación  & $\times$ \\
+División        & $\div$   \\
+\multicolumn{1}{|c|}{$\vdots$} & \\ \hline
+\end{tabular}
+\end{center}
+
+\begin{globo}
+Nosotros podemos definir nuevas \textbf{Operaciones Matemáticas} con las ya
+existentes usando \textbf{Nuevos Operadores}, como se verá ahora.
+\end{globo}
+
+% ---------------------- FORMAS DE DEFINIR UNA OPERACIÓN -------------------
+\begin{apartados}
+
+\item \rotulo{Mediante Fórmula}
+  Ejemplo:
+  \formula{$a \op b \;=\; 2a + 3b$}
+  Luego:
+  \par\smallskip
+  $1 \op 2 =$ \par\smallskip
+  $3 \op 5 =$
+
+  \par\medskip
+  Ejemplo: \quad $\triop{$x$} = 2x + 3$
+  \par\smallskip
+  Luego: \quad $\triop{$2$} =$
+  \par\smallskip
+  \phantom{Luego:} \quad $\triop{$3$} =$
+
+\item \rotulo{Mediante Tabla}
+  En el conjunto $A = \{a, b, c, d\}$ podemos definir la siguiente tabla.
+
+  \begin{cayley}{4}
+    $\op$ & $a$ & $b$ & $c$ & $d$ \\ \cline{2-5}
+    $a$   & $b$ & $c$ & $d$ & $a$ \\
+    $b$   & $c$ & $d$ & $a$ & $b$ \\
+    $c$   & $d$ & $a$ & $b$ & $c$ \\
+    $d$   & $a$ & $b$ & $c$ & $d$ \\
+  \end{cayley}
+
+  Entonces: \quad $a \op b =$ \hfill $b \op c =$ \par\smallskip
+  \phantom{Entonces:} \quad $a \op d =$ \hfill $c \op d =$
+
+  \par\medskip
+  Se puede usar cualquier símbolo para mi ``nueva operación matemática''.
+  \par\smallskip
+  Ejemplo: $\op$, \#, $\triangle$, $\theta$, $\bullet$, $\sim$, \dots, etc.
+
+\end{apartados}
+
+% ------------------------------ PROPIEDADES ------------------------------
+\concepto{Propiedades de las Operaciones Matemáticas}
+
+\begin{apartados}
+
+\item \rotulo{Clausura o Cerradura}
+  Si $a$ y $b$ pertenecen a un conjunto ``$C$'', por ejemplo, la operación
+  definida también pertenece a dicho conjunto.
+
+  \par\smallskip
+  Ejemplo: En $\mathbb{N}$ la suma es cerrada:
+  \[ 3 + 4 = 7 \]
+  $3 \in \mathbb{N}$, $4 \in \mathbb{N}$ entonces $7 \in \mathbb{N}$
+
+  \par\smallskip
+  --- En $\mathbb{N}$ la multiplicación es cerrada:
+  \[ 8 \times 5 = 40 \]
+  $8 \in \mathbb{N}$, $5 \in \mathbb{N}$ entonces $40 \in \mathbb{N}$
+
+  \par\smallskip
+  \uline{Aplicación}:
+  \par\smallskip
+  --- En $\mathbb{N}$ se define: $a \op b = 3a + 4b$. ¿Es cerrada?
+
+  \par\smallskip
+  \uline{Solución}:
+  \lineas{2}
+
+  --- En $A = \{a, b, c\}$ se define la tabla:
+
+  \begin{cayley}{3}
+    $\op$ & $c$ & $b$ & $a$ \\ \cline{2-4}
+    $a$   & $a$ & $b$ & $c$ \\
+    $b$   & $b$ & $c$ & $a$ \\
+    $c$   & $c$ & $a$ & $b$ \\
+  \end{cayley}
+  ¿Es cerrada?
+  \lineas{2}
+
+\item \rotulo{Propiedad Conmutativa}
+  \formula{$\forall\, a, b \in C \qquad a \op b = b \op a$}
+
+  Ejemplos: En $\mathbb{N}$ la suma es conmutativa.
+  \[ 8 + 3 = 3 + 8 \qquad 2 + 7 = 7 + 2 \]
+
+  --- En $\mathbb{Z}$ la multiplicación es conmutativa.
+  \[ 8 \times 3 = 3 \times 8 \qquad 7 \times 2 = 2 \times 7 \]
+
+  \uline{Aplicación}:
+  \par\smallskip
+  --- En $\mathbb{N}$ se define $a \,\theta\, b = a + b + 3$. ¿Será conmutativa?
+
+  \par\smallskip
+  \uline{Solución}:
+  \lineas{2}
+
+  --- En $C = \{m, n, p\}$ se define la tabla. ¿Es conmutativa?
+
+  \begin{cayley}{3}
+    $\theta$ & $m$ & $n$ & $p$ \\ \cline{2-4}
+    $m$      & $n$ & $p$ & $m$ \\
+    $n$      & $p$ & $m$ & $n$ \\
+    $p$      & $m$ & $n$ & $p$ \\
+  \end{cayley}
+
+\item \rotulo{Elemento Neutro}
+  Es aquel que, operando con cualquier número, se obtiene el mismo número.
+
+  \par\smallskip
+  Ejemplos:
+  \par\smallskip
+  --- El elemento neutro de la suma es el $0$.
+  \[ 3 + 0 = 3 \,,\qquad 11 + 0 = 11 \]
+  --- El elemento neutro de la multiplicación es el $1$.
+  \[ 4 \times 1 = 4 \,,\qquad 19 \times 1 = 19 \ \text{etc.} \]
+
+  \uline{Aplicación}:
+  \par\smallskip
+  --- En $\mathbb{N}$ se define: $a \,\triangle\, b = a - b + 2$.
+  ¿Cuál será el elemento neutro?
+
+  \par\smallskip
+  \uline{Solución}:
+  \lineas{2}
+
+  --- En $B = \{x, y, z\}$ se define la tabla. ¿Cuál será el elemento neutro?
+
+  \begin{cayley}{3}
+    $\triangle$ & $x$ & $y$ & $z$ \\ \cline{2-4}
+    $z$         & $x$ & $y$ & $z$ \\
+    $x$         & $y$ & $z$ & $x$ \\
+    $y$         & $z$ & $x$ & $y$ \\
+  \end{cayley}
+
+\item \rotulo{Elemento Inverso}
+  Es aquel que, operando con un número, se obtiene el elemento neutro.
+  El inverso de un número es único para ese número.
+
+  \par\smallskip
+  Ejemplo: En la suma el inverso de $4$ es $-4$, porque $4 + (-4) = 0$.
+
+  \par\smallskip
+  \uline{Aplicación}:
+  \par\smallskip
+  $*$ Del ejemplo anterior, para la operación $\triangle$ hallar el inverso
+  de $3$ y el inverso de $5$.
+  \par\smallskip
+  Inverso de $3$ \;$(3^{-1}) =$ \par\smallskip
+  Inverso de $5$ \;$(5^{-1}) =$
+
+  \par\medskip
+  $*$ Del ejemplo anterior de la tabla, hallar:
+  \par\smallskip
+  inverso de $x$ \;$(x^{-1}) =$ \par\smallskip
+  inverso de $y$ \;$(y^{-1}) =$ \par\smallskip
+  inverso de $z$ \;$(z^{-1}) =$
+
+\end{apartados}
+
+% ======================= EJERCICIOS DE APLICACIÓN =========================
+\bloque{Ejercicios de Aplicación}
+
+\begin{ejercicios}
+
+\item La operación matemática es un proceso que consiste en la
+  \rule{32mm}{0.4pt} de una o más \rule{22mm}{0.4pt} en otra cantidad
+  llamada \rule{30mm}{0.4pt}.
+
+\item La operación matemática es representada por un símbolo llamado
+  \rule{34mm}{0.4pt}.
+
+\item Si: $a \op b = 2a + b$. \; Hallar: $3 \op 4$
+  \alts{9}{10}{11}{12}{13}
+
+\item Se define en $A = \{a, b, c, d\}$ la siguiente tabla:
+  \begin{cayley}{4}
+    $\op$ & $a$ & $b$ & $c$ & $d$ \\ \cline{2-5}
+    $a$   & $b$ & $c$ & $d$ & $a$ \\
+    $b$   & $c$ & $d$ & $a$ & $b$ \\
+    $c$   & $d$ & $a$ & $b$ & $c$ \\
+    $d$   & $a$ & $b$ & $c$ & $d$ \\
+  \end{cayley}
+  Hallar: $(b \op d) \op (a \op c)$
+  \alts{$a$}{$b$}{$c$}{$d$}{$b$ y $d$}
+
+\item Se define: \; $\triop{$x$} = x^{2} + 3x$
+  \par\smallskip
+  Hallar: \; $\triop{$4$} + \triop{$5$}$
+  \alts{66}{67}{68}{69}{70}
+
+\item Si: $m \,\#\, n = 2m + 3n$. \; Hallar: $(2 \,\#\, 3) \,\#\, (4 \,\#\, 2)$
+  \alts{76}{77}{78}{79}{80}
+
+\item Se define:
+  \[ a \,\triangle\, b = \begin{cases} 2a - b\,; & a > b \\ a + b\,; & a < b \end{cases} \]
+  Calcular: $P = (2 \,\triangle\, 1) \,\triangle\, (1 \,\triangle\, 2)$
+  \alts{5}{6}{7}{8}{9}
+
+\item Si: $\triop{$\substack{b\\ a\ c}$} = a^{2} - bc$
+  \par\smallskip
+  Hallar: $\triop{$\substack{3\\ 4\ 2}$} - \triop{$\substack{2\\ 3\ 1}$}$
+  \alts{1}{2}{3}{4}{5}
+
+\item Se define en $A = \{2, 3, 4\}$:
+  \begin{cayleyfull}{3}
+    $\op$ & $2$ & $3$ & $4$ \\ \hline
+    $2$   & $4$ & $3$ & $2$ \\ \hline
+    $3$   & $2$ & $4$ & $3$ \\ \hline
+    $4$   & $3$ & $2$ & $4$ \\ \hline
+  \end{cayleyfull}
+  Calcular: $S = \dfrac{(3 \op 4) \op (2 \op 4)}{(2 \op 3) \op (3 \op 4)}$
+  \alts{1}{2}{0,5}{0,2}{3}
+
+\item Dada la siguiente tabla:
+  \begin{cayley}{4}
+    $\op$ & $a$ & $b$ & $c$ & $d$ \\ \cline{2-5}
+    $a$   & $c$ & $d$ & $a$ & $b$ \\
+    $b$   & $d$ & $a$ & $b$ & $c$ \\
+    $c$   & $a$ & $b$ & $c$ & $d$ \\
+    $d$   & $b$ & $c$ & $d$ & $a$ \\
+  \end{cayley}
+  Calcular: $M = \dfrac{(a \op c) \op (b \op d)}{(a \op b) \op (c \op d)}$
+  \alts{$b$}{$a$}{$a/b$}{1}{$d$}
+
+\item Se tiene la siguiente tabla:
+  \begin{cayley}{5}
+    $\op$ & $m$ & $n$ & $p$ & $q$ & $r$ \\ \cline{2-6}
+    $m$   & $p$ & $q$ & $m$ & $n$ & $r$ \\
+    $n$   & $q$ & $p$ & $n$ & $r$ & $m$ \\
+    $p$   & $m$ & $n$ & $p$ & $q$ & $r$ \\
+    $q$   & $n$ & $r$ & $q$ & $p$ & $m$ \\
+    $r$   & $r$ & $m$ & $r$ & $n$ & $p$ \\
+  \end{cayley}
+  Hallar el elemento neutro.
+  \alts{$m$}{$n$}{$p$}{$q$}{$r$}
+
+\item Del ejercicio anterior, hallar:
+  $(n^{-1} \op p^{-1}) \op (q^{-1} \op r^{-1})$
+  \alts{$m$}{$n$}{$p$}{$q$}{$r$}
+
+\item Si: \; $\triop{$x$} = 2(x - 1)$ \quad y \quad $\triop{$\nabla x$} = 3(x-1)$
+  \par\smallskip
+  Hallar $x$ en: \; $\triop{$\nabla x$} = \triop{$2$}$
+  \alts{4/7}{7/3}{13/7}{13/6}{13/3}
+
+\item En el conjunto $A = \{0, 1, 2, 3, 4\}$:
+  \begin{cayley}{4}
+    $\triangle$ & $0$ & $1$ & $2$ & $3$ \\ \cline{2-5}
+    $0$ & $2$ & $3$ & $0$ & $1$ \\
+    $1$ & $2$ & $3$ & $0$ & $1$ \\
+    $2$ & $0$ & $1$ & $1$ & $1$ \\
+    $3$ & $3$ & $2$ & $1$ & $0$ \\
+  \end{cayley}
+  \begin{cayley}{4}
+    $\bullet$ & $1$ & $2$ & $3$ & $4$ \\ \cline{2-5}
+    $1$ & $1$ & $1$ & $1$ & $1$ \\
+    $2$ & $2$ & $4$ & $1$ & $2$ \\
+    $3$ & $1$ & $1$ & $4$ & $2$ \\
+    $4$ & $1$ & $2$ & $2$ & $4$ \\
+  \end{cayley}
+  Hallar ``$x$'' en:
+  $(x \,\triangle\, x) \bullet (3 \,\triangle\, 1) = (4 \,\triangle\, 3) \bullet (4 \,\triangle\, 1)$
+  \alts{0}{1}{2}{3}{4}
+
+\item Se define en $C = \{a, b, c, d, e\}$:
+  \begin{cayley}{5}
+    $\op$ & $a$ & $b$ & $c$ & $d$ & $e$ \\ \cline{2-6}
+    $a$ & $c$ & $d$ & $e$ & $a$ & $b$ \\
+    $b$ & $d$ & $e$ & $a$ & $b$ & $c$ \\
+    $c$ & $e$ & $a$ & $b$ & $c$ & $d$ \\
+    $d$ & $a$ & $b$ & $c$ & $d$ & $e$ \\
+    $e$ & $b$ & $c$ & $d$ & $e$ & $a$ \\
+  \end{cayley}
+  ¿Cuál de las siguientes proposiciones es verdadera?
+  \begin{enumerate}[label=\Roman*.,leftmargin=8mm,itemsep=0.2ex,topsep=0.4ex]
+    \item $[a \op (x \op c)] \op d = c$, si $x = e$
+    \item Se cumple la propiedad conmutativa
+    \item Se cumple la propiedad de clausura
+    \item El elemento neutro es ``$a$''
+  \end{enumerate}
+  \alts{I y III}{III y IV}{II y III}{I y IV}{Todas}
+
+\end{ejercicios}
+
+% ========================= TAREA DOMICILIARIA =============================
+\tarea{5}
+
+\begin{ejercicios}
+
+\item Colocar verdadero (V) o falso (F) según corresponda:
+  \begin{itemize}[label=--,leftmargin=6mm,itemsep=0.6ex,topsep=0.6ex]
+    \item Toda operación matemática presenta una regla de definición. \hfill (\quad)
+    \item El elemento neutro es aquél que operado con otro elemento se
+          obtiene el elemento inverso. \hfill (\quad)
+    \item La operación matemática es representada por el operador. \hfill (\quad)
+    \item Toda operación matemática presenta elemento neutro. \hfill (\quad)
+  \end{itemize}
+
+\item El resultado de operar un elemento con su inverso es el
+  \rule{34mm}{0.4pt}.
+
+\item Si: $a \op b = a - 2b$. \; Hallar: $5 \op 2$
+  \alts{1}{2}{3}{4}{5}
+
+\item Se define en $A = \{a, b, c, d\}$ la siguiente tabla:
+  \begin{cayley}{4}
+    $\op$ & $a$ & $b$ & $c$ & $d$ \\ \cline{2-5}
+    $a$   & $c$ & $d$ & $a$ & $b$ \\
+    $b$   & $d$ & $a$ & $b$ & $c$ \\
+    $c$   & $a$ & $b$ & $c$ & $d$ \\
+    $d$   & $b$ & $c$ & $d$ & $a$ \\
+  \end{cayley}
+  Hallar: $(c \op a) \op (d \op b)$
+  \alts{$a$}{$b$}{$c$}{$d$}{$a$ ó $c$}
+
+\item Se define: \; $\triop{$x$} = 2x + 3$ \quad y \quad $\triop{$\nabla x$} = 4x - 5$
+  \par\smallskip
+  Hallar: \; $\triop{$5$} + \triop{$\nabla 3$}$
+  \alts{19}{20}{21}{22}{23}
+
+\item Si: $m \,\%\, n = 2m - n$ \; y \; $m \,\triangle\, n = n - 3m$
+  \par\smallskip
+  Hallar: $\dfrac{(4 \,\%\, 3)}{(20 \,\triangle\, 5)}$
+  \alts{2}{1}{0}{-1}{-2}
+
+\item Se define:
+  \[ a \op b = \begin{cases} a - 2b\,; & a > b \\ a - b\,; & a < b \end{cases} \]
+  Calcular: $M = (5 \op 2) \op (4 \op 3)$
+  \alts{-2}{-1}{0}{1}{2}
+
+\item Si: $\triop{$\substack{a\\ b\ c}$} = bc - a^{2}$
+  \par\smallskip
+  Hallar: $\triop{$\substack{2\\ 5\ 2}$} - \triop{$\substack{3\\ 2\ 7}$}$
+  \alts{1}{2}{3}{4}{5}
+
+\item Se define en $A = \{5, 6, 7\}$:
+  \begin{cayleyfull}{3}
+    $\#$ & $5$ & $6$ & $7$ \\ \hline
+    $5$  & $7$ & $6$ & $5$ \\ \hline
+    $6$  & $5$ & $7$ & $6$ \\ \hline
+    $7$  & $6$ & $5$ & $7$ \\ \hline
+  \end{cayleyfull}
+  Calcular: $E = \dfrac{(6 \,\#\, 7) \,\#\, (5 \,\#\, 7)}{(5 \,\#\, 6) \,\#\, (6 \,\#\, 7)}$
+  \alts{1}{2}{0,7}{0,2}{3}
+
+\item Dada la siguiente tabla:
+  \begin{cayley}{4}
+    $\%$ & $d$ & $c$ & $d$ & $a$ \\ \cline{2-5}
+    $a$  & $c$ & $d$ & $a$ & $b$ \\
+    $b$  & $d$ & $a$ & $b$ & $c$ \\
+    $c$  & $a$ & $b$ & $c$ & $d$ \\
+    $d$  & $b$ & $c$ & $d$ & $a$ \\
+  \end{cayley}
+  Calcular: $N = \dfrac{(d \,\%\, b) \,\%\, (c \,\%\, a)}{(d \,\%\, c) \,\%\, (b \,\%\, a)}$
+  \alts{$a$}{$b$}{$b/a$}{1}{$c$}
+
+\item Se tiene la siguiente tabla:
+  \begin{cayley}{5}
+    $\op$ & $v$ & $w$ & $x$ & $y$ & $z$ \\ \cline{2-6}
+    $z$ & $x$ & $y$ & $z$ & $v$ & $w$ \\
+    $v$ & $y$ & $z$ & $v$ & $w$ & $x$ \\
+    $w$ & $z$ & $v$ & $w$ & $x$ & $y$ \\
+    $x$ & $v$ & $w$ & $x$ & $y$ & $z$ \\
+    $y$ & $w$ & $x$ & $y$ & $z$ & $v$ \\
+  \end{cayley}
+  Hallar el elemento neutro.
+  \alts{$v$}{$w$}{$x$}{$y$}{$z$}
+
+\item Del ejercicio anterior, hallar:
+  $[(w^{-1} \op z^{-1})] \op (y^{-1} \op v^{-1})] \op x^{-1}$
+
+\item Si: \; $\triop{$x$} = x + 4$ \quad y \quad $\triop{$\nabla x$} = 5 - x$
+  \par\smallskip
+  Hallar ``$x$'' en: \; $\triop{$\nabla x$} = \triop{$3$}$
+  \alts{9}{10}{11}{12}{13}
+
+\item En el conjunto $B = \{0, 1, 2, 3, 4\}$:
+  \begin{cayley}{4}
+    $\triangle$ & $1$ & $2$ & $3$ & $4$ \\ \cline{2-5}
+    $4$ & $2$ & $3$ & $4$ & $1$ \\
+    $3$ & $3$ & $4$ & $1$ & $2$ \\
+    $2$ & $4$ & $1$ & $2$ & $3$ \\
+    $1$ & $1$ & $2$ & $3$ & $4$ \\
+  \end{cayley}
+  \begin{cayley}{4}
+    $\bullet$ & $3$ & $2$ & $1$ & $0$ \\ \cline{2-5}
+    $0$ & $3$ & $2$ & $1$ & $0$ \\
+    $1$ & $2$ & $1$ & $0$ & $3$ \\
+    $2$ & $1$ & $0$ & $3$ & $2$ \\
+    $3$ & $0$ & $3$ & $2$ & $1$ \\
+  \end{cayley}
+  Hallar ``$x$'' en:
+  $(3 \,\triangle\, x) \bullet (4 \,\triangle\, 1) = (3 \bullet 2) \,\triangle\, (1 \bullet 0)$
+  \alts{0}{1}{2}{3}{4}
+
+\item Se define en $C = \{m, n, p, q, r\}$:
+  \begin{cayley}{5}
+    $\op$ & $m$ & $n$ & $p$ & $q$ & $r$ \\ \cline{2-6}
+    $r$ & $p$ & $q$ & $r$ & $m$ & $n$ \\
+    $q$ & $q$ & $r$ & $m$ & $n$ & $p$ \\
+    $p$ & $r$ & $m$ & $n$ & $p$ & $q$ \\
+    $n$ & $m$ & $n$ & $p$ & $q$ & $r$ \\
+    $m$ & $r$ & $p$ & $q$ & $r$ & $m$ \\
+  \end{cayley}
+  ¿Cuál de las siguientes proposiciones es verdadera?
+  \begin{enumerate}[label=\Roman*.,leftmargin=8mm,itemsep=0.2ex,topsep=0.4ex]
+    \item Es conmutativa
+    \item Es cerrada
+    \item No tiene elemento neutro
+  \end{enumerate}
+  \alts{I}{II y III}{III}{I y II}{Todas}
+
+\end{ejercicios}
+
+\end{ficha}
+\end{document}

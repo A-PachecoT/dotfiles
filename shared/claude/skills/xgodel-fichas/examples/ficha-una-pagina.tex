@@ -1,0 +1,100 @@
+% ===========================================================================
+%  Ficha XGodel — Divisores · Primero de Secundaria · Aritmética
+%  Compilar:  xelatex ficha-divisores.tex   (dos pasadas)
+% ===========================================================================
+\documentclass{xgodel-ficha}
+
+\marca{XGodel}
+\sitio{www.XGodel.com}
+\grado{Primero de Secundaria}
+\curso{Aritmética}
+\titulo{Divisores}
+
+\begin{document}
+\portada
+
+\begin{ficha}
+
+% --------------------------- COLUMNA IZQUIERDA ---------------------------
+\begin{pensamiento}
+Si puedes repartir $12$ caramelos en grupos exactos, ¡ya sabes buscar
+divisores! Hoy aprenderás a encontrarlos todos sin equivocarte.
+\end{pensamiento}
+
+\concepto{Divisor de un número}
+Un número $d$ es \textbf{divisor} de $N$ si la división $N \div d$ es
+\textbf{exacta}, es decir, el residuo es cero.
+\lineas{2}
+
+\formula{$N \div d = k$ \quad y \quad residuo $= 0$}
+
+\concepto{Ejemplo resuelto}
+Hallemos todos los divisores de $12$. Probamos desde el $1$:
+\par\smallskip
+$12 \div 1 = 12$ \quad $12 \div 2 = 6$ \quad $12 \div 3 = 4$
+\par\smallskip
+$12 \div 4 = 3$ \quad $12 \div 6 = 2$ \quad $12 \div 12 = 1$
+\par\smallskip
+En cambio $12 \div 5$, $12 \div 7$, $12 \div 8$, $12 \div 9$, $12 \div 10$
+y $12 \div 11$ dejan residuo. Entonces:
+\formula{$D_{12} = \{1,\, 2,\, 3,\, 4,\, 6,\, 12\}$}
+El $12$ tiene $6$ divisores. Nota que el $1$ y el mismo número
+\textbf{siempre} son divisores.
+
+\begin{globo}
+Ahora, ¿cómo saber si un número es divisor \textbf{sin hacer la división}?
+Usamos los \textbf{criterios de divisibilidad}.
+\end{globo}
+
+\concepto{Criterios de divisibilidad}
+
+\begin{apartados}
+
+\item \rotulo{Divisibilidad por 2}
+  El número termina en cifra par: $0$, $2$, $4$, $6$ u $8$.
+  \par\smallskip
+  Ejemplos: $34$ \textbf{sí} (termina en $4$); \; $57$ \textbf{no}.
+
+\item \rotulo{Divisibilidad por 3}
+  La suma de sus cifras es múltiplo de $3$.
+  \par\smallskip
+  Ejemplo: $231 \rightarrow 2 + 3 + 1 = 6$, y $6$ es múltiplo de $3$;
+  entonces $231$ \textbf{sí}.
+  \par\smallskip
+  Ejemplo: $124 \rightarrow 1 + 2 + 4 = 7$; entonces $124$ \textbf{no}.
+
+\item \rotulo{Divisibilidad por 5}
+  El número termina en $0$ o en $5$.
+  \par\smallskip
+  Ejemplos: $145$ \textbf{sí}; \; $62$ \textbf{no}.
+
+\end{apartados}
+
+% ======================= EJERCICIOS DE APLICACIÓN =========================
+\bloque{Ejercicios de Aplicación}
+
+\begin{ejercicios}
+
+\item Escribe todos los divisores de $15$:
+  \par\smallskip
+  $D_{15} = \{$ \rule{34mm}{0.4pt} $\}$
+
+\item ¿Cuántos divisores tiene el número $24$?
+  \alts{4}{6}{7}{8}{10}
+
+\item Halla la suma de todos los divisores de $8$.
+  \alts{12}{14}{15}{16}{18}
+
+\item ¿Cuál de los siguientes números es divisible entre $3$?
+  \alts{124}{235}{502}{411}{617}
+
+\item Halla el mayor divisor de $20$ que sea menor que $20$.
+  \alts{2}{4}{5}{10}{20}
+
+\item ¿Cuántos números del $1$ al $20$ son divisibles entre $5$?
+  \alts{3}{4}{5}{6}{10}
+
+\end{ejercicios}
+
+\end{ficha}
+\end{document}
