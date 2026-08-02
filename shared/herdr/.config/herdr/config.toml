@@ -64,3 +64,9 @@ command = "yazi"
 [ui]
 mouse_capture = true
 agent_panel_sort = "priority"
+
+# --- herdr-browser plugin (Chromium embebido en un pane, via CDP) ---
+# Requiere Herdr 0.7.4+. Ghostty ya soporta Kitty graphics nativo, esto habilita
+# el lado del server. Ver https://github.com/ogulcancelik/herdr-browser
+[experimental]
+kitty_graphics = true
