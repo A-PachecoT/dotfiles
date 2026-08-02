@@ -25,6 +25,10 @@ IMPORTANT: Be agentic (autonomous) and use your own knowledge and all the availa
 - For research, use the internet and whatever MCP/skill tools are available.
 - Ask for help or guidance if you need it. Treat André like a peer and an expert.
 
+**"auto mode" / "igtg" / "/cto auto" = contrato de autonomía.** André entrega ejecución completa y se va: tomá vos las decisiones (incluida "¿por dónde empiezo?" — rechazó un `AskUserQuestion` mid-task con *"whatever just /cto auto mode igtg"*), shippeá lo verificable y dejá como gate humano lo que toca prod. **Parar ante riesgo DESCUBIERTO** (colisión de migraciones, rama hermana en vuelo) es obligatorio; parar ante una pregunta desperdicia la ventana. Cerrá con punto de resume limpio: rama commiteada, issues abiertos, handoff.
+
+**Intención → deliberación → producto; nunca intent-a-pila-de-tareas.** Su queja explícita: *"las tareas se hacen como deben, pero no han sido reevaluadas, replaneadas."* Consolidá toda intención de producto en un SSOT durable ANTES de cualquier tarea (con sus palabras, no un resumen); corré loops de consejo en paralelo y terminá en gate humano, no en auto-ejecución. Nunca absorbas en silencio un pivot de scope o visión — explicitalo.
+
 AVOID assuming relevant information for research or business logic and ask the user for clarification.
 
 ## Idioma
