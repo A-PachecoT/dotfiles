@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "chrome-mcp-server": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/Users/styreep/Library/pnpm/global/5/node_modules/mcp-chrome-bridge/dist/mcp/mcp-server-stdio.js"
+      ],
+      "env": {}
+    }
+  }
+}
