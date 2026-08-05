@@ -49,7 +49,7 @@ hr "CONTAINERS / GROUP CONTAINERS (>500M)"
 # Package manager caches (regenerable but slow rebuild)
 hr "PACKAGE MANAGER CACHES (regenerable, slow rebuild)"
 for d in ~/.cache/huggingface ~/.cache/pre-commit ~/.bun ~/.cargo/registry \
-         ~/Library/pnpm ~/.rustup ~/.cache/prisma; do
+         ~/Library/pnpm/store ~/.rustup ~/.cache/prisma; do
     [[ -d "$d" ]] || continue
     sz=$(du -sh "$d" 2>/dev/null | awk '{print $1}')
     [[ -n "$sz" ]] && echo "  $sz  $d"
