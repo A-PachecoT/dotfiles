@@ -199,8 +199,12 @@ its proper home), list those moves explicitly.
    suggests it belongs in a project (e.g. `*sponsorship*.pdf` → `cofoundy/legal/`).
 5. **Confirm before reboot suggestions** — only suggest reboot if swap > 8 GB
    AND uptime > 5 days.
-6. **NEVER `rm` inside `~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared`** —
-   that's the live message DB. Always direct user to WhatsApp in-app cleanup.
+6. **NEVER touch WhatsApp's `*.sqlite` files, `fts/`, or anything at the root of
+   `group.net.whatsapp.WhatsApp.shared`** — that IS the live message DB.
+   `Message/Media/` is a different thing: pure media, prunable, and usually the
+   biggest win on the disk. Follow the recipe above (quit app → static file list
+   → staging → user confirms → delete). Superseded the old blanket ban on
+   2026-08-04, which sent users to a file-by-file in-app UI for 38 GB.
 7. **NEVER `rm` inside `~/Library/Containers/com.docker.docker/Data/vms`** —
    that's the Docker Desktop VM disk; deleting corrupts Docker. Use Docker
    Desktop → Troubleshoot → Clean / Purge data instead.
