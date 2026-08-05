@@ -112,16 +112,67 @@ reclaim that space, user must open Docker Desktop → Troubleshoot → "Clean /
 Purge data" (nukes all images/containers, requires re-pull).
 
 For `Containers / Group Containers > 500M`:
-- **WhatsApp** (`group.net.whatsapp.WhatsApp.shared/Message`): NEVER `rm` —
-  it's the live message DB. Direct user to WhatsApp → Settings → Storage and
-  Data → Manage Storage to delete per-chat media.
+- **WhatsApp** — usually the single biggest thing on the disk (measured 38 GB,
+  2026-08-04). **The media IS separable from the DB — see the recipe below.**
+  The in-app cleanup is file-by-file and impractical at this scale; don't
+  punt the user there when they have tens of GB in group forwards.
 - **Docker** (`com.docker.docker/Data/vms`): see above, Docker Desktop UI only.
 - **Other apps**: ask before touching — these are app state, not caches.
 
 For `Package manager caches`: offer `rm -rf` per cache (huggingface, .bun,
-.cargo/registry, ~/Library/pnpm). All regenerable but rebuilds are slow
-(huggingface re-downloads model weights, cargo re-fetches crates). Default
-recommendation: skip unless desperate for space.
+.cargo/registry). All regenerable but rebuilds are slow (huggingface
+re-downloads model weights, cargo re-fetches crates). Default recommendation:
+skip unless desperate for space.
+**`~/Library/pnpm` is NOT all cache** — it holds `store/` (the content cache,
+safe) *and* `global/` (globally installed binaries the user actually runs,
+e.g. `chrome-mcp-bridge`). Only ever delete `~/Library/pnpm/store`.
+
+---
+
+## WhatsApp media — the bulk-delete recipe
+
+The layout (verified 2026-08-04, WhatsApp for macOS):
+
+```
+group.net.whatsapp.WhatsApp.shared/
+├── ChatStorage.sqlite      ← THE MESSAGE DB. Never touch. (~700 MB)
+├── LocalKeyValue.sqlite, Axolotl.sqlite, fts/   ← never touch
+└── Message/Media/          ← PURE MEDIA, safe to prune (~37 GB)
+    └── <JID>/x/y/<uuid>.<ext>
+```
+
+`Message/Media/` contains **only** media files, one directory per chat, keyed
+by JID. **Deleting media does not touch the message DB** — every message, its
+text, and the full chat history survive; the attachment shows as unavailable.
+
+- **JID suffixes:** `@g.us` = group chat · `@s.whatsapp.net` / `@lid` =
+  individual. Groups are almost always the bulk (measured: 31.5 GB of 37 GB
+  across 252 groups; `.mp4` alone was 15.4 GB).
+- **Target heavy assets in groups**, ranked by regret-risk: videos >10 MB
+  older than 180 days (viral forwards) → all videos >10 MB → all videos →
+  PDFs (careful: work documents and invoices hide here).
+- **Never filter individual chats the same way** without asking per chat —
+  that's where personal photos live.
+
+### Mandatory procedure
+
+1. **Quit WhatsApp first** (`osascript -e 'tell application "WhatsApp" to quit'`,
+   then poll `pgrep -x WhatsApp`). Never move files under a running app.
+2. **Two-phase, never a straight delete.** Move to `~/whatsapp-media-staging-<date>/`
+   preserving the relative path (`<JID>/x/y/file`), have the user open WhatsApp
+   and confirm nothing else broke, and only then delete the staging dir. A move
+   within the same volume is instant and frees nothing until phase 2 — that
+   delay is the whole point. Print the inverse `mv` command as the restore path.
+3. **Materialize the file list BEFORE moving anything.** Piping `find` straight
+   into a move loop makes `find` lose entries as the tree changes underneath it
+   — measured: it moved 1232 of 2366 files and reported success. Write the list
+   to a file first, then iterate over the static list.
+4. **Never suppress stderr on the `mv`.** Count successes and failures
+   separately and verify the remaining count is zero at the end.
+5. **Say the irreversible part out loud** before starting: WhatsApp *may*
+   re-download from its servers, but the window is limited and not guaranteed.
+   Media still on the user's phone is unaffected — but don't assert that without
+   checking.
 
 ### 4. Final report
 
