@@ -72,6 +72,24 @@ else
   ok "Swap is low"
 fi
 
+# ─── Disk Usage ───────────────────────────────────────────
+header "Disk Usage"
+DF_DATA=$(df -g /System/Volumes/Data | tail -1)
+DISK_SIZE_GB=$(echo "$DF_DATA" | awk '{print $2}')
+DISK_USED_GB=$(echo "$DF_DATA" | awk '{print $3}')
+DISK_AVAIL_GB=$(echo "$DF_DATA" | awk '{print $4}')
+DISK_PCT=$(echo "$DF_DATA" | awk '{print $5}' | tr -d '%')
+
+echo "Data volume: ${DISK_USED_GB} GB used / ${DISK_SIZE_GB} GB (${DISK_PCT}% used, ${DISK_AVAIL_GB} GB free)"
+
+if [ "$DISK_AVAIL_GB" -lt 15 ]; then
+  crit "Only ${DISK_AVAIL_GB} GB free — run /space-clean"
+elif [ "$DISK_AVAIL_GB" -lt 30 ]; then
+  warn "${DISK_AVAIL_GB} GB free — getting tight"
+else
+  ok "Disk space is healthy"
+fi
+
 # ─── Top Apps by Memory ──────────────────────────────────
 header "Top Apps by Memory (RSS)"
 ps -eo rss,comm | awk 'NR>1{

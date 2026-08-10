@@ -97,6 +97,7 @@ system-audit --full   # + all processes >1% CPU + uptime
 |---------|---------------|
 | System Overview | CPU cores, load average, RAM used/free, health status |
 | Memory Pressure | Swap usage, compressor stats (logical→physical), threshold warnings |
+| Disk Usage | Data volume used/free/%, threshold warnings |
 | Top Apps by Memory | Top 15 apps by RSS, aggregated across all their processes |
 | Top Apps by CPU | Top 10 apps by CPU%, aggregated across all their processes |
 | Claude Code Instances | Claude process count + RAM, MCP npm/node process count + RAM |
@@ -108,6 +109,7 @@ system-audit --full   # + all processes >1% CPU + uptime
 - Load > cores: warning | Load > cores×2: critical
 - Swap > 2 GB: warning | Swap > 10 GB: critical
 - Claude instances > 5: warning | > 10: critical (kill idle sessions with `tm` → `Ctrl-x`)
+- Disk free < 30 GB: warning | < 15 GB: critical (run `/space-clean`)
 
 **Typical workflow when Mac is hot/slow:**
 1. Run `system-audit --full`
