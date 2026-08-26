@@ -35,11 +35,30 @@ pero **no alcanza**. Para exponerlo de verdad haría falta, además:
 4. Reenviar también el **rango UDP de coturn** — y aun así, con **NAT simétrico** el
    relay de media puede fallar para algunos participantes.
 
-## Recomendación si se retoma
+## Recomendación si se retoma — DECIDIDO 2026-08-26
 
-Por el dominio + TLS + WebRTC, WorkAdventure es un candidato **mucho mejor para un
-túnel con TLS terminado (Cloudflare Tunnel) o un VPS** (Ruta C) que para port
-forwarding casero. Cloudflare Tunnel resuelve dominio + TLS + NAT de una, aunque el
-componente TURN/UDP sigue siendo el punto delicado.
+**Host = la laptop gamer de André, en Lima.** No AWS EC2 (revertido: se perdieron los
+créditos free y el egress de un SFU es prohibitivo), no `coworky-no1` (es el único
+runner de CI de un cliente, sin SSH, y Nuremberg está a 177 ms de Lima), no una VPS
+nueva (la opción técnica era Hetzner Ashburn a 92 ms / ~$16 mes, descartada por caja).
 
-Mientras tanto está **cerrado** y no consume nada.
+Ventaja real de hostear en casa: el equipo es 100% Lima → latencia de media **<5 ms**,
+mejor que cualquier datacenter. El costo objetivo es **$0/mes**.
+
+Forma del despliegue:
+
+- **HTTP/WS + TLS + dominio → Cloudflare Tunnel** (resuelve el doble NAT para TCP sin
+  tocar los routers, y de paso la IP pública dinámica).
+- **Media → quedarse en P2P**: subir `MAX_USERS_FOR_WEBRTC` (hoy `4`) por encima del
+  tamaño del equipo (~6) y **no prender LiveKit**. El túnel no proxea UDP arbitrario,
+  así que el SFU exigiría port-forward en los dos routers; con burbujas de proximidad
+  de 2-4 personas el mesh alcanza. Queda un TURN de respaldo por resolver.
+- **Validar con 5-6 personas reales fuera de la LAN** antes de declararlo listo. El
+  error de julio fue exactamente ese: nunca se probó fuera del tailnet.
+
+Detalle completo, riesgos aceptados y próximos pasos:
+[`cofoundy-sandbox.md`](./cofoundy-sandbox.md).
+
+Mientras tanto está **cerrado** y no consume nada. El repo, el `.env` y los volúmenes
+(`docker_map-storage-data`, `docker_redisdata`) siguen intactos en la Arch — verificado
+2026-08-26; los contenedores ya no existen (`down`, no `stop`).
