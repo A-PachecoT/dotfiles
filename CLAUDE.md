@@ -852,11 +852,16 @@ Apps that auto-start via macOS (not controlled by AeroSpace):
 - **Raycast** - App launcher
 - **1Password** - Password manager (Browser Helper + Launcher)
 - **SketchyBar** - Status bar (via `~/Library/LaunchAgents/homebrew.mxcl.sketchybar.plist`)
+- **Wispr Flow** - Dictado (reemplazó a superwhisper, 2026-09-03)
 
 **Disabled/Removed:**
 - **Gather/GatherV2** - Removed from Login Items (use `alt-g` to launch manually)
 - **skhd** - LaunchAgent disabled (see Deprecated Packages)
 - **yabai** - LaunchAgent disabled (see Deprecated Packages)
+- **superwhisper** - App borrada 2026-09-03 (a Trash, junto con Application Support/Caches y su extensión de Raycast). Sus grabaciones siguen en `~/Documents/superwhisper` (3.3 GB en iCloud).
+- **HeyClicky** - Fuera de Login Items 2026-09-03 (app sigue instalada)
+- **Studio by Spotify Labs** - Autostart off 2026-09-03: `launchctl disable gui/501/com.spotify.studio.startuphelper` + `app.autostart-mode="off"` en `~/Library/Application Support/StudioBySpotifyLabs/prefs`
+- **OneDrive** - Autostart off 2026-09-03: `launchctl disable gui/501/com.microsoft.OneDriveLauncher` + `defaults write com.microsoft.OneDrive OpenAtLogin -bool false`
 
 ### Managing Startup Apps
 
@@ -872,6 +877,16 @@ ls -la ~/Library/LaunchAgents/
 
 # Disable a LaunchAgent
 mv ~/Library/LaunchAgents/com.example.plist ~/Library/LaunchAgents/com.example.plist.disabled
+
+# Ver TODOS los items de arranque, incluidos los que System Events no lista
+sfltool dumpbtm
+
+# Login items embebidos en un .app (SMLoginItem: "OneDrive Launcher",
+# "StartUpHelper"...) NO salen en System Events. Se apagan por launchd:
+launchctl print-disabled gui/501            # estado actual
+launchctl disable gui/501/com.example.helper
+# Ojo: `launchctl kickstart` ignora el disabled — no sirve para verificar.
+# Además apaga el toggle propio de la app, o al relanzar se re-registra.
 ```
 
 ## SketchyBar Theme System
