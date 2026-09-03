@@ -81,11 +81,18 @@ run = 'move-node-to-workspace 9'
 if.app-name-regex-substring = 'comet'
 run = 'move-node-to-workspace 1'
 
-# Ghostty routing by tmux session name in window title
+# Ghostty routing by window title. The herdr windows carry a title pinned with
+# Ghostty's `--title=` (see scripts/dev-startup.sh); the tmux ones are named
+# after their session by `tmux new -A -s <name>`.
 [[on-window-detected]]
 if.app-name-regex-substring = 'ghostty'
-if.window-title-regex-substring = 'cofoundy'
+if.window-title-regex-substring = 'herdr-mac'
 run = 'move-node-to-workspace 2'
+
+[[on-window-detected]]
+if.app-name-regex-substring = 'ghostty'
+if.window-title-regex-substring = 'herdr-arch'
+run = 'move-node-to-workspace 3'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'ghostty'
@@ -99,8 +106,8 @@ if.window-title-regex-substring = 'pdf-viewer'
 run = 'layout floating'
 
 # NOTE: No fallback for Ghostty - ad-hoc windows stay in current workspace.
-# Only cofoundy/notes are statically routed by title (pinned). Every other
-# tmux session (bilio, personal, and anything else) is routed dynamically
+# Only herdr-mac/herdr-arch/notes are statically routed by title (pinned).
+# Every other tmux session (bilio, personal, and anything else) is routed dynamically
 # by scripts/dev-startup.sh via `aerospace move-node-to-workspace` right
 # after launch — see docs/superpowers/specs/2026-07-04-dynamic-tmux-session-restore-design.md
 

@@ -12,18 +12,31 @@
 # Test hook: set WSMAP_FILE to use a fixture path instead of the real
 # machine-local state file.
 
-WSMAP_POOL="3 4 5 6 7 10"
+# WS2/WS3/WS9 are pinned to the fixed windows in dev-startup.sh (herdr Mac,
+# herdr Arch, tmux notes) and are deliberately absent from the pool.
+WSMAP_POOL="4 5 6 7 10"
 
 wsmap_file() {
 	echo "${WSMAP_FILE:-$HOME/.local/state/dotfiles/dev-startup-workspace-map.txt}"
 }
 
-# Prints the recorded workspace for "type name", or nothing if not found.
+# Prints the recorded workspace for "type name", or nothing if not found -- or
+# if the recorded workspace has since left WSMAP_POOL. That last case is what
+# happens when a slot gets pinned to a fixed window (WS3 -> herdr Arch): the
+# stale sticky entry must not keep parking a session on a workspace that is no
+# longer ours to hand out.
 wsmap_lookup() {
-	local type="$1" name="$2" file
+	local type="$1" name="$2" file recorded slot
 	file="$(wsmap_file)"
 	[ -f "$file" ] || return 0
-	awk -F'\t' -v n="$name" -v t="$type" '$1==n && $2==t {print $3; exit}' "$file"
+	recorded="$(awk -F'\t' -v n="$name" -v t="$type" '$1==n && $2==t {print $3; exit}' "$file")"
+	[ -n "$recorded" ] || return 0
+	for slot in $WSMAP_POOL; do
+		if [ "$slot" = "$recorded" ]; then
+			echo "$recorded"
+			return 0
+		fi
+	done
 }
 
 wsmap_assign_all() {

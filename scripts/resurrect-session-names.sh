@@ -1,7 +1,12 @@
 #!/bin/bash
 # Prints unique local tmux session names from tmux-resurrect's last snapshot,
-# excluding the fixed/pinned sessions (cofoundy, notes). One name per line.
-# Prints nothing (exit 0) if no snapshot exists yet.
+# excluding the sessions dev-startup.sh handles outside the dynamic pool
+# (cofoundy, notes). One name per line. Prints nothing (exit 0) if no snapshot
+# exists yet.
+#
+# `notes` is still launched pinned to WS9; `cofoundy` no longer is -- WS2 now
+# runs herdr (`h`) instead -- so keeping it listed here is what stops a stale
+# snapshot from respawning it into a dynamic workspace.
 #
 # Test hook: set RESURRECT_DIR_OVERRIDE to point at a fixture directory
 # instead of resolving tmux-resurrect's real save location.

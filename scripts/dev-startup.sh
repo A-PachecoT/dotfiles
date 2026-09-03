@@ -7,7 +7,10 @@
 # and left untouched (not even re-moved -- moving it would scramble a layout
 # the user has since arranged). `--force` opts back into unconditional spawn.
 #
-# Fixed trio (cofoundy -> WS2, notes -> WS9) always get their pinned slots.
+# Fixed windows always get their pinned slots: herdr on the Mac (`h`) -> WS2,
+# herdr on the Arch box (`ha`, over ET) -> WS3, tmux `notes` -> WS9. WS2/WS3
+# replaced the old pinned `cofoundy` tmux session; `cofoundy` stays in
+# resurrect-session-names.sh's exclusion list so it is not respawned at all.
 # Bitwarden is launched + routed separately (see .aerospace.toml's
 # after-startup-command and on-window-detected rule for workspace 8).
 # Every other tmux session -- local (discovered from the last
@@ -147,9 +150,34 @@ launch_remote_session() {
 	move_ghostty_window "$session" "$workspace"
 }
 
-# --- Fixed trio ---
+# Launches a Ghostty window running herdr -- locally (`h`) or on the Arch box
+# over ET (`ha`) -- and routes it to its workspace. Both go through `zsh -ic`
+# so the alias stays the single source of truth (shared/zsh/mesh.zsh), which is
+# what keeps this in sync when the mesh IPs move.
+#
+# Unlike the tmux launchers, the window title is pinned with Ghostty's
+# `--title=`: `tmux new -A -s <name>` names the window after the session for
+# free, herdr does not. A pinned title is also immune to herdr rewriting it
+# later, so ghostty_window_exists / find_ghostty_window_id keep matching for
+# the lifetime of the window.
+launch_herdr_session() {
+	local title="$1" workspace="$2" alias_name="$3"
+	if [ "$FORCE" -eq 0 ] && ghostty_window_exists "$title"; then
+		log "skip: herdr window '$title' already exists"
+		return
+	fi
+	if [ "$DRY_RUN" -eq 1 ]; then
+		log "dry-run: herdr '$title' -> $alias_name (via zsh -ic) -> workspace $workspace"
+		return
+	fi
+	open -na Ghostty --args --title="$title" --command="/bin/zsh -ic '$alias_name'"
+	move_ghostty_window "$title" "$workspace"
+}
+
+# --- Fixed windows ---
 sleep 0.5
-launch_local_session cofoundy 2
+launch_herdr_session herdr-mac 2 h
+launch_herdr_session herdr-arch 3 ha
 launch_local_session notes 9
 
 # --- Discover variable sessions ---
