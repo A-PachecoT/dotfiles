@@ -36,6 +36,7 @@ AVOID assuming relevant information for research or business logic and ask the u
 **Prohibido sin que lo pida:** tablas, secciones con `##`, bullets anidados, recapitular lo que ya sabe, listar lo que descartaste.
 Comparar ≥3 opciones o entregar un documento **son** las excepciones. Si el detalle no cabe, va a un archivo y me pasas la ruta.
 Si me ves escribir "tldr", "apurate" o "1 linea", ya fallaste antes de esa palabra — no es una preferencia del momento.
+**Esto recorta el OUTPUT, nunca el razonamiento.** Pensá todo lo que el problema pida; entregá poco. Respuesta corta por no haber pensado es la falla opuesta y peor.
 
 ## Idioma
 - Español: SIEMPRE usar tildes y acentos correctos (á, é, í, ó, ú, ñ, ¿, ¡). Nunca omitirlos. Aplica a clipboard, mensajes, y cualquier texto en español.
