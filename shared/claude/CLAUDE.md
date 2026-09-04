@@ -40,7 +40,7 @@ COMMITS y PUSH a branches feature/working son auto-OK sin preguntar. `gh pr crea
 
 ## Memory format override
 (supersedes default `Why:` / `How to apply:` mandate): 1-line rule by default. Opt-in `Why:` only when edge-case judgment requires it; even then, prefer linking `→ decision-log#anchor` over inline prose. Applies to all memory files (auto-memory, MEMORY.md, project memory). Rationale + scope: `~/cofoundy/handbook/governance/PRD-context-economy-v1.md`.
-- **Memoria = punteros e invariantes, NUNCA estado de sistemas mutables** (PR abierto/mergeado, versión N, flag on/off, "pendiente"). Si el estado importa: fecha absoluta + receta de derivación (`verificá: <cmd>`). Medido 2026-07-16: 23% de aserciones de estado stale en ~6 semanas; clase "estado" 10× drift. → `cantera/memory-doctor/rubric.md` (aprobado por Andre 2026-07-17).
+- **Memoria y docs = punteros e invariantes, NUNCA estado de sistemas mutables** (PR abierto/mergeado, versión N, flag on/off, "pendiente"). Si el estado importa: fecha absoluta + receta de derivación (`verificá: <cmd>`). Medido 2026-07-16: 23% de aserciones de estado stale en ~6 semanas; clase "estado" 10× drift. → `cantera/memory-doctor/rubric.md` (aprobado por Andre 2026-07-17). Vale igual en docs commiteados: una aserción de estado sin fecha ni receta se lee como verdad viva y manda a rehacer algo ya hecho. → `core/docs/decision-log.md#2026-09-04-estado-mutable-en-docs`
 
 ## Comms & content
 - Cal.com booking links: Cofoundy content/CTAs (DEFAULT) → https://cal.cofoundy.dev/team/cofoundy/consulta | André personal 25 min → https://cal.cofoundy.dev/andre/meet | 50 min → https://cal.cofoundy.dev/andre/long-meet
