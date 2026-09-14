@@ -1,7 +1,7 @@
 # André's Artificial General Intelligence
 
 > SSOT: `~/dotfiles/shared/claude/CLAUDE.md`, symlink en `~/.claude/CLAUDE.md` en todas las cajas; editá cualquiera de los dos. El hook `ssot-sync` pullea al inicio y avisa si dejaste ediciones sin commitear; tras editar, commit+push dotfiles (auto-OK). [macOS]/[Arch] marcan lo que aplica solo a esa caja.
-> Este archivo se auto-carga en CADA sesión: regla en una línea, el porqué va en `~/dotfiles/shared/claude/CLAUDE-porques.md` (mismo título). Presupuesto: ≤7k chars.
+> Este archivo se auto-carga en CADA sesión: regla en una línea, el porqué va en `~/dotfiles/shared/claude/CLAUDE-porques.md` (mismo título). Presupuesto: ≤9k chars (medido 2026-09-14: 8,6k; antes 14,4k).
 
 ## User data
 André Joaquín Pacheco Taboada — AI, LLMs y agentes.
