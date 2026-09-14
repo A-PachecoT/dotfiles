@@ -31,6 +31,13 @@ case "$MODE" in
         echo "ssot-sync: $(basename "$repo") tiene SSOT sin sincronizar (dirty o commiteado-sin-push) — commit+push (auto-OK por git-autonomy) o la otra máquina no lo verá."
       fi
     done
+    # (retro 2026-09-14) ~/cofoundy/CLAUDE.md tiene que ser el SYMLINK al template del
+    # toolkit (workspace-setup paso 2). Una copia se congela sin avisar: en Arch quedó en
+    # agosto y la regla de Entornos del template nunca llegó a ninguna sesión de esa caja.
+    WS="$HOME/cofoundy/CLAUDE.md"; TPL="$HOME/cofoundy/plugins/cofoundy-toolkit/templates/workspace-CLAUDE.md"
+    if [ -f "$TPL" ] && [ -e "$WS" ] && [ ! -L "$WS" ]; then
+      echo "ssot-sync: ~/cofoundy/CLAUDE.md es una COPIA, no el symlink al template del toolkit — las reglas nuevas del workspace NO llegan a esta caja. Fix: diff -u \"$WS\" \"$TPL\" (rescatá lo local), luego ln -sfn \"$TPL\" \"$WS\""
+    fi
     ;;
   push)
     cd "$DOTS" 2>/dev/null || exit 0
