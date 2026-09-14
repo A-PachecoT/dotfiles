@@ -139,6 +139,13 @@ Estado que queda pendiente de un restart de herdr — **verificá**:
 - **`Restart=always` invalida "matá el proceso que sobra".** Antes de matar algo
   gordo hay que mirar de qué unit cuelga: si es un servicio, el kill no libera
   nada y encima puede tumbar un entorno.
+- **`git stash -u` a ciegas en una caja remota rompe cosas.** Al verificar el fix
+  del `.gitconfig` en la Mac stasheé sin mirar qué había; el `stash pop` post-pull
+  conflictuó y dejó marcadores dentro de `~/.gitconfig`, que es symlink al archivo
+  del repo → **todo** comando git en la Mac empezó a fallar con `bad config line 42`.
+  Se recuperó (el stash tenía solo el bloque que ya se había movido al per-box) y
+  quedó auth OK, working tree limpio. Para salir del pozo: `GIT_CONFIG_GLOBAL=/dev/null git …`,
+  única forma de correr git cuando el config global es el que está roto.
 - **Un CLI vale más que un MCP para capacidades que se usan a ráfagas.**
   `agent-browser` cuesta 0 hasta que lo invocás; el MCP equivalente cuesta 250 MB
   por agente, esté o no usándolo.
