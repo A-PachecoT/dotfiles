@@ -1,0 +1,45 @@
+# Mapa doc -> fuentes que describe, para el drift-detector (SessionStart hook):
+# avisa cuando las fuentes se commitearon DESPUÉS del doc que dice describirlas.
+# level 1 = broad (todo el árbol), 2 = surface-only (default).
+#
+# Los `sources` son deliberadamente ESTRECHOS: un doc que grita con cada cambio
+# de config se vuelve ruido y se ignora, que es peor que no tener detector. Cada
+# entrada lista solo lo que ese doc realmente describe.
+docs:
+  # Describe comandos, hotkeys y arranque del entorno, no el contenido de cada config.
+  - doc: CLAUDE.md
+    sources:
+      - install.sh
+      - scripts/dev-startup.sh
+      - scripts/workspace-sticky-map.sh
+      - shared/tmux/.tmux.conf
+      - shared/ghostty/.config/ghostty
+      - shared/zsh/tmux-workflow.zsh
+    level: 2
+
+  # Describe el LAYOUT de paquetes y las reglas de stow, no los configs de adentro.
+  - doc: docs/dotfiles-architecture.md
+    sources:
+      - install.sh
+      - shared/zsh
+    level: 2
+
+  - doc: docs/audio-priority-system.md
+    sources:
+      - macos/hammerspoon
+      - scripts/audio-priority.sh
+    level: 2
+
+  - doc: docs/device-mesh.md
+    sources:
+      - shared/zsh/mesh.zsh
+      - scripts/mesh-update.sh
+      - scripts/mesh-fanout.sh
+      - scripts/termux-bootstrap.sh
+      - macos/zsh/.zshenv
+    level: 2
+
+  # Log append-only: solo se "atrasa" respecto de sus propias entradas.
+  - doc: BITACORA.md
+    sources: [bitacora]
+    level: 2

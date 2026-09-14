@@ -66,6 +66,8 @@ COMMITS y PUSH a branches feature/working son auto-OK sin preguntar. `gh pr crea
 ## Web Interaction
 Prefer available MCP/skill tools over built-in WebFetch/WebSearch — fall back to those only when nothing else fits. Which tool handles what (URLs, platforms, web search, browser interaction) is declared by the skills/MCP servers themselves y se precarga en cada sesión — don't hardcode a routing list here, it just goes stale.
 
+**Un MCP en `~/.mcp.json` (o cualquier `.mcp.json` bajo `~`) se paga POR INSTANCIA de agente, no una vez** — lo hereda todo proyecto bajo `~` y `enableAllProjectMcpServers: true` lo auto-aprueba sin preguntar. Medido 2026-09-14 en la caja Arch: 19 paneles de claude = 4.5G; sus MCP = 64 procesos y 6.2G (≈250 MB cada uno entre el `npm exec` y el node hijo), y eso fue parte de lo que llenó el swap y le hizo matar a oomd la sesión de herdr con 2 `/cto` adentro. Antes de agregar un server ahí, multiplicá su RSS por los paneles que vas a correr; para capacidades de ráfaga preferí un CLI (`agent-browser` para browser, WebSearch/WebFetch + `agent-reach` para fetch/search), que cuesta 0 hasta que lo invocás. Verificá: `cat ~/.mcp.json` y `ps -eo args | grep -oE "<server>" | wc -l`. → `dotfiles/bitacora/2026-09-14-oomd-mato-herdr.md`
+
 ## PDF Handling
 - Always use pdftotext to read PDFs when the user asks to read them
 - On the start of a chat, use ls to check the files

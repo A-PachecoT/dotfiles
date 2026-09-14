@@ -69,10 +69,21 @@ If the config has no platform-specific paths or commands, it belongs
 in `shared/`. When portability breaks (e.g. `/opt/homebrew/...`),
 either fix it or keep the file in `macos/` / `linux/`.
 
-### 4. `shared/zsh` does NOT exist
-zsh is divergent enough across OS that we have `macos/zsh/.zshrc`
-(homebrew + darwin-specific PATHs) and `linux/zsh/.config/zsh/*`
-(HyDE ZDOTDIR convention). Different target paths = no stow conflict.
+### 4. zsh: el entrypoint es per-OS, la lógica portable vive en `shared/zsh`
+Los entrypoints divergen y **no** se comparten: `macos/zsh/.zshrc` (homebrew +
+PATHs de darwin) y `linux/zsh/.config/zsh/*` (convención ZDOTDIR de HyDE).
+Distinto target path = sin conflicto de stow.
+
+Lo que **sí** es portable va en `shared/zsh/*.zsh`, que no se stowa: lo sourcean
+los dos entrypoints por path absoluto — `macos/zsh/.zshrc` directo, y Linux con
+un shim de una línea en `conf.d/NN-<nombre>.zsh`. Hoy: `mesh.zsh`,
+`tmux-workflow.zsh`, `vi-mode.zsh`, `agent-browser.zsh`.
+
+Duplicar una función en los dos entrypoints es el bug, no la regla: cada caja
+"arregla" su copia y re-rompe la otra. Si algo aplica a las dos, va a `shared/`.
+
+> Esta regla decía `shared/zsh does NOT exist` hasta el 2026-09-14. Era falso
+> desde julio y contradecía al CLAUDE.md del repo, que ya mandaba usarlo.
 
 ### 5. `scripts/` is flat
 All scripts live at `~/dotfiles/scripts/<name>` because ~20+
