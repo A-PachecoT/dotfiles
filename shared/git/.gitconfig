@@ -41,9 +41,9 @@
 	cmd = code --wait --diff \"$LOCAL\" \"$REMOTE\"
 [credential]
 	helper = osxkeychain
-[credential "https://github.com"]
-	helper = 
-	helper = !/usr/bin/gh auth git-credential
-[credential "https://gist.github.com"]
-	helper = 
-	helper = !/usr/bin/gh auth git-credential
+# OJO: `gh auth login` escribe su credential helper acá con PATH ABSOLUTO
+# (`/usr/bin/gh` en Arch, `/opt/homebrew/bin/gh` en Mac) porque ~/.gitconfig es
+# el symlink a este archivo. Eso es el ping-pong que CLAUDE.md prohíbe en
+# shared/. El helper ya vive per-box en ~/.config/git/config (no stowed) y git
+# lee los dos archivos — si volvés a ver un bloque [credential "https://..."]
+# acá abajo, sacalo: es basura que escribió gh, no configuración.
