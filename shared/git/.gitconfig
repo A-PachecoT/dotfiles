@@ -39,8 +39,12 @@
 	insteadOf = git@github.com:
 [difftool "vscode"]
 	cmd = code --wait --diff \"$LOCAL\" \"$REMOTE\"
-[credential]
-	helper = osxkeychain
+# El credential helper es PER-BOX, no va acá: `osxkeychain` no existe en Arch
+# (imprime "credential-osxkeychain is not a git command" en cada operación de
+# git) y `gh auth git-credential` se escribe con path absoluto distinto en cada
+# caja. Vive en ~/.config/git/config, que git lee además de este archivo:
+#   Mac  -> helper = osxkeychain   (+ /opt/homebrew/etc/gitconfig ya lo trae)
+#   Arch -> helper = !/usr/bin/gh auth git-credential
 # OJO: `gh auth login` escribe su credential helper acá con PATH ABSOLUTO
 # (`/usr/bin/gh` en Arch, `/opt/homebrew/bin/gh` en Mac) porque ~/.gitconfig es
 # el symlink a este archivo. Eso es el ping-pong que CLAUDE.md prohíbe en
