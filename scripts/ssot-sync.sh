@@ -38,6 +38,13 @@ case "$MODE" in
     if [ -f "$TPL" ] && [ -e "$WS" ] && [ ! -L "$WS" ]; then
       echo "ssot-sync: ~/cofoundy/CLAUDE.md es una COPIA, no el symlink al template del toolkit — las reglas nuevas del workspace NO llegan a esta caja. Fix: diff -u \"$WS\" \"$TPL\" (rescatá lo local), luego ln -sfn \"$TPL\" \"$WS\""
     fi
+    # (2026-09-14) Los worktrees de herdr están FUERA de ~/cofoundy/: sin ~/.herdr/CLAUDE.md
+    # → ~/cofoundy/CLAUDE.md ninguna sesión de herdr carga las reglas del workspace.
+    # → core/docs/decision-log.md#2026-09-14-workspace-claude-md-fuera-de-la-cadena
+    HD="$HOME/.herdr/CLAUDE.md"
+    if [ -d "$HOME/.herdr" ] && [ -e "$WS" ] && [ "$(readlink -f "$HD" 2>/dev/null)" != "$(readlink -f "$WS" 2>/dev/null)" ]; then
+      echo "ssot-sync: ~/.herdr/CLAUDE.md no apunta a ~/cofoundy/CLAUDE.md — las sesiones de herdr NO cargan las reglas del workspace. Fix: ln -sfn \"$WS\" \"$HD\""
+    fi
     ;;
   push)
     cd "$DOTS" 2>/dev/null || exit 0

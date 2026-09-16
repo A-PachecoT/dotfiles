@@ -203,6 +203,22 @@ EOF
         success "Linked global CLAUDE.md → shared/claude/CLAUDE.md"
     fi
 
+    # Los worktrees de herdr viven en ~/.herdr/worktrees/, FUERA de ~/cofoundy/, y Claude
+    # Code carga los CLAUDE.md por la cadena de directorios del cwd: sin este link, ninguna
+    # sesión de herdr ve las reglas del workspace (medido 2026-09-14: 17 de 29 worktrees de
+    # inbox-ai; el CLAUDE.md del repo creció 31k→172k chars con la regla vigente).
+    # → core/docs/decision-log.md#2026-09-14-workspace-claude-md-fuera-de-la-cadena
+    local ws_claude="$HOME/cofoundy/CLAUDE.md"
+    local herdr_claude="$HOME/.herdr/CLAUDE.md"
+    if [[ -d "$HOME/.herdr" && -e "$ws_claude" ]]; then
+        if [[ -f "$herdr_claude" && ! -L "$herdr_claude" ]]; then
+            mv "$herdr_claude" "$herdr_claude.pre-dotfiles.$(date +%Y%m%d%H%M%S)"
+            warning "Existing ~/.herdr/CLAUDE.md backed up"
+        fi
+        ln -sfn "$ws_claude" "$herdr_claude"
+        success "Linked ~/.herdr/CLAUDE.md → ~/cofoundy/CLAUDE.md (herdr worktrees load the workspace rules)"
+    fi
+
     # Symlink personal skills from dotfiles into ~/.claude/skills/
     local skills_src="$DOTFILES/shared/claude/skills"
     local skills_dst="$claude_dir/skills"
