@@ -22,10 +22,10 @@ case "${1:-}" in
         ssh_mac "$MAC_PATH; command -v pngpaste >/dev/null 2>&1 && pngpaste -"
         ;;
     paste-text)
-        ssh_mac "$MAC_PATH; pbpaste"
+        ssh_mac "$MAC_PATH; LC_CTYPE=UTF-8 pbpaste"
         ;;
     copy-text)
-        ssh_mac "$MAC_PATH; pbcopy"
+        ssh_mac "$MAC_PATH; LC_CTYPE=UTF-8 pbcopy"
         ;;
     *)
         usage
