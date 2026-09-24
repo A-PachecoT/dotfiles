@@ -6,9 +6,11 @@ pero para todo el equipo. El disparador original fue
 [WorkAdventure](./workadventure.md); para la capa de red ver
 [`network-topology.md`](./network-topology.md).
 
-> **Estado (2026-08-26): host = laptop gamer en casa de André. AWS EC2 REVERTIDO.**
-> Decisión tomada con la caja de la empresa apretada; objetivo de costo **$0/mes**.
-> Nada implementado todavía.
+> **Estado (2026-09-24): INSTALADO como `cofoundy-hq`.** Ubuntu Server 26.04 LTS,
+> dual-boot con Windows (la laptop es de Melissa; Windows se conserva). Base lista:
+> SSH solo por clave, sudo sin password para `andre`, Docker CE, Tailscale
+> (`ssh hq` → `100.106.190.15`), tapa cerrada no suspende. WorkAdventure aún NO
+> desplegado. `verificá: ssh hq 'docker ps; tailscale status | head -3'`
 
 ## Historial de la decisión (cambió dos veces — leé esto antes de re-proponer cloud)
 
@@ -95,11 +97,12 @@ El doble NAT de la casa (ZTE + TP-Link, ver `network-topology.md`) es un problem
    confirmado en esta sesión. Alternativa: coturn en la propia laptop (gratis, pero
    vuelve al problema de UDP público del punto 3).
 
-### Specs — PENDIENTE de medir
+### Specs (medido 2026-09-24)
 
-Marca/modelo/CPU/RAM/disco de la laptop: **desconocidos**. Medir antes de sizear
-nada. `verificá:` correr en la laptop `lscpu | head -20; free -h; df -h /`.
-WorkAdventure solo pide ~2-4 GB, pero el uso compartido (abajo) es lo que manda.
+Acer Nitro, AMD Rembrandt (Radeon 680M) + NVIDIA RTX 3050 Mobile, 16 hilos,
+14 GB RAM, NVMe 512 GB: **98 GB para Ubuntu** (`nvme0n1p5`, ex-Manjaro) y ~375 GB
+NTFS de Windows. Si falta disco, achicar la partición de Windows desde Windows.
+Ethernet `enp3s0` (Killer E2600) en la LAN de casa `192.168.1.103` (DHCP).
 
 ## Propósito multi-uso (lo que vivirá ahí)
 
@@ -118,7 +121,7 @@ WorkAdventure solo pide ~2-4 GB, pero el uso compartido (abajo) es lo que manda.
 
 ## Próximos pasos
 
-1. Prender la laptop, medir specs, instalar Arch/Debian + Docker + Tailscale.
+1. ~~Prender la laptop, medir specs, instalar SO + Docker + Tailscale.~~ Hecho 2026-09-24 (Ubuntu Server 26.04).
 2. Clonar WorkAdventure y portar la config real que ya existe en la Arch
    (`andre-arch:~/workadventure/contrib/docker/.env` — ver [`workadventure.md`](./workadventure.md)).
 3. Cloudflare Tunnel → subdominio de `cofoundy.dev`, TLS terminado en el edge.
