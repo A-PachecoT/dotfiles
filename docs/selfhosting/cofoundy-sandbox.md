@@ -9,8 +9,9 @@ pero para todo el equipo. El disparador original fue
 > **Estado (2026-09-24): INSTALADO como `cofoundy-hq`.** Ubuntu Server 26.04 LTS,
 > dual-boot con Windows (la laptop es de Melissa; Windows se conserva). Base lista:
 > SSH solo por clave, sudo sin password para `andre`, Docker CE, Tailscale
-> (`ssh hq` → `100.106.190.15`), tapa cerrada no suspende. WorkAdventure aún NO
-> desplegado. `verificá: ssh hq 'docker ps; tailscale status | head -3'`
+> (`ssh hq` → `100.106.190.15`), tapa cerrada no suspende, Ubuntu Pro + Livepatch.
+> **WorkAdventure desplegado 2026-09-24 en https://office.cofoundy.dev** (ver
+> [`workadventure.md`](./workadventure.md)). `verificá: ssh hq 'cd ~/workadventure && docker compose ps'`
 
 ## Historial de la decisión (cambió dos veces — leé esto antes de re-proponer cloud)
 

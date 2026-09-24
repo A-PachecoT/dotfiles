@@ -4,11 +4,17 @@ Variante self-hosted tipo Gather (mundo 2D con proximity video-chat vía Jitsi).
 Estuvo corriendo en la caja Arch. Para la capa de red, ver
 [`network-topology.md`](./network-topology.md).
 
-> **Estado (2026-07-19): CERRADO.** Bajado con `docker compose -p docker -f
-> docker-compose.prod.yaml down`. Volúmenes conservados. Proyecto en
-> `~/workadventure/` (compose en `contrib/docker/docker-compose.prod.yaml`).
-> Consumía 7 contenedores (uno, `map-storage`, en bucle de reinicio) y ocupaba los
-> puertos 80/443/50051.
+> **Estado (2026-09-24): DESPLEGADO en `cofoundy-hq` → https://office.cofoundy.dev.**
+> `~/workadventure/` en hq: `docker-compose.yaml` (prod upstream v1.32.10) +
+> `docker-compose.override.yaml` (Traefik solo HTTP; TLS lo termina Cloudflare) + `.env`
+> con secrets nuevos (los del Arch NO se reusaron). Traefik escucha en `127.0.0.1:8080`;
+> Cloudflare Tunnel `cofoundy-hq` (servicio systemd `cloudflared`, config en
+> `/etc/cloudflared/config.yml`) → CNAME `office.cofoundy.dev`. Media P2P:
+> `MAX_USERS_FOR_WEBRTC=8`, `MAX_PER_GROUP=8`, sin LiveKit, sin TURN, STUN de Google.
+> Credenciales de map-storage: `MAP_STORAGE_AUTHENTICATION_USER/PASSWORD` en ese `.env`.
+> **Pendiente:** validar video con 5-6 personas en redes distintas; acceso abierto a
+> cualquiera con la URL (`DISABLE_ANONYMOUS=false`) — evaluar Cloudflare Access.
+> La instalación vieja del Arch (`~/workadventure`, volúmenes vacíos) queda como histórico.
 
 ## ¿Aplica el mismo port forward que Minecraft?
 
