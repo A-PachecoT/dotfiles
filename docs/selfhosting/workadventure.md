@@ -12,8 +12,17 @@ Estuvo corriendo en la caja Arch. Para la capa de red, ver
 > `/etc/cloudflared/config.yml`) → CNAME `office.cofoundy.dev`. Media P2P:
 > `MAX_USERS_FOR_WEBRTC=8`, `MAX_PER_GROUP=8`, sin LiveKit, sin TURN, STUN de Google.
 > Credenciales de map-storage: `MAP_STORAGE_AUTHENTICATION_USER/PASSWORD` en ese `.env`.
-> **Pendiente:** validar video con 5-6 personas en redes distintas; acceso abierto a
-> cualquiera con la URL (`DISABLE_ANONYMOUS=false`) — evaluar Cloudflare Access.
+> **Login (2026-09-24):** OIDC contra Casdoor `id.cofoundy.dev`, app `admin/app-workadventure`
+> (org `cofoundy-internal`, Google/GitHub, **signup desactivado** → solo usuarios ya
+> existentes). `DISABLE_ANONYMOUS=true`; editor solo `andre@cofoundy.dev`. Client secret
+> solo en el `.env` de hq (pendiente espejar en Vaultwarden). Casdoor manda
+> `//openid-callback` (PUSHER_URL con `/` final): ambos redirect URIs registrados.
+> **Mapa:** `~/map-starter-kit` en hq (office.tmj sin Jitsi) subido a map-storage como
+> `/~/cofoundy/office.wam` (`START_ROOM_URL`); upload con bearer
+> `MAP_STORAGE_AUTHENTICATION_TOKEN`. meet.jit.si embebido corta a los 5 min → no usar.
+> **Red:** la casa está detrás de CGNAT (traceroute a la IP pública sale por `10.2.0.1`),
+> sin IPv6 → LiveKit/TURN self-host en hq imposible sin IP pública del ISP.
+> **Pendiente:** validar video con 5-6 personas en redes distintas.
 > La instalación vieja del Arch (`~/workadventure`, volúmenes vacíos) queda como histórico.
 
 ## ¿Aplica el mismo port forward que Minecraft?
