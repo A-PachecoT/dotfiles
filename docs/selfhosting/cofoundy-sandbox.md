@@ -6,6 +6,8 @@ pero para todo el equipo. El disparador original fue
 [WorkAdventure](./workadventure.md); para la capa de red ver
 [`network-topology.md`](./network-topology.md).
 
+> **SSOT operativo (runbook del equipo): `~/cofoundy/handbook/infrastructure/cofoundy-hq.md`.** Este doc guarda el porqué y el historial.
+>
 > **Estado (2026-09-24): INSTALADO como `cofoundy-hq`.** Ubuntu Server 26.04 LTS,
 > dual-boot con Windows (la laptop es de Melissa; Windows se conserva). Base lista:
 > SSH solo por clave, sudo sin password para `andre`, Docker CE, Tailscale
