@@ -22,6 +22,7 @@ Estuvo corriendo en la caja Arch. Para la capa de red, ver
 > `MAP_STORAGE_AUTHENTICATION_TOKEN`. meet.jit.si embebido corta a los 5 min → no usar.
 > **Red:** la casa está detrás de CGNAT (traceroute a la IP pública sale por `10.2.0.1`),
 > sin IPv6 → LiveKit/TURN self-host en hq imposible sin IP pública del ISP.
+> **Editor de mapas (2026-09-28):** solo aparece en salas `/~/…`; Traefik redirige las globales `/_/…` a la oficina. Receta completa: `~/cofoundy/handbook/infrastructure/cofoundy-hq.md` § Editor de mapas.
 > **Pendiente:** validar video con 5-6 personas en redes distintas.
 > La instalación vieja del Arch (`~/workadventure`, volúmenes vacíos) queda como histórico.
 
