@@ -43,8 +43,9 @@ Si me ves escribir "tldr", "apurate" o "1 linea", ya fallaste antes. **Esto reco
 - Al cierre de sesión: commiteá lo sin commitear por default; override solo si André dijo «no commitees todavía».
 → CLAUDE-porques.md §Git autonomy
 
-## Memory format override
-- Memoria = regla en 1 línea; `Why:` opt-in solo para edge cases, y mejor `→ decision-log#anchor` que prosa. Vale para toda memoria (auto-memory, MEMORY.md, project memory). → `handbook/governance/PRD-context-economy-v1.md`
+## Memoria = SSOT versionado, nunca auto-memoria
+- **Auto-memoria de Claude Code APAGADA** (`autoMemoryEnabled: false`). Nunca escribas en `~/.claude/projects/*/memory/`; una lección entra por `/retro` a su SSOT (repo CLAUDE.md/brain + decision-log, skill, handbook). → `core/docs/decision-log.md#2026-09-28-sin-auto-memoria`
+- Regla en 1 línea; el porqué va a `→ decision-log#anchor`, no en prosa. → `handbook/governance/PRD-context-economy-v1.md`
 - **Memoria y docs = punteros e invariantes, NUNCA estado de sistemas mutables** (PR abierto, versión N, flag, «pendiente»). Si el estado importa: fecha absoluta + receta (`verificá: <cmd>`). → `cantera/memory-doctor/rubric.md` · `core/docs/decision-log.md#2026-09-04-estado-mutable-en-docs`
 
 ## Comms & content
