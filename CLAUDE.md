@@ -369,6 +369,9 @@ log show --predicate 'subsystem == "com.apple.audio"' --last 5m
 # Install all configurations (creates symlinks)
 ./install.sh install
 
+# Headless Ubuntu box (cofoundy-hq): apt bootstrap + server profile
+server/bootstrap-ubuntu.sh   # then `./install.sh server` / autodetected by `install`
+
 # Remove all symlinks (safe uninstall)
 ./install.sh unstow
 

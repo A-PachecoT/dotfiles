@@ -46,6 +46,16 @@ ok "yazi $(yazi --version 2>/dev/null | head -1)"
 [[ -d "$HOME/.tmux/plugins/tpm" ]] || git clone -q https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
 ok "tpm (install plugins: prefix + I, or ~/.tmux/plugins/tpm/bin/install_plugins)"
 
+# `ssh hq 'claude …'` runs a NON-interactive bash, and Ubuntu's ~/.bashrc returns
+# before anything else is read — so ~/.local/bin (claude, uv, yazi) is off PATH.
+# Put it on the first line, above that guard. Idempotent.
+MARK='# dotfiles(server): ~/.local/bin for non-interactive ssh'
+if ! grep -qF "$MARK" "$HOME/.bashrc" 2>/dev/null; then
+  printf '%s\ncase ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac\n' "$MARK" \
+    | cat - "$HOME/.bashrc" > "$HOME/.bashrc.tmp" && mv "$HOME/.bashrc.tmp" "$HOME/.bashrc"
+fi
+ok "~/.local/bin on PATH for non-interactive ssh"
+
 "$DOTFILES/install.sh" server
 
 cat <<MSG

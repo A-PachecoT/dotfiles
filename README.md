@@ -38,6 +38,16 @@ See [docs/linux-system-config.md](docs/linux-system-config.md) for
 Arch+HyDE system-level config (mkinitcpio, SDDM, AQ_DRM_DEVICES,
 waybar systemd unit, Hyprland v0.53+ syntax).
 
+### Headless server (Ubuntu/Debian — e.g. cofoundy-hq)
+```bash
+git clone https://github.com/A-PachecoT/dotfiles.git ~/dotfiles
+~/dotfiles/server/bootstrap-ubuntu.sh   # apt deps + p10k + yazi + tpm, then ./install.sh server
+```
+Profile `server` = `shared/*` minus `ghostty`/`zsh`/`claude` + `linux/zsh` + `server/zsh`
+(the loader HyDE provides on Arch). `./install.sh install` autodetects it (Ubuntu/Debian
+with no display manager and no xsessions/wayland-sessions); `DOTFILES_PROFILE=` overrides.
+Login shell is NOT changed; optional: `sudo chsh -s "$(command -v zsh)" "$USER"`.
+
 ### WSL
 Same as Linux. `install.sh` detects WSL via `/proc/version` but
 currently treats it as Linux (uses `linux/` packages).
@@ -109,7 +119,8 @@ API keys live in a [private repo](https://github.com/A-PachecoT/dotfiles-secrets
 ## Day-to-day commands
 
 ```bash
-./install.sh install       # Stow shared/* + {platform}/*
+./install.sh install       # Stow shared/* + {platform}/* (autodetects the server profile)
+./install.sh server        # Force the headless server profile
 ./install.sh restow        # Re-symlink after updates (git pull)
 ./install.sh unstow        # Remove all symlinks
 ./install.sh list          # Show what would be stowed on this machine
