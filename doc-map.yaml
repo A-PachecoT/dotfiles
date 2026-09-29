@@ -39,6 +39,13 @@ docs:
       - macos/zsh/.zshenv
     level: 2
 
+  # Runbook del alta de un worker: describe el script y lo que el script replica de hq.
+  - doc: docs/new-worker.md
+    sources:
+      - scripts/new-worker.sh
+      - server/bootstrap-ubuntu.sh
+    level: 2
+
   # Log append-only: solo se "atrasa" respecto de sus propias entradas.
   - doc: BITACORA.md
     sources: [bitacora]

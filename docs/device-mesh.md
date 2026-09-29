@@ -6,6 +6,10 @@
 > como tercer worker (homelab compartido; runbook:
 > `~/cofoundy/handbook/infrastructure/cofoundy-hq.md`). La matriz 12/12 de abajo
 > es de las 4 cajas originales; hq no entró a esa medición.
+>
+> **Sumar un worker nuevo:** `scripts/new-worker.sh <ssh-host> <alias>` desde la
+> Arch — runbook en `docs/new-worker.md` (orden, verificación por paso, pasos
+> humanos y trampas medidas).
 
 ## Topología
 
@@ -53,6 +57,8 @@ Claude Code resume su propia conversación (native agent session restore).
 
 ## Reglas de operación
 
+- **Worker nuevo (Linux)**: `scripts/new-worker.sh <ssh-host> <alias>` — ver
+  `docs/new-worker.md`. Deja el alias en `mesh.zsh` y en `termux-bootstrap.sh`.
 - **Key nueva = dispositivo nuevo**: correr `scripts/termux-bootstrap.sh`
   (Android) y autorizar su pubkey en ambos workers. Nunca copiar keys entre
   dispositivos.
