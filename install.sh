@@ -6,7 +6,7 @@
 #   macos/    → installed on Darwin
 #   linux/    → installed on Linux (including WSL)
 #   windows/  → reserved (WSL uses linux/, native support TBD)
-#   server/   → headless Linux profile (Ubuntu/Debian without a graphical target)
+#   server/   → headless Linux profile (Ubuntu/Debian with no graphical session installed)
 #
 # Profiles: macos · linux (Arch desktop) · server (headless). `install` autodetects;
 # `./install.sh server` forces the server profile; DOTFILES_PROFILE=<p> overrides.
@@ -46,17 +46,21 @@ is_wsl() {
     grep -qiE "microsoft|wsl" /proc/version 2>/dev/null
 }
 
-# Headless server profile: Linux whose /etc/os-release is Ubuntu/Debian AND whose
-# systemd default target is not graphical. Deliberately NOT based on $DISPLAY /
-# $WAYLAND_DISPLAY: the Arch desktop is usually driven over ssh/ET, where those are
-# empty, and must keep the full linux/ profile. Arch (ID=arch) never matches.
+# Headless server profile: Linux whose /etc/os-release is Ubuntu/Debian AND that has
+# no graphical session installed (no display manager, no xsessions/wayland-sessions).
+# NOT based on $DISPLAY/$WAYLAND_DISPLAY (the Arch desktop is driven over ssh/ET, where
+# they are empty) nor on `systemctl get-default` (cofoundy-hq, Ubuntu Server, reports
+# graphical.target with no DM at all — measured 2026-09-28). Arch (ID=arch) never matches.
 is_headless_server() {
     [[ "$(uname -s)" == "Linux" ]] || return 1
     is_wsl && return 1
     local ids
     ids=$(. /etc/os-release 2>/dev/null; echo "${ID:-} ${ID_LIKE:-}")
     [[ "$ids" =~ (ubuntu|debian) ]] || return 1
-    [[ "$(systemctl get-default 2>/dev/null)" != "graphical.target" ]]
+    [[ -e /etc/systemd/system/display-manager.service ]] && return 1
+    compgen -G '/usr/share/xsessions/*.desktop' >/dev/null && return 1
+    compgen -G '/usr/share/wayland-sessions/*.desktop' >/dev/null && return 1
+    return 0
 }
 
 detect_profile() {
