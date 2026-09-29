@@ -66,6 +66,7 @@ pgrep -x sshd >/dev/null || sshd
 # mesh: h = herdr Mac | ha = herdr Arch (mismos aliases en las 4 cajas)
 alias h="et styreep@$MESH_MAC_IP -c herdr"
 alias ha="et andre@$MESH_ARCH_IP -c herdr"
+alias hq="et andre@100.106.190.15 -c herdr"
 EOF
 
 sshd 2>/dev/null || true
