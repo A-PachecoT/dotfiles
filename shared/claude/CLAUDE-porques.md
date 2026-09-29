@@ -53,3 +53,7 @@ CLIP_REMOTE="styreep@100.73.150.52" /home/andre/dotfiles/scripts/mac-clipboard c
 ```
 "paste-image: No image data found" → the Mac clipboard has text (use paste-text). Vault/secrets needing Touch ID can't be written from Arch (headless) — give André a one-liner to run in his Mac terminal.
 - **Si el ssh Arch→Mac cuelga en la fase de auth** (bridge incluido): el `SSH_AUTH_SOCK` de la sesión suele ser un socket ET-forwarded muerto (`/tmp/et_forward_sock_*`). Bypass: `SSH_AUTH_SOCK= ssh -F /dev/null -i ~/.ssh/id_ed25519 styreep@100.73.150.52 …`. El WiFi del Mac no importa — la IP `100.73.150.52` es Tailscale. (Aprendido 2026-07-12.)
+
+## Worktrees — nunca en el scratchpad ni en /tmp
+
+2026-09-28: en la caja Arch, `/tmp` es tmpfs (vive en RAM y se va a swap). Los agentes de inbox-ai creaban worktrees completos del repo (con `backend/.venv`, 150–500 MB cada uno) dentro de su scratchpad `/tmp/claude-1000/...`, y Claude Code no limpia el scratchpad al cerrar la sesión. Se juntaron 7 GB; con 20 agentes y un `pytest -n 8` el swap llegó al 100 % y systemd-oomd mató herdr entero con todos los paneles. En `~/.herdr/worktrees/` el worktree está en disco, se ve y se puede limpiar.
