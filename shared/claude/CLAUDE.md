@@ -33,6 +33,7 @@ Si me ves escribir "tldr", "apurate" o "1 linea", ya fallaste antes. **Esto reco
 ## Entornos y checkouts
 - Cada repo declara sus entornos en `{repo}/.claude/rules/entornos.md`; leelo antes de decir «desplegado», hacer QA o promover. Si no existe, decilo — no inventes URL.
 - Lo auto-cargado es del CHECKOUT, no del repo: al entrar a un worktree, `git rev-list --count HEAD..origin/develop` (o `main`); atrás y sin trabajo propio → `git merge --ff-only`. → `core/docs/decision-log.md#2026-09-14-checkout-viejo-reglas-viejas`
+- Worktrees nuevos van en `~/.herdr/worktrees/<repo>/<nombre>`, NUNCA en el scratchpad ni en `/tmp` (en Arch es tmpfs: RAM); al terminar, `git worktree remove`. → CLAUDE-porques.md §Worktrees
 - Un worktree fuera de `~/cofoundy/` (`~/.herdr/worktrees`, `/tmp`) NO carga `~/cofoundy/CLAUDE.md`: las reglas del workspace son invisibles ahí. → `core/docs/decision-log.md#2026-09-14-workspace-claude-md-fuera-de-la-cadena`
 
 ## Git autonomy (override del default de Claude Code)
