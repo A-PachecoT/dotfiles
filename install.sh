@@ -6,8 +6,12 @@
 #   macos/    → installed on Darwin
 #   linux/    → installed on Linux (including WSL)
 #   windows/  → reserved (WSL uses linux/, native support TBD)
+#   server/   → headless Linux profile (Ubuntu/Debian without a graphical target)
 #
-# Usage: ./install.sh [install|unstow|restow|list|jupyter|claude|help]
+# Profiles: macos · linux (Arch desktop) · server (headless). `install` autodetects;
+# `./install.sh server` forces the server profile; DOTFILES_PROFILE=<p> overrides.
+#
+# Usage: ./install.sh [install|server|unstow|restow|list|jupyter|claude|help]
 
 set -e
 
@@ -41,6 +45,41 @@ detect_platform() {
 is_wsl() {
     grep -qiE "microsoft|wsl" /proc/version 2>/dev/null
 }
+
+# Headless server profile: Linux whose /etc/os-release is Ubuntu/Debian AND whose
+# systemd default target is not graphical. Deliberately NOT based on $DISPLAY /
+# $WAYLAND_DISPLAY: the Arch desktop is usually driven over ssh/ET, where those are
+# empty, and must keep the full linux/ profile. Arch (ID=arch) never matches.
+is_headless_server() {
+    [[ "$(uname -s)" == "Linux" ]] || return 1
+    is_wsl && return 1
+    local ids
+    ids=$(. /etc/os-release 2>/dev/null; echo "${ID:-} ${ID_LIKE:-}")
+    [[ "$ids" =~ (ubuntu|debian) ]] || return 1
+    [[ "$(systemctl get-default 2>/dev/null)" != "graphical.target" ]]
+}
+
+detect_profile() {
+    if [[ -n "${DOTFILES_PROFILE:-}" ]]; then echo "$DOTFILES_PROFILE"; return; fi
+    local platform
+    platform=$(detect_platform)
+    if [[ "$platform" == "linux" ]] && is_headless_server; then
+        echo "server"
+    else
+        echo "$platform"
+    fi
+}
+
+# Server profile: what it stows from shared/ and linux/.
+#   shared/ghostty → GUI terminal, nothing to render on a headless box
+#   shared/zsh     → not a stow package (sourced by absolute repo path)
+#   shared/claude  → handled by `./install.sh claude` (stowing it drops
+#                    settings.template.json + skills/ loose into $HOME)
+SERVER_SKIP_SHARED=(ghostty zsh claude)
+# linux/ is the Arch desktop (hyprland, waybar, kitty, dunst, chrome-guardian…);
+# the server only takes the zsh user layer. server/zsh supplies the loader that
+# HyDE provides on Arch.
+SERVER_LINUX_PKGS=(zsh)
 
 # ── Preflight ───────────────────────────────────────────────
 require_stow() {
@@ -85,8 +124,36 @@ stow_pkg() {
     fi
 }
 
+in_list() { local x=$1; shift; local y; for y in "$@"; do [[ "$x" == "$y" ]] && return 0; done; return 1; }
+
+for_server_packages() {
+    local action=$1
+    info "Profile: server (headless)"
+
+    info "── shared/ (skip: ${SERVER_SKIP_SHARED[*]}) ──"
+    while IFS= read -r pkg; do
+        in_list "$pkg" "${SERVER_SKIP_SHARED[@]}" && continue
+        stow_pkg "$action" shared "$pkg" || true
+    done < <(list_packages shared)
+
+    info "── linux/ (only: ${SERVER_LINUX_PKGS[*]}) ──"
+    local pkg
+    for pkg in "${SERVER_LINUX_PKGS[@]}"; do
+        stow_pkg "$action" linux "$pkg" || true
+    done
+
+    info "── server/ ──"
+    while IFS= read -r pkg; do
+        stow_pkg "$action" server "$pkg" || true
+    done < <(list_packages server)
+}
+
 for_all_packages() {
     local action=$1
+    if [[ "$(detect_profile)" == "server" ]]; then
+        for_server_packages "$action"
+        return
+    fi
     local platform
     platform=$(detect_platform)
     info "Platform: $platform$(is_wsl && echo ' (WSL)')"
@@ -107,6 +174,18 @@ unstow_dotfiles() { require_stow; for_all_packages --delete; success "Unstow com
 restow_dotfiles() { require_stow; for_all_packages --restow; success "Restow complete"; }
 
 list_all() {
+    if [[ "$(detect_profile)" == "server" ]]; then
+        echo "Profile: server"
+        echo "Shared packages:"
+        list_packages shared | while read -r p; do in_list "$p" "${SERVER_SKIP_SHARED[@]}" || echo "  $p"; done
+        echo ""
+        echo "linux packages:"
+        printf '  %s\n' "${SERVER_LINUX_PKGS[@]}"
+        echo ""
+        echo "server packages:"
+        list_packages server | sed 's/^/  /'
+        return
+    fi
     local platform
     platform=$(detect_platform)
     echo "Shared packages:"
@@ -283,7 +362,8 @@ usage() {
 Usage: $0 [command]
 
 Commands:
-  install   Stow shared/* + {platform}/* (default)
+  install   Stow shared/* + {platform}/* (default; autodetects the server profile)
+  server    Force the headless server profile (Ubuntu: run server/bootstrap-ubuntu.sh first)
   unstow    Remove all symlinks
   restow    Reinstall symlinks (useful after pulls)
   list      Show packages that would be stowed on this platform
@@ -292,7 +372,7 @@ Commands:
   et        Set up Eternal Terminal server (Linux): clipboard-friendly mosh alt
   help      Show this help
 
-Platform detected: $(detect_platform)$(is_wsl && echo ' (WSL)')
+Platform detected: $(detect_platform)$(is_wsl && echo ' (WSL)') · profile: $(detect_profile)
 Dotfiles root: $DOTFILES
 EOF
 }
@@ -300,6 +380,7 @@ EOF
 # ── Main ────────────────────────────────────────────────────
 case "${1:-install}" in
     install)  install_dotfiles ;;
+    server)   DOTFILES_PROFILE=server install_dotfiles ;;
     unstow)   unstow_dotfiles ;;
     restow)   restow_dotfiles ;;
     list)     list_all ;;
