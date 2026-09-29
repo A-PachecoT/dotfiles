@@ -14,6 +14,8 @@ pero para todo el equipo. El disparador original fue
 > (`ssh hq` → `100.106.190.15`), tapa cerrada no suspende, Ubuntu Pro + Livepatch.
 > **WorkAdventure desplegado 2026-09-24 en https://office.cofoundy.dev** (ver
 > [`workadventure.md`](./workadventure.md)). `verificá: ssh hq 'cd ~/workadventure && docker compose ps'`
+> **Staging de Fovente y runners de CI desde 2026-09-24; host de agentes desde 2026-09-29**
+> (Claude Code + herdr, alias `hq`; faltan secretos y MCP). Detalle en el runbook del handbook.
 
 ## Historial de la decisión (cambió dos veces — leé esto antes de re-proponer cloud)
 
@@ -120,7 +122,8 @@ Ethernet `enp3s0` (Killer E2600) en la LAN de casa `192.168.1.103` (DHCP).
    saturado a 2.4x. Los timeouts flaky de `pets-marketplace` bajo concurrencia 2 son
    inanición de CPU; esto los ataca en la raíz.
 4. **Nodo Tailscale del mesh** — acceso desde cualquier caja del equipo.
-5. **Agentes de Hermes** — correr agentes persistentes fuera de la máquina de André.
+5. **Agentes de Hermes** — correr agentes persistentes fuera de la máquina de André. Primer paso hecho
+   2026-09-29: hq ya corre Claude Code + herdr (alias `hq`); Hermes todavía no.
 
 ## Próximos pasos
 

@@ -2,7 +2,10 @@
 
 > Establecido 2026-07-14. SSH full-mesh sobre Tailscale entre las 4 cajas de
 > André. **Workers** (donde corre el cómputo): Mac + Arch. **Terminales de
-> acceso**: celu + tablet (Termux).
+> acceso**: celu + tablet (Termux). Desde 2026-09-29 se suma **cofoundy-hq**
+> como tercer worker (homelab compartido; runbook:
+> `~/cofoundy/handbook/infrastructure/cofoundy-hq.md`). La matriz 12/12 de abajo
+> es de las 4 cajas originales; hq no entró a esa medición.
 
 ## Topología
 
@@ -10,6 +13,7 @@
 |---|---|---|---|---|
 | Mac (`mac`) | `100.73.150.52` | macOS | worker — herdr, agentes, dev | :22 (Remote Login) |
 | Arch (`arch`/`razer`) | `100.84.249.22` | Arch Linux | worker — herdr, Hermes agents | :22 (systemd) |
+| cofoundy-hq (`hq`) | `100.106.190.15` | Ubuntu Server 26.04 | worker compartido (desde 2026-09-29) — herdr, Claude Code; también staging de Fovente, runners de CI y la ofi | :22 (systemd) |
 | Celu (`celu`/`redmi`) | `100.113.92.48` | Android/Termux | terminal + endpoint termux-api | :8022 |
 | Tablet (`tablet`/`tab`) | `100.108.156.30` | Android/Termux | terminal + endpoint termux-api | :8022 |
 
@@ -26,6 +30,7 @@ Misma memoria muscular en las 4:
 |---|---|---|
 | `h` | herdr de la **Mac** | `shared/zsh/mesh.zsh` (workers) / `~/.bashrc` (Termux) |
 | `ha` | herdr del **Arch** | ídem |
+| `hq` | herdr de **cofoundy-hq** | ídem (commit `20af2ce`) |
 
 Local → binario directo; remoto → `et <worker> -c herdr`.
 
@@ -36,7 +41,8 @@ Local → binario directo; remoto → `et <worker> -c herdr`.
   moría con mosh y revivió con SSH puro (validado 2026-07-14).
 - **ET (Eternal Terminal)** usa una capa "Eternal TCP": passthrough fiel
   como SSH (touch ✓) + reconexión automática como mosh. Lo mejor de ambos.
-- etserver: Mac vía `brew services` (puerto 2022), Arch vía systemd.
+- etserver: Mac vía `brew services` (puerto 2022), Arch vía systemd, hq vía `et.service`
+  (PPA `jgmath2000/et`, puerto 2022).
 
 ## Persistencia de sesiones
 

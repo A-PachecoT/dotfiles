@@ -174,14 +174,15 @@ Para entrar de un dispositivo a otro necesitas SSH. Pero SSH puro se corta si ca
 
 ---pagebreak---
 
-# Parte D — Los aliases: `h`, `ha`, `mu`
+# Parte D — Los aliases: `h`, `ha`, `hq`, `mu`
 
-Toda la magia se reduce a 3 aliases con la **misma semántica en las 4 cajas**. Local → binario directo; remoto → vía ET.
+Toda la magia se reduce a 4 aliases con la **misma semántica en todas las cajas**. Local → binario directo; remoto → vía ET.
 
 | Alias | Hace | Desde la Mac | Desde el celu |
 |---|---|---|---|
 | `h` | Herdr de la **Mac** | `herdr` (directo) | `et styreep@100.73.150.52 -c herdr` |
 | `ha` | Herdr del **Arch** | `et andre@100.84.249.22 -c herdr` | `et andre@100.84.249.22 -c herdr` |
+| `hq` | Herdr de **cofoundy-hq** (servidor compartido, desde 2026-09-29) | `et andre@100.106.190.15 -c herdr` | `et andre@100.106.190.15 -c herdr` |
 | `mu` | Fan-out: sincroniza ambos workers | script | (solo en workers) |
 
 En los workers, esto vive en `shared/zsh/mesh.zsh` (parte de mis dotfiles):
@@ -189,15 +190,18 @@ En los workers, esto vive en `shared/zsh/mesh.zsh` (parte de mis dotfiles):
 ```bash
 MESH_MAC="styreep@100.73.150.52"    # Tailscale
 MESH_ARCH="andre@100.84.249.22"     # Tailscale
+MESH_HQ="andre@100.106.190.15"      # Tailscale (cofoundy-hq)
 
 case "$(uname -s)" in
   Darwin)   # Mac
     alias h="herdr"
     alias ha="et $MESH_ARCH -c herdr"
+    alias hq="et $MESH_HQ -c herdr"
     ;;
   Linux)    # Arch
     alias h="et $MESH_MAC -c herdr"
     alias ha="herdr"
+    alias hq="et $MESH_HQ -c herdr"
     ;;
 esac
 
@@ -205,7 +209,7 @@ esac
 alias mu="$HOME/dotfiles/scripts/mesh-update.sh"
 ```
 
-En los Termux (celu/tablet), los mismos `h`/`ha` se definen en el `~/.bashrc` (el bootstrap lo hace por ti, ver Parte E).
+En los Termux (celu/tablet), los mismos `h`/`ha`/`hq` se definen en el `~/.bashrc` (el bootstrap lo hace por ti, ver Parte E).
 
 ## `mu` — mantener los workers sincronizados
 
@@ -272,6 +276,7 @@ cat > ~/.bashrc <<EOF
 pgrep -x sshd >/dev/null || sshd
 alias h="et styreep@$MESH_MAC_IP -c herdr"
 alias ha="et andre@$MESH_ARCH_IP -c herdr"
+alias hq="et andre@100.106.190.15 -c herdr"
 EOF
 
 sshd 2>/dev/null || true
@@ -362,7 +367,7 @@ Para tener exactamente mi setup, en orden:
 - [ ] En cada worker: **SSH server** activo (Remote Login en Mac, sshd en Linux)
 - [ ] En cada worker: **ET** instalado y `etserver` corriendo
 - [ ] En cada worker: **Herdr** instalado (`~/.local/bin/herdr`) + `config.toml`
-- [ ] Aliases `h`/`ha`/`mu` en el shell de los workers (`mesh.zsh`)
+- [ ] Aliases `h`/`ha`/`hq`/`mu` en el shell de los workers (`mesh.zsh`)
 - [ ] En Android: **Termux** (F-Droid) + `pkg install openssh mosh et termux-api`
 - [ ] Bootstrap corrido en cada Android → key generada, `~/.ssh/config` + `~/.bashrc` escritos
 - [ ] Pubkey de cada Android autorizada en **ambos** workers
