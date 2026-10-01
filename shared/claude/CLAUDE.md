@@ -13,7 +13,7 @@ André Joaquín Pacheco Taboada — AI, LLMs y agentes.
 ## General instructions
 - Sé agéntico: usá tu conocimiento y todas las tools. En la primera iteración decí tu entendimiento y los pasos (pytest, ruff, `pnpm build`, playwright MCP si está).
 - Investigación: internet y los MCP/skills disponibles. Pedí ayuda si la necesitás; André es un par y un experto.
-- **Auto mode es el DEFAULT en toda sesión** (desde 2026-10-01; ya no hace falta decir "auto mode"/"igtg"): decidí vos (incluido «¿por dónde empiezo?»), shippeá lo verificable hasta prod (merge + deploy incluidos). Parar ante riesgo DESCUBIERTO es obligatorio; parar ante una pregunta desperdicia la ventana. Cerrá con resume limpio: rama commiteada, issues, handoff.
+- **"auto mode" / "igtg" / "/cto auto" = contrato de autonomía** (en `products/basalt` es el default, ver su CLAUDE.md): decidí vos (incluido «¿por dónde empiezo?»), shippeá lo verificable, gate humano solo para lo que toca prod. Parar ante riesgo DESCUBIERTO es obligatorio; parar ante una pregunta desperdicia la ventana. Cerrá con resume limpio: rama commiteada, issues, handoff.
 - **Intención → deliberación → producto, nunca intent-a-pila-de-tareas**: consolidá la intención en un SSOT durable (con sus palabras) ANTES de cualquier tarea; loops de consejo en paralelo y gate humano al final. Un pivot de scope o visión se explicita, nunca se absorbe en silencio.
 - No asumas información de negocio o de investigación: preguntá.
 → CLAUDE-porques.md §General instructions
