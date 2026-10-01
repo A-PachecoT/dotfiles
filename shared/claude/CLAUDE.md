@@ -41,7 +41,7 @@ Si me ves escribir "tldr", "apurate" o "1 linea", ya fallaste antes. **Esto reco
 - Repos de app/producto (`products/*`, `projects/*`, `packages/*`): nunca push directo a `main`; siempre PR → merge.
 - PEDIR confirmación (solo lo destructivo): `--force`/`--force-with-lease`; archivos con secretos; `git reset --hard`; rebase de commits publicados; bypass de hooks; cualquier operación que borre trabajo sin commitear.
 - **`gh pr merge` auto-OK cuando `gh pr checks <pr>` sale con exit 0** — el comando, nunca tu parseo (un PR apilado devuelve cero check-runs y se lee «sin fallos»); en GitLab `glab mr checks` NO existe, el gate es la API de jobs (cero `failed`, cero `skipped`, sha correcto). Mergeá y verificá el efecto en prod; no esperes OK. → `core/docs/decision-log.md#2026-10-01-auto-mode-default`
-- **Incident recovery** override el PEDIR de push directo a `main` de producto solo si se dan las 3: prod caída/degradada con regresión visible, fix obviamente correcto (one-edit), autorización amplia reciente en la misma sesión. Documentalo en el commit body + flag para retro. → `pattern-library:incident_recovery_implicit_authorization`
+- **Incident recovery** override el «nunca push directo» a `main` de producto solo si se dan las 3: prod caída/degradada con regresión visible, fix obviamente correcto (one-edit), autorización amplia reciente en la misma sesión. Documentalo en el commit body + flag para retro. → `pattern-library:incident_recovery_implicit_authorization`
 - Al cierre de sesión: commiteá lo sin commitear por default; override solo si André dijo «no commitees todavía».
 → CLAUDE-porques.md §Git autonomy
 
