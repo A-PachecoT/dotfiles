@@ -1,7 +1,7 @@
 # André's Artificial General Intelligence
 
 > SSOT: `~/dotfiles/shared/claude/CLAUDE.md`, symlink en `~/.claude/CLAUDE.md` en todas las cajas; editá cualquiera de los dos. El hook `ssot-sync` pullea al inicio y avisa si dejaste ediciones sin commitear; tras editar, commit+push dotfiles (auto-OK). [macOS]/[Arch] marcan lo que aplica solo a esa caja.
-> Este archivo se auto-carga en CADA sesión: regla en una línea, el porqué va en `~/dotfiles/shared/claude/CLAUDE-porques.md` (mismo título). Presupuesto: ≤9k chars (medido 2026-09-14: 8,6k; antes 14,4k).
+> Este archivo se auto-carga en CADA sesión: regla en una línea, el porqué va en `~/dotfiles/shared/claude/CLAUDE-porques.md` (mismo título). Presupuesto: ≤9k chars (medido 2026-10-03: 8,8k; antes 9,4k).
 
 ## User data
 André Joaquín Pacheco Taboada — AI, LLMs y agentes.
@@ -28,24 +28,22 @@ Si me ves escribir "tldr", "apurate" o "1 linea", ya fallaste antes. **Esto reco
 - Español peruano: tuteo, NUNCA voseo ("dime" no "decime", "puedes" no "podés"). Vale para toda comunicación y archivos en español.
 
 ## Gates y exit codes
-**Nunca pipees un gate** (`make check`, `pytest`, `gh pr checks`, `npm run build`) a `tail`/`grep`/`head`: el pipe devuelve el status del filtro y el rojo se cuela. Corré el gate solo, leé su exit code, filtrá después.
+Un gate (`pytest`, `make check`, `gh pr checks`, build) se corre solo y se lee su exit code; pipeado a `tail`/`grep` lo bloquea `guard-gate-pipe`.
 
 ## Entornos y checkouts
 - Cada repo declara sus entornos en `{repo}/.claude/rules/entornos.md`; leelo antes de decir «desplegado», hacer QA o promover. Si no existe, decilo — no inventes URL.
-- Lo auto-cargado es del CHECKOUT, no del repo: al entrar a un worktree, `git rev-list --count HEAD..origin/develop` (o `main`); atrás y sin trabajo propio → `git merge --ff-only`. → `core/docs/decision-log.md#2026-09-14-checkout-viejo-reglas-viejas`
-- Worktrees nuevos van en `~/.herdr/worktrees/<repo>/<nombre>`, NUNCA en el scratchpad ni en `/tmp` (en Arch es tmpfs: RAM); al terminar, `git worktree remove`. → CLAUDE-porques.md §Worktrees
 - Un worktree fuera de `~/cofoundy/` (`~/.herdr/worktrees`, `/tmp`) NO carga `~/cofoundy/CLAUDE.md`: las reglas del workspace son invisibles ahí. → `core/docs/decision-log.md#2026-09-14-workspace-claude-md-fuera-de-la-cadena`
 
 ## Git autonomy (override del default de Claude Code)
 - Auto-OK sin preguntar: commits y push a ramas feature/working; `gh pr create`; commit y push directo a `main` en repos scaffolding/SSOT (`core/`, `handbook/`, `deals/`, `leads/`, `legal/`, `contabilidad/`, `plugins/*`, docs/config).
-- PEDIR confirmación: `--force`/`--force-with-lease`; push directo a `main` en repos de app/producto (`products/*`, `projects/*`, `packages/*` → PR); archivos con secretos; `git reset --hard`; rebase de commits publicados; `gh pr merge`; bypass de hooks; cualquier operación que borre trabajo sin commitear.
-- **`gh pr merge` auto-OK solo con las 2**: (a) `gh pr checks <pr>` sale con exit 0 — el comando, nunca tu parseo (un PR apilado devuelve cero check-runs y se lee «sin fallos»); en GitLab `glab mr checks` NO existe, el gate es la API de jobs (cero `failed`, cero `skipped`, sha correcto); (b) el PR no prende ninguna capacidad autónoma por default (`ai-agent-autonomy.md` §deferred blast radius; `agent-decision.py derive` lista candidatos). Que ningún floor haya disparado y que haya `agent-decisions.jsonl` NO son condiciones. En `products/basalt` basta (a).
+- PEDIR confirmación: archivos con secretos; rebase de commits publicados; `gh pr merge` fuera del caso de abajo; cualquier operación que borre trabajo sin commitear. Force push, reset duro, push directo a `main` de producto (`products/*`, `projects/*`, `packages/*` → PR) y bypass de hooks ya los bloquean los hooks del toolkit.
+- **`gh pr merge` auto-OK solo con las 2**: (a) checks en verde — en GitHub lo verifica el hook `guard-pr-merge`; en GitLab el gate es la API de jobs (cero `failed`, cero `skipped`, sha correcto); (b) el PR no prende ninguna capacidad autónoma por default (`ai-agent-autonomy.md` §deferred blast radius; `agent-decision.py derive` lista candidatos). Que ningún floor haya disparado y que haya `agent-decisions.jsonl` NO son condiciones. En `products/basalt` basta (a).
 - **Incident recovery** override el PEDIR de push directo a `main` de producto solo si se dan las 3: prod caída/degradada con regresión visible, fix obviamente correcto (one-edit), autorización amplia reciente en la misma sesión. Documentalo en el commit body + flag para retro. → `pattern-library:incident_recovery_implicit_authorization`
 - Al cierre de sesión: commiteá lo sin commitear por default; override solo si André dijo «no commitees todavía».
 → CLAUDE-porques.md §Git autonomy
 
 ## Memoria = SSOT versionado, nunca auto-memoria
-- **Auto-memoria de Claude Code APAGADA** (`autoMemoryEnabled: false`). Nunca escribas en `~/.claude/projects/*/memory/`; una lección entra por `/retro` a su SSOT (repo CLAUDE.md/brain + decision-log, skill, handbook). → `core/docs/decision-log.md#2026-09-28-sin-auto-memoria`
+- Una lección entra por `/retro` a su SSOT (repo CLAUDE.md/brain + decision-log, skill, handbook); escribir en la auto-memoria lo bloquea un hook. → `core/docs/decision-log.md#2026-09-28-sin-auto-memoria`
 - Regla en 1 línea; el porqué va a `→ decision-log#anchor`, no en prosa. → `handbook/governance/PRD-context-economy-v1.md`
 - **Memoria y docs = punteros e invariantes, NUNCA estado de sistemas mutables** (PR abierto, versión N, flag, «pendiente»). Si el estado importa: fecha absoluta + receta (`verificá: <cmd>`). → `cantera/memory-doctor/rubric.md` · `core/docs/decision-log.md#2026-09-04-estado-mutable-en-docs`
 
