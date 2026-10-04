@@ -50,6 +50,11 @@ Host celu
 	Port 8022
 	ServerAliveInterval 60
 
+Host hq
+	HostName 100.106.190.15
+	User andre
+	ServerAliveInterval 60
+
 Host tablet
 	HostName $MESH_TABLET_IP
 	Port 8022
@@ -63,7 +68,7 @@ chmod 600 ~/.ssh/config
 cat > ~/.bashrc <<EOF
 # autostart sshd al abrir Termux (puerto 8022)
 pgrep -x sshd >/dev/null || sshd
-# mesh: h = herdr Mac | ha = herdr Arch (mismos aliases en las 4 cajas)
+# mesh: h = herdr Mac | ha = herdr Arch | hq = herdr cofoundy-hq (mismos aliases en todo el mesh)
 alias h="et styreep@$MESH_MAC_IP -c herdr"
 alias ha="et andre@$MESH_ARCH_IP -c herdr"
 alias hq="et andre@100.106.190.15 -c herdr"
@@ -72,6 +77,8 @@ EOF
 sshd 2>/dev/null || true
 echo "=================================================="
 echo "✓ dispositivo listo — autoriza esta key en los workers:"
-echo "  (Mac y Arch: append a ~/.ssh/authorized_keys)"
+echo "  agrégala a ~/dotfiles/scripts/mesh-clients.pub (commit + push) y corre"
+echo "  scripts/new-worker.sh <host> <alias> contra cada worker (Arch, hq…);"
+echo "  en la Mac: append a ~/.ssh/authorized_keys"
 cat ~/.ssh/id_ed25519.pub
 echo "=================================================="

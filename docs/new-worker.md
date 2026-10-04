@@ -39,9 +39,9 @@ preflight aborta sin cambiar nada si falta cualquiera de estas.
 | Paso | Qué hace | Verificación por efecto |
 |---|---|---|
 | a · preflight | ssh sin prompt, SO, sudo, IP de Tailscale | aborta si no es Ubuntu, si ssh o sudo piden algo, o si no hay IP `100.x` |
-| b · dotfiles | clone https, `bootstrap-ubuntu.sh`, `./install.sh server`; restaura `shared/git/.gitconfig` si gh lo ensució | dpkg de los 22 paquetes + `stow -n` sin links pendientes; `ssh <host> 'echo $PATH'` **no interactivo** contiene `~/.local/bin` |
+| b · dotfiles | clone https, `bootstrap-ubuntu.sh`, `./install.sh server`, login shell → zsh (`chsh`); restaura `shared/git/.gitconfig` si gh lo ensució | dpkg de los 22 paquetes + `stow -n` sin links pendientes; `getent passwd` = zsh; `ssh <host> 'echo $PATH'` **no interactivo** contiene `~/.local/bin` |
 | c · herdr | copia `~/.local/bin/herdr` si falta o es más viejo | `herdr --version` en el worker = el local |
-| d · ET | PPA `jgmath2000/et`, `et.service`, terminfo `xterm-ghostty` | puerto 2022 alcanzable **desde la caja fuente** |
+| d · ET + acceso | PPA `jgmath2000/et`, `et.service`, terminfo `xterm-ghostty`; pubkeys de `scripts/mesh-clients.pub` (Mac, Arch, celu, tablet) en `authorized_keys` | puerto 2022 alcanzable **desde la caja fuente**; cada key presente (se compara el cuerpo, no el comentario) |
 | e · memoria | swapfile hasta que swap ≥ RAM (en fstab) + systemd-oomd con los drop-ins de hq | `systemctl show`: `-.slice` `ManagedOOMSwap=kill`, `user@UID` presión `kill` con límite ≠ 0 |
 | f · herramientas | Claude Code (installer oficial), `gh` (repo cli.github.com fijado a 1001), `bw` (npm en `~/.local`) + `bw config server` | `--version` de cada uno; `bw config server` = `https://vault.cofoundy.dev` |
 | g · workspace | credential helper per-box, clones https de los repos de la fuente, `~/cofoundy/CLAUDE.md`, `./install.sh claude`, marketplaces, plugins, settings no secretos + `autoMemoryEnabled: false` | N/N repos, marketplaces y plugins; hooks renderizados = los de `settings.json`; `~/.herdr/CLAUDE.md` enlazado |
@@ -91,6 +91,14 @@ con el equipo, su runbook va al handbook (como `cofoundy-hq.md`).
 - **`x | grep -q` con `pipefail` da falsos negativos** (141 por SIGPIPE cuando grep sale antes que
   `x`). Le pasó al propio script en su primera corrida: vio un marketplace como ausente y lo re-agregó
   (no-op). Por eso los scripts remotos corren sin `pipefail` y comparan con here-strings.
+
+- **Login shell bash = worker pelado.** hq quedó con bash: `cl`, `y`, `z`, el prompt y los aliases
+  del mesh solo existen en el zsh del perfil server, así que `et hq` y los panes de herdr llegaban sin
+  nada (2026-10-04). El paso b hace `chsh`, y `shared/herdr/.../config.toml` fija
+  `[terminal] default_shell = "/bin/zsh"` porque un herdr server ya corriendo hereda el `$SHELL` viejo.
+- **Un worker solo conoce las keys que le diste.** hq tenía las de Mac y Arch pero no las de Termux,
+  así que `hq` desde el celu daba `Permission denied` (2026-10-04). Dispositivo nuevo → su pubkey en
+  `scripts/mesh-clients.pub` y re-correr el script contra cada worker.
 
 ## Mantenimiento
 

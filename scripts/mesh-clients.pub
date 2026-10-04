@@ -1,0 +1,7 @@
+# Clientes del mesh: pubkeys que TODO worker autoriza (new-worker.sh paso d).
+# Una key por dispositivo (revocable sola). Dispositivo nuevo → su pubkey acá + re-correr
+# new-worker.sh contra cada worker. Públicas por diseño: no son secretos.
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIcMsTYqLoyRnH5nOXfZduGkPoPW6wltE/fJdXa+U0O8 mac
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINGMBnMfp5MW2SRNSIKLwaL5pNbzjAOYFJLmctL06AQM arch
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMNQvqs5iTD1dNfm+Fp46mihlY4FpEE1JV4jp7NQ8lIX u0_a372@localhost (termux: celu o tablet)
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAWN8Haw1qS7zlK5fhhE36laikF9OQDrVyLaNAPuJYnA u0_a257@localhost (termux: celu o tablet)

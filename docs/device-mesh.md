@@ -60,8 +60,9 @@ Claude Code resume su propia conversación (native agent session restore).
 - **Worker nuevo (Linux)**: `scripts/new-worker.sh <ssh-host> <alias>` — ver
   `docs/new-worker.md`. Deja el alias en `mesh.zsh` y en `termux-bootstrap.sh`.
 - **Key nueva = dispositivo nuevo**: correr `scripts/termux-bootstrap.sh`
-  (Android) y autorizar su pubkey en ambos workers. Nunca copiar keys entre
-  dispositivos.
+  (Android), sumar su pubkey a `scripts/mesh-clients.pub` y re-correr
+  `new-worker.sh` contra cada worker Linux (en la Mac, append a mano). Nunca
+  copiar keys entre dispositivos.
 - **Android mata procesos**: Termux Y Tailscale necesitan batería "Sin
   restricciones" en cada dispositivo Android. Sin eso el mesh se cae al
   apagarse la pantalla.

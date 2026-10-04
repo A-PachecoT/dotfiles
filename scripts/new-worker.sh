@@ -40,6 +40,7 @@ DOTFILES="$HOME/dotfiles"
 WS="$HOME/cofoundy"
 MESH_FILE="$DOTFILES/shared/zsh/mesh.zsh"
 TERMUX_FILE="$DOTFILES/scripts/termux-bootstrap.sh"
+MESH_KEYS_FILE="$DOTFILES/scripts/mesh-clients.pub"
 ET_PPA="ppa:jgmath2000/et"
 VAULT_URL="https://vault.cofoundy.dev"
 
@@ -197,6 +198,13 @@ while IFS= read -r l; do
 done < <(DOTFILES_PROFILE=server "$D/install.sh" list 2>/dev/null)
 if [ "$pending" -gt 0 ]; then run "./install.sh server ($pending links pendientes)" "$D/install.sh" server
 else say OK "perfil server stoweado (0 links pendientes)"; fi
+
+# Login shell = zsh: cl, y, z, el prompt y los aliases del mesh viven solo en el zsh del perfil
+# server. Con bash, `et <worker>` y los panes de herdr llegan pelados (hq, 2026-10-04).
+ZSH_BIN=$(command -v zsh)
+if [ -z "$ZSH_BIN" ]; then say FAIL "zsh no está instalado (lo pone bootstrap-ubuntu.sh)"
+elif [ "$(getent passwd "$USER" | cut -d: -f7)" = "$ZSH_BIN" ]; then say OK "login shell $ZSH_BIN"
+else act "login shell → $ZSH_BIN (chsh)" sudo chsh -s "$ZSH_BIN" "$USER"; fi
 EOS
 # Verificación por efecto: un ssh NO interactivo sin tocar PATH ve ~/.local/bin.
 if [ "$DRY" = 0 ]; then
@@ -228,7 +236,7 @@ else
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
-step d "Eternal Terminal (PPA jgmath2000/et + et.service)"
+step d "Eternal Terminal (PPA jgmath2000/et + et.service) · pubkeys de los clientes del mesh"
 # ═════════════════════════════════════════════════════════════════════════════
 remote "$DRY" "$ET_PPA" <<'EOS' | relay
 PPA=$1
@@ -253,6 +261,27 @@ if [ "$DRY" = 0 ]; then
   elif (exec 3<>"/dev/tcp/$W_TSIP/2022") 2>/dev/null; then ok "puerto 2022 alcanzable desde esta caja ($W_TSIP)"
   else fail "no llego a $W_TSIP:2022 (etserver)"; fi
 fi
+
+# Clientes del mesh (Mac, Arch, celu, tablet): sin su pubkey, `hq` desde Termux da
+# Permission denied aunque ET esté arriba (hq, 2026-10-04). SSOT: scripts/mesh-clients.pub.
+# Por PRELUDE y no como args: ssh re-parte los args en el remoto y el comentario de una key rompe bash.
+PRELUDE=$(printf 'MESH_KEYS=%q\n' "$(grep -vE '^[[:space:]]*(#|$)' "$MESH_KEYS_FILE")")
+remote "$DRY" <<'EOS' | relay
+AK="$HOME/.ssh/authorized_keys"
+mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+have=$(awk '{for (i=1;i<NF;i++) if ($i ~ /^ssh-|^ecdsa-/) {print $(i+1); break}}' "$AK" 2>/dev/null)
+n=0 total=0
+while IFS= read -r k; do
+  [ -n "$k" ] || continue; total=$((total+1))
+  body=$(printf '%s' "$k" | awk '{print $2}')
+  grep -qxF "$body" <<< "$have" && continue
+  if [ "$DRY" = 1 ]; then say PLAN "autorizar ${k#* * }"; else
+    printf '%s\n' "$k" >> "$AK" && chmod 600 "$AK" && say CHANGED "autorizada ${k#* * }"; fi
+  n=$((n+1))
+done <<< "$MESH_KEYS"
+[ "$n" = 0 ] && say OK "authorized_keys con las $total pubkeys del mesh"
+EOS
+PRELUDE=""
 
 # ═════════════════════════════════════════════════════════════════════════════
 step e "memoria (swap ≥ RAM + systemd-oomd como en hq)"

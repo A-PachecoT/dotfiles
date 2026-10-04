@@ -8,7 +8,7 @@
 #   nvim (LazyVim) → neovim ripgrep fd-find gcc/make (treesitter) unzip curl nodejs npm
 #   yazi (shared/yazi, tmux-workflow `y`/`tw`) → not in apt: GitHub release binary
 #   stow jq → install.sh itself
-# Idempotent. Does NOT change the login shell (see the optional step printed at the end).
+# Idempotent. Makes zsh the login shell: cl/y/z, the prompt and the mesh aliases only exist in zsh.
 set -euo pipefail
 DOTFILES="$(cd "$(dirname "$0")/.." && pwd)"
 info() { printf '\033[0;34m[INFO]\033[0m %s\n' "$1"; }
@@ -58,9 +58,8 @@ ok "~/.local/bin on PATH for non-interactive ssh"
 
 "$DOTFILES/install.sh" server
 
-cat <<MSG
-
-Optional (not done automatically): make zsh the login shell
-  sudo chsh -s "\$(command -v zsh)" "\$USER"
-Until then, run \`zsh\` by hand; the stowed ~/.zshenv is only read by zsh.
-MSG
+ZSH_BIN="$(command -v zsh)"
+if [[ "$(getent passwd "$USER" | cut -d: -f7)" != "$ZSH_BIN" ]]; then
+  sudo chsh -s "$ZSH_BIN" "$USER"
+fi
+ok "login shell $ZSH_BIN (new logins; current shells keep bash until you reconnect)"
