@@ -70,3 +70,8 @@ agent_panel_sort = "priority"
 # el lado del server. Ver https://github.com/ogulcancelik/herdr-browser
 [experimental]
 kitty_graphics = true
+
+# Shell de los panes explícito: sin esto herdr hereda el $SHELL del proceso server,
+# y en cofoundy-hq el server arrancó con bash → sin cl/y/z (2026-10-04). /bin/zsh existe en Mac, Arch y Ubuntu.
+[terminal]
+default_shell = "/bin/zsh"
