@@ -23,3 +23,9 @@ André pidió un widget de SketchyBar «tipo el de Spotify» que fuera un task m
 - Los items de sketchybar están stoweados archivo por archivo: un archivo nuevo necesita `stow -R`. Además, sketchybar y Hammerspoon arrancan con PATH mínimo, así que el shebang `env uv` falla sin un wrapper que exporte el PATH.
 - `mouse.exited.global` cierra la popup apenas se abre si el mouse no está encima: para capturarla en pruebas, screenshot inmediato y en el display correcto (`screencapture -D 2`).
 - `~/.claude-pending/` tenía 44 473 archivos `unknown_unknown`: ese sistema está muerto; tk lo reemplaza para herdr.
+
+## v1 — myturn (misma sesión)
+- André revisó el flujo del MVP: «no creo que hayas pensado bien el user flow». El dry run expuso 5 huecos: nadie enlaza a mano, «tu turno» se queda pegado, una sola «tarea de ahora» no calza con 5 agentes en paralelo, avisa en silencio y no hay teclado.
+- Rediseño: la unidad es la sesión de herdr. El hook `myturn track` registra cada agente con el título que Claude Code ya pone (Haiku descartado para títulos: era trabajo duplicado). Solo interrumpe lo priorizado; «visto» = pane enfocado con la ventana de herdr al frente después de la última transición; sonido 1× por transición; ⌥T paleta, ⌥G salto.
+- Nombre con la skill `naming`: 5 scouts por territorio de metáfora (crook, wilco, stint, bellhop…). André: «no tienen nada que ver, debe ser fácil de recordar» → literal: **myturn**.
+- Learnings: `pypi.org/project/<x>/` devuelve 200 para cualquier nombre (protección anti-bots); usa `/pypi/<x>/json`. En US International-PC ⌥N es la ñ: ojo con los hotkeys de Option. `terminal_title_stripped` de herdr NO quita el glifo de estado de Claude Code (✳/◐). Para descartar un `claude -p` que corre dentro de un pane, el hook compara su `session_id` con el `agent_session` del pane en herdr.

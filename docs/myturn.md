@@ -97,6 +97,12 @@ por context switching me olvidé de volver a ellos. Además ahora tengo como 60 
   revisión del flujo con André encontró los 5 huecos que motivaron esta versión (enlace manual, «tu turno»
   pegado, una sola tarea de ahora, aviso silencioso, sin teclado).
 
+- 2026-10-05, v1: 12 smoke tests (visto/pausa/nueva transición, foco sin ventana al frente no cuenta, sin prio
+  nunca interrumpe, orden de la cola, agente cerrado → pendientes, hook registra 1× y descarta sesiones ajenas,
+  hook fuera de herdr = no-op, hook nunca rompe, poda de sesiones, merge intercalado) + ruff. En vivo: el hook no
+  imprime nada; `import` registró 66 sesiones en el Mac y 16 en el Arch; un agente idle priorizado entró a
+  «te espera», sonó una vez (`notified`) y la popup lo mostró en el monitor externo.
+
 ## Roadmap
 
 - **v1 (esta):** registro automático por hook, cola «te esperan» con visto, ⌥G, sonido por transición, paleta ⌥T
