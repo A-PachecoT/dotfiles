@@ -17,7 +17,7 @@ SSOT: `~/dotfiles/docs/myturn.md`. CLI: `myturn --help`.
 
 | André dice | Corre |
 |---|---|
-| «esto es prioridad» / «avísame cuando termines» / te deja trabajando en algo del día | `myturn prio 1` — prioriza ESTA sesión (el agente enfocado en herdr). `myturn prio 2` = importante; `myturn prio 0` = quitar |
+| «esto es prioridad» / «avísame cuando termines» / te deja trabajando en algo del día | `myturn prio 1 --id $(myturn ls --json \| …)` no hace falta: corre `myturn prio 1` — prioriza el agente enfocado en herdr (esta sesión cuando André te habla). `myturn prio 0` = quitar. André lo hace él mismo con ⌥T |
 | «anota X» / «agrégalo a mis pendientes» (algo que no es esta sesión) | `myturn add --raw "X"` — la IA saca fecha y prioridad en segundo plano. Si él dio prioridad o fecha, pásalas: `myturn add "X" --prio 1 --due 2026-10-06` |
 | «qué me espera» / «qué tengo» | `myturn ls` |
 | «listo, ciérrala» | `myturn done` (esta sesión) o `myturn done --id <id>` — solo cuando André lo confirma; terminar tu turno NO cierra la tarea |
