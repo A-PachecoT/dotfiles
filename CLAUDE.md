@@ -119,7 +119,22 @@ system-audit --full   # + all processes >1% CPU + uptime
 4. Close unused apps (Granola, PDFgear, etc.)
 5. If swap > 8 GB and uptime > 5 days, consider a reboot
 
-### Claude Pending Notification System
+### myturn — tareas + agentes en la barra (reemplazó al widget de Spotify)
+
+Producto personal de André (candidato a OSS). **SSOT: [docs/myturn.md](docs/myturn.md)** — visión, diseño y
+«Mantener myturn» (loop de desarrollo, despliegue, logs). Antes de tocarlo, léelo entero.
+
+- Un solo CLI: `scripts/myturn` (alias `tk`), tests en `scripts/tests/test_myturn.py`. La UI es el widget:
+  barra (`macos/sketchybar/.../items/myturn.sh`) + panel webview (`macos/hammerspoon/.hammerspoon/myturn{.lua,-panel.html}`).
+- Datos: repo privado `~/tasks` (`events.jsonl` append-only, `merge=union`); **nunca se edita a mano**.
+- Obsidian: el timer `myturn-obsidian` del **Arch** es el único que escribe `BrainFlow/05. System/myturn/Tareas.md`.
+- Hook `myturn track` en `UserPromptSubmit` (settings template): debe quedar **silencioso** (su stdout entra al contexto).
+- Las teclas son de André: ⌥T panel, ⌥G ir al agente que espera. ⌥N no (es la ñ en US International-PC).
+
+### Claude Pending Notification System (⚰️ muerto; myturn lo reemplaza para herdr)
+
+> 2026-10-05: `~/.claude-pending/` tenía 44 473 archivos `unknown_unknown` — no identifica sesiones bajo herdr.
+> Lo que sigue es histórico (tmux). Para «qué agente me espera» usa myturn.
 
 Multi-Claude awareness system for knowing when Claude instances finish or need attention across sessions.
 

@@ -120,6 +120,28 @@ incluidos eventos 📅 de días pasados, así que nada expiraba nunca.
 | Obsidian (BrainFlow) | `Tareas.md` espejo + consulta ```tasks``` en el daily note + importación de `- [ ]` del To-do; `daily_prep.py` y morning-brief (Hermes) parcheados |
 | Vikunja, calendario, celular | fuera de alcance por ahora |
 
+## Mantener myturn
+
+Todo cambio sigue este loop; cierra con los tests en verde, commit + push de dotfiles y la bitácora.
+
+| Tocas | Verifica / despliega |
+|---|---|
+| `scripts/myturn` | `uv run --with pytest pytest scripts/tests/` y `ruff check --select E,F,I,B --line-length 120 scripts/myturn` (gates: córrelos solos, sin pipes). Mac: nada más (el symlink ya apunta al repo). Arch: `ssh andre-arch 'cd ~/dotfiles && git pull --rebase'` |
+| La barra (`items/myturn.sh`, `plugins/myturn.sh`) | `sketchybar --reload`. Archivo nuevo en el paquete → `cd ~/dotfiles/macos && stow -R -t ~ sketchybar` (los links son por archivo) |
+| El panel (`myturn.lua`, `myturn-panel.html`) | recarga Hammerspoon **en segundo plano**: `(perl -e 'alarm 4; exec @ARGV' hs -c 'hs.reload()' >/dev/null 2>&1 &)` — un `hs -c 'hs.reload()'` normal se cuelga. Abrir: `open -g hammerspoon://myturn-panel`. Probar sin clics: `hs -c 'require("myturn").eval([[document.title]])'` → resultado en `~/.cache/myturn/panel.log` |
+| El sync con Obsidian | en el Arch: `myturn obsidian` (una pasada, imprime qué hizo); `journalctl --user -u myturn-obsidian -n 20`; `systemctl --user list-timers myturn-obsidian.timer` |
+| El hook | `echo '{"session_id":"x"}' \| myturn track` no debe imprimir nada |
+| Hermes (`daily_prep.py`, morning-brief) | están en `~/.hermes` del Arch (repo git propio); un cambio ahí se commitea allá y se anota en el pitfall 2026-10-06 del morning-brief |
+
+**Dónde mirar cuando algo no cuadra:** `myturn ls` (estado real), `~/tasks/state.json` (lo último que vio la barra),
+`~/.cache/myturn/seen.json` (transiciones y «visto» por sesión), `~/.cache/myturn/panel.log` (mensajes y errores del
+panel), `~/.cache/myturn/obsidian-last.json` (lo último escrito en Tareas.md).
+
+**Invariantes que no se rompen:** el store es append-only y se deriva ordenando por `ts`; solo el Arch escribe
+`Tareas.md`; nada se borra (archivar/`[>]`); el hook no imprime; la UI no muestra las sesiones que el hook registró sin
+tarea.
+
+
 ## Validación
 
 - 2026-10-05, MVP v0 (lista con enlace manual): 6 smoke tests; captura → IA → git → popup verificados en vivo. Su
