@@ -18,6 +18,11 @@
           {
             "type": "command",
             "command": "__DOTFILES__/scripts/claude-active set"
+          },
+          {
+            "type": "command",
+            "command": "__DOTFILES__/scripts/myturn track",
+            "timeout": 5
           }
         ]
       }
