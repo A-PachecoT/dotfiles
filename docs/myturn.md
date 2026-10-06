@@ -17,8 +17,8 @@ por context switching me olvidé de volver a ellos. Además ahora tengo como 60 
 
 ### Qué es y qué no es
 
-- **Es** una cola de retorno: «estos agentes te esperan, en este orden». Lo secundario: una lista corta de
-  pendientes sueltos (sin agente) que se poda sola.
+- **Es** una cola de retorno: «estos agentes te esperan, en este orden». Un solo concepto en la UI: **mis
+  prioridades**. (Las capturas sueltas sin agente existen en el CLI, `myturn add`, pero no en la UI del v1.)
 - **No es** un gestor de proyectos ni de equipo (eso es Vikunja), ni un orquestador de agentes (eso es herdr y
   `/cto`), ni un lugar donde planificar. Si tienes que abrir myturn para *mantenerlo*, falló.
 
@@ -26,23 +26,25 @@ por context switching me olvidé de volver a ellos. Además ahora tengo como 60 
 
 1. **Lanzas un agente como siempre** (un pane de herdr, escribes el prompt). Un hook de Claude Code lo registra
    solo; el título es el que Claude Code ya le pone a la sesión. Cero ceremonia.
-2. **Marcas lo que importa** con ⌥T → «★ prioridad: <agente enfocado>». Lo no marcado se rastrea en silencio y
-   nunca te interrumpe.
+2. **Marcas lo que importa**: ⌥T sobre el agente que estás mirando → aviso «★ Fix webhook — te aviso cuando
+   termine». ⌥T otra vez lo desmarca («☆ … ya no es prioridad»). Sin menú. Lo no marcado se rastrea en silencio
+   y nunca te interrumpe.
 3. **Te vas a otra cosa.** Cuando un agente prioritario termina o te pregunta algo (idle/blocked) y no lo has visto,
    entra a la cola **te esperan**, suena una vez y la barra se pone verde: `● 2 te esperan: Fix webhook Fovente`.
 4. **⌥G te lleva al siguiente** que te espera (ventana de herdr + pane). Mirarlo cuenta como visto: sale de la
    cola hasta su próximo cambio de estado.
-5. **Terminas**: ⌥T → «✓ hecha», o cierras el pane. Lo que muere solo (sin prioridad, idle >12 h o sesión cerrada)
+5. **Terminas**: ⌥T lo desmarca, o cierras el pane. Lo que muere solo (sin prioridad, idle >12 h o sesión cerrada)
    lo archiva el jardinero; todo es reversible.
 
 ### Principios
 
 1. **La sesión es la unidad.** Una tarea con agente *es* su sesión de Claude (el id de sesión que herdr expone),
-   no un ítem que alguien tiene que mantener enlazado. Las capturas sueltas (⌥T) son el caso secundario.
+   no un ítem que alguien tiene que mantener enlazado.
 2. **Solo interrumpe lo que marcaste.** Prioridad = permiso para interrumpir. El resto existe pero calla.
 3. **Visto apaga la alarma.** Un agente idle que ya miraste no es «te espera»; vuelve a serlo solo con una
    transición nueva (respondiste, trabajó, terminó otra vez).
-4. **Teclado primero.** Dos teclas globales (⌥T paleta, ⌥G siguiente; ⌥N no, en US International-PC es la ñ); el popup de la barra es para mirar, no
+4. **Una tecla, una acción; un clic, siempre lo mismo.** ⌥T marca/desmarca, ⌥G va al siguiente (⌥N no: en US
+   International-PC es la ñ); clic en una fila = ir a ese agente. Nada de menús mixtos. El popup es para mirar, no
    para operar.
 5. **El código escribe el porqué; la IA, solo donde hay juicio.** Títulos: los de Claude Code. Estados: los de
    herdr. La IA (`claude -p`) queda para lo ambiguo: fechas y prioridad en capturas sueltas, poda y (v2) resumir
@@ -76,7 +78,7 @@ por context switching me olvidé de volver a ellos. Además ahora tengo como 60 
 | CLI, store, estados, foco, poda | `scripts/tk` (→ `~/.local/bin/tk` en ambas cajas) |
 | Hook de registro | `myturn track` en `UserPromptSubmit` (`shared/claude/settings.template.json`) |
 | Barra y popup | `macos/sketchybar/.config/sketchybar/items/myturn.sh` + `plugins/myturn.sh` |
-| Paleta ⌥T y salto ⌥G | `macos/hammerspoon/.hammerspoon/myturn.lua` |
+| ⌥T marcar/desmarcar y ⌥G salto | `macos/hammerspoon/.hammerspoon/myturn.lua` |
 | Skill para agentes | `shared/claude/skills/myturn/SKILL.md` |
 | Datos | repo privado `A-PachecoT/tasks` en `~/tasks` (`events.jsonl`; `state.json` derivado) |
 | Caché | `~/.cache/myturn/` (estados vistos, avisos dados, última poda) |
@@ -105,9 +107,11 @@ por context switching me olvidé de volver a ellos. Además ahora tengo como 60 
 
 ## Roadmap
 
-- **v1 (esta):** registro automático por hook, cola «te esperan» con visto, ⌥G, sonido por transición, paleta ⌥T
-  (prioridad / hecha sobre el agente enfocado), importación única de las sesiones existentes, poda de sesiones
-  muertas.
+- **v1 (esta):** registro automático por hook, «mis prioridades» con visto, ⌥G, sonido por transición, ⌥T
+  marcar/desmarcar el agente que miras, importación única de las sesiones existentes, poda de sesiones muertas.
+  2026-10-05 noche: André no entendía la paleta ⌥T ni los clics («no entiendo nada») — mezclaba captura,
+  acciones sobre un agente invisible y la lista; con seis estados de jerga. Se redujo a un concepto, una tecla
+  por acción y un clic que siempre hace lo mismo (mockup aprobado por él).
 - **v2:** la IA lee al agente que te espera (`herdr agent read`) y resume en el popup qué hizo y qué te pide.
 - **v3:** captura desde el celular; contexto de calendario.
 - **OSS:** repo propio con el nombre final, instalador sin dotfiles (Homebrew/uv), sin rutas de André.

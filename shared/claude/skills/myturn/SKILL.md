@@ -17,7 +17,7 @@ SSOT: `~/dotfiles/docs/myturn.md`. CLI: `myturn --help`.
 
 | André dice | Corre |
 |---|---|
-| «esto es prioridad» / «avísame cuando termines» / te deja trabajando en algo del día | `myturn prio 1 --id $(myturn ls --json \| …)` no hace falta: corre `myturn prio 1` — prioriza el agente enfocado en herdr (esta sesión cuando André te habla). `myturn prio 0` = quitar. André lo hace él mismo con ⌥T |
+| «esto es prioridad» / «avísame cuando termines» / te deja trabajando en algo del día | `myturn prio 1` — prioriza ESTA sesión (usa tu `HERDR_PANE_ID`, no el pane enfocado). `myturn prio 0` = quitar. André lo hace él mismo con ⌥T |
 | «anota X» / «agrégalo a mis pendientes» (algo que no es esta sesión) | `myturn add --raw "X"` — la IA saca fecha y prioridad en segundo plano. Si él dio prioridad o fecha, pásalas: `myturn add "X" --prio 1 --due 2026-10-06` |
 | «qué me espera» / «qué tengo» | `myturn ls` |
 | «listo, ciérrala» | `myturn done` (esta sesión) o `myturn done --id <id>` — solo cuando André lo confirma; terminar tu turno NO cierra la tarea |
@@ -25,6 +25,6 @@ SSOT: `~/dotfiles/docs/myturn.md`. CLI: `myturn --help`.
 ## Reglas
 
 - No hace falta registrar la sesión: el hook `UserPromptSubmit` (`myturn track`) ya lo hizo. Lo único que agrega valor es la **prioridad** — sin ella, myturn nunca interrumpe a André por esta sesión.
-- `myturn prio` sin `--id` actúa sobre el agente **enfocado** en herdr, que es esta sesión cuando André te está hablando.
+- `myturn prio` / `myturn done` sin `--id`, corridos por ti, actúan sobre **tu propia sesión** (vía `HERDR_PANE_ID`). Fuera de herdr usan el agente enfocado.
 - No edites `~/tasks/events.jsonl` a mano (append-only, sincronizado por git entre el Mac y el Arch). Para corregir: `myturn archive <id>` / `myturn restore <id>`.
 - No inventes prioridad ni fecha que André no dijo.

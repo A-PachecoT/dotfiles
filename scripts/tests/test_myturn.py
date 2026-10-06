@@ -80,10 +80,10 @@ def test_queue_order_prio_then_wait_time(mt):
     assert [t["id"] for t in st["waiting"]] == ["p1b", "p1", "p2"]
 
 
-def test_closed_prio_agent_goes_to_pending_and_untracked_counted(mt):
+def test_closed_prio_agent_is_hidden_and_untracked_counted(mt):
     mt.emit("add", "a", title="x", source="agent", prio=1, link=link(mt, "gone"))
     st = state(mt, [agent("other", "idle")])
-    assert st["pending"][0]["id"] == "a" and "agente cerrado" in st["pending"][0]["why"]
+    assert st["prios"] == [] and st["pending"] == []
     assert st["untracked"] == 1
 
 
@@ -125,7 +125,7 @@ def test_garden_archives_dead_unprioritized_sessions_only(mt, monkeypatch):
         f.write(json.dumps({"ts": old, "host": mt.LOCAL, "op": "add", "id": "stale", "title": "vieja"}) + "\n")
     monkeypatch.setattr(mt, "herdr_agents", lambda host: [agent("s1", "working")])
     acts = {a["id"]: a["archive"] for a in mt.garden(use_ai=False)}
-    assert acts == {"closed": "sesión cerrada", "stale": "sin tocar hace 30 d"}
+    assert acts == {"closed": "sesión cerrada", "prio": "sesión cerrada", "stale": "sin tocar hace 30 d"}
     mt.emit("restore", "closed")
     assert mt.fold()["closed"]["status"] == "open"
 
@@ -138,14 +138,39 @@ def test_fold_tolerates_interleaved_union_merge(mt):
     assert mt.fold()["x"]["status"] == "done"
 
 
-def test_bar_never_says_nothing_when_a_prio_task_is_paused(mt):
+def test_bar_says_ya_lo_viste_when_a_prio_task_is_seen(mt):
     mt.emit("add", "a", title="x", source="agent", prio=1, link=link(mt, "s1"))
-    st = state(mt, [agent("s1", "idle", focused=True)], front=mt.LOCAL)  # ya la viste
-    assert st["waiting"] == [] and st["paused"]
-    icon, _, label = mt.bar_label(st)
-    assert label.startswith("en pausa") and "Fix webhook" in label
+    st = state(mt, [agent("s1", "idle", focused=True)], front=mt.LOCAL)
+    dot, color, label = mt.bar_label(st)
+    assert label == "Fix webhook · ya lo viste" and color == "white"
+    assert [r["say"] for r in st["prios"]] == ["ya lo viste"]
 
 
-def test_bar_empty_and_background_only_says_nada_prioritario(mt):
+def test_bar_waiting_is_green_and_prios_order(mt):
+    mt.emit("add", "w", title="w", source="agent", prio=1, link=link(mt, "s1"))
+    mt.emit("add", "k", title="k", source="agent", prio=1, link=link(mt, "s2"))
+    st = state(mt, [agent("s1", "blocked", title="✳ Cotización"), agent("s2", "working", pane="w:p2")])
+    assert mt.bar_label(st) == ("●", "green", "Cotización · te espera")
+    assert [(r["id"], r["say"]) for r in st["prios"]] == [("w", "te hizo una pregunta"), ("k", "trabajando…")]
+
+
+def test_bar_without_prios_says_so(mt):
     mt.emit("add", "bg", title="x", source="agent", link=link(mt, "s1"))  # sin prioridad
-    assert mt.bar_label(state(mt, [agent("s1", "idle")]))[2] == "nada prioritario"
+    assert mt.bar_label(state(mt, [agent("s1", "idle")]))[2].startswith("sin prioridades")
+
+
+def test_toggle_marks_and_unmarks_the_agent_you_are_looking_at(mt, monkeypatch):
+    monkeypatch.setattr(mt, "herdr_frontmost", lambda: mt.LOCAL)
+    monkeypatch.setattr(mt, "LOCAL", "mac")
+    monkeypatch.setattr(mt, "herdr_agents", lambda host: [agent("s1", "working", focused=True)])
+    monkeypatch.setattr(mt, "refresh", lambda: {})
+    assert mt.toggle() == "★ Fix webhook — te aviso cuando termine"
+    assert next(iter(mt.fold().values()))["prio"] == 1
+    assert mt.toggle() == "☆ Fix webhook — ya no es prioridad"
+    assert next(iter(mt.fold().values()))["prio"] is None
+
+
+def test_toggle_needs_herdr_in_front(mt, monkeypatch):
+    monkeypatch.setattr(mt, "LOCAL", "mac")
+    monkeypatch.setattr(mt, "herdr_frontmost", lambda: None)
+    assert mt.toggle().startswith("Abre herdr")

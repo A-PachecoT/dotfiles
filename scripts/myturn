@@ -4,7 +4,7 @@
 # ///
 """myturn — tus agentes te esperan; myturn te lleva a ellos. SSOT: ~/dotfiles/docs/myturn.md
 
-  myturn                         salta al siguiente agente que te espera (= myturn jump)
+  myturn                         ⌥G: salta al siguiente agente que te espera (= myturn jump)
   myturn ls [--json]             te esperan · trabajando · pendientes
   myturn add "texto" [--raw] [--prio 1|2] [--due YYYY-MM-DD]   pendiente suelto (--raw: la IA saca fecha/prio)
   myturn prio [1|2|0] [--id ID]  prioridad del agente enfocado en herdr (o de ID); 0 = quitar
@@ -14,7 +14,7 @@
   myturn import                  registrar las sesiones de herdr que ya existían (sin prioridad)
   myturn garden [--ai]           poda: sesiones sin prio inactivas >12 h o cerradas; pendientes muertos
   myturn track                   hook UserPromptSubmit de Claude Code (lee el JSON del hook por stdin)
-  myturn palette --json          datos para la paleta ⌥T de Hammerspoon
+  myturn toggle                  ⌥T: marca/desmarca como prioridad el agente que estás mirando en herdr
   myturn sketchybar              pinta la barra (Mac)
 
 Store: $MYTURN_HOME (default ~/tasks): events.jsonl append-only (merge=union), sincronizado por git.
@@ -303,7 +303,6 @@ def classify(tasks: dict, info: dict[str, dict], lists: dict[str, list | None]) 
             if ag and not t.get("title_fixed") and ag["title"]:
                 t["title"] = ag["title"]
             t["agent"] = ag
-            known = lists.get(link["host"]) is not None
             if not t.get("prio"):
                 background += 1
                 continue
@@ -313,9 +312,7 @@ def classify(tasks: dict, info: dict[str, dict], lists: dict[str, list | None]) 
                 verb = "te pregunta algo" if ag["status"] == "blocked" else "terminó"
                 row = t | {"why": [f"p{t['prio']}", f"{verb} hace {ago(ag['since'])}"]}
                 (paused if ag.get("seen_at") else waiting).append(row)
-            elif known and not ag:
-                pending.append(t | {"why": [f"p{t['prio']}", "agente cerrado"], "_key": (0, t["prio"], t["created"])})
-            continue
+            continue  # agente cerrado: no se muestra; garden lo archiva
         why, tier = [], 2
         due = date.fromisoformat(t["due"]) if t.get("due") else None
         if due:
@@ -334,7 +331,12 @@ def classify(tasks: dict, info: dict[str, dict], lists: dict[str, list | None]) 
         t.pop("_key", None)
     tracked = set(by_session(tasks))
     untracked = sum(1 for agents in lists.values() for a in agents or [] if session_of(a) not in tracked)
-    return {"updated": iso(t0), "waiting": waiting, "working": working, "paused": paused, "pending": pending,
+    prios = ([t | {"dot": "green", "say": "te hizo una pregunta" if t["agent"]["status"] == "blocked"
+                   else f"terminó hace {ago(t['agent']['since'])}"} for t in waiting]
+             + [t | {"dot": "dim", "say": "trabajando…"} for t in working]
+             + [t | {"dot": "white", "say": "ya lo viste"} for t in paused])
+    return {"updated": iso(t0), "prios": prios, "waiting": waiting, "working": working, "paused": paused,
+            "pending": pending,
             "background": background, "untracked": untracked,
             "herdr_ok": lists.get(LOCAL) is not None}
 
@@ -400,34 +402,60 @@ def go(t: dict) -> None:
 
 def jump() -> str:
     st = compute()
-    queue = st["waiting"] or st["paused"]
-    if not queue:
+    if not st["waiting"]:
         return "nadie te espera"
-    t = queue[0]
+    t = st["waiting"][0]
     go(t)
     refresh()
     return f"→ {t['title']}"
 
 
-def focused_agent() -> dict | None:
-    """El agente de Claude enfocado en el herdr local."""
-    return next((a for a in herdr_agents(LOCAL) or [] if a.get("focused") and session_of(a)), None)
+def focused_agent(host: str = LOCAL) -> dict | None:
+    """El agente de Claude enfocado en el herdr de esa caja (lectura fresca, sin caché)."""
+    if host != LOCAL:
+        (CACHE / f"agents-{host}.json").unlink(missing_ok=True)
+    return next((a for a in herdr_agents(host) or [] if a.get("focused") and session_of(a)), None)
 
 
-def task_for_agent(a: dict, create: bool) -> dict | None:
+def task_for_agent(a: dict, create: bool, host: str = LOCAL) -> dict | None:
     tasks = fold()
     t = by_session(tasks).get(session_of(a))
     if t or not create:
         return t
     tid = new_id()
     emit("add", tid, title=clean_title(a.get("terminal_title")) or "agente", source="agent", cwd=a.get("cwd"),
-         link={"host": LOCAL, "session": session_of(a), "pane": a.get("pane_id")})
+         link={"host": host, "session": session_of(a), "pane": a.get("pane_id")})
     return fold()[tid]
+
+
+def toggle() -> str:
+    """⌥T: marca o desmarca como prioridad el agente que estás mirando. Devuelve el texto del aviso."""
+    host = herdr_frontmost() if LOCAL == "mac" else LOCAL
+    if not host:
+        return "Abre herdr, enfoca un agente y vuelve a presionar ⌥T"
+    a = focused_agent(host)
+    if not a:
+        return "Este pane de herdr no tiene un agente de Claude"
+    t = task_for_agent(a, create=True, host=host)
+    title = trunc(t["title"], 50)
+    if t.get("prio"):
+        emit("update", t["id"], set={"prio": None})
+        msg = f"☆ {title} — ya no es prioridad"
+    else:
+        emit("update", t["id"], set={"prio": 1})
+        msg = f"★ {title} — te aviso cuando termine"
+    sync_bg()
+    refresh()
+    return msg
 
 
 def target(ref: str | None, create: bool = True) -> dict:
     if ref:
         return find(fold(), ref)
+    if os.environ.get("HERDR_PANE_ID"):  # lo corre un agente: actúa sobre su propia sesión, no sobre la enfocada
+        cur = (herdr_json(["pane", "current"]) or {}).get("pane")
+        if cur and session_of(cur):
+            return task_for_agent(cur, create)
     a = focused_agent()
     if not a:
         sys.exit("myturn: no hay un agente de Claude enfocado en herdr; usa --id")
@@ -519,12 +547,13 @@ def garden(use_ai: bool) -> list[dict]:
         if t["status"] != "open":
             continue
         link = t.get("link")
-        if link and link["host"] == LOCAL and lists[LOCAL] is not None and not t.get("prio"):
+        if link and link["host"] == LOCAL and lists[LOCAL] is not None:
             a = live.get(link["session"])
             since = parse(seen.get(link["session"], {}).get("since"))
             if not a:
                 archive(t, "sesión cerrada")
-            elif a.get("agent_status") in WAITING and since and t0 - since > timedelta(hours=DEAD_AGENT_H):
+            elif (not t.get("prio") and a.get("agent_status") in WAITING and since
+                  and t0 - since > timedelta(hours=DEAD_AGENT_H)):
                 archive(t, f"sin prioridad, inactiva hace {ago(iso(since))}")
         elif not link and t.get("prio") != 1:
             idle = (t0 - parse(t["touched"])).days
@@ -551,31 +580,26 @@ def garden(use_ai: bool) -> list[dict]:
 
 
 # ── sketchybar ────────────────────────────────────────────────────────────────────────────────────
-C = {"white": "0xffe5e9f0", "dim": "0xff9aa3b5", "green": "0xffa3be8c", "yellow": "0xffebcb8b"}
-SLOTS = {"w": 4, "k": 3, "z": 3, "p": 3}  # filas fijas por sección en items/myturn.sh
+C = {"white": "0xffe5e9f0", "dim": "0xff9aa3b5", "green": "0xffa3be8c"}
+ROWS = 6  # filas fijas de «mis prioridades» en items/myturn.sh
 
 
 def trunc(s: str, n: int) -> str:
     return s if len(s) <= n else s[: n - 1].rstrip() + "…"
 
 
-def plural(n: int, one: str, many: str) -> str:
-    return f"{n} {one if n == 1 else many}"
-
-
 def bar_label(st: dict) -> tuple[str, str, str]:
-    """(ícono, color, texto) de la barra. Orden: te espera > trabajando > en pausa > pendiente.
-    «En pausa» = ya la viste pero sigue siendo tuya: visto no es terminado, así que la barra no dice «nada»."""
-    for key, icon, color, one, many in (("waiting", "󰂞", "green", "te espera", "te esperan"),
-                                        ("working", "󰔟", "dim", "trabajando", "trabajando"),
-                                        ("paused", "󰏤", "white", "en pausa", "en pausa")):
-        rows = st[key]
-        if rows:
-            head = one if len(rows) == 1 else f"{len(rows)} {many}"
-            return icon, color, f"{head} · {trunc(rows[0]['title'], 34)}"
-    if st["pending"]:
-        return "󰄱", "white", trunc(st["pending"][0]["title"], 42)
-    return "󰄲", "dim", "nada prioritario"
+    """(punto, color, texto) de la barra. Solo habla de tus prioridades:
+    te espera (verde) > trabajando (gris) > ya lo viste (blanco) > sin prioridades."""
+    w, k, z = st["waiting"], st["working"], st["paused"]
+    if w:
+        head = "te espera" if len(w) == 1 else f"{len(w)} te esperan"
+        return "●", "green", f"{trunc(w[0]['title'], 36)} · {head}"
+    if k:
+        return "◌", "dim", f"{trunc(k[0]['title'], 36)} · trabajando"
+    if z:
+        return "○", "white", f"{trunc(z[0]['title'], 36)} · ya lo viste"
+    return "○", "dim", "sin prioridades · ⌥T en un agente para marcarlo"
 
 
 def sketchybar(st: dict) -> None:
@@ -586,28 +610,21 @@ def sketchybar(st: dict) -> None:
     def s(item: str, *props: str) -> None:
         a.extend(["--set", item, *props])
 
-    w, k, z, p = st["waiting"], st["working"], st["paused"], st["pending"]
-    icon, color, label = bar_label(st)
-    s("myturn", f"icon={icon}", f"icon.color={C[color]}", f"label={label}", f"label.color={C[color]}")
-    for key, rows, hdr in (("w", w, "TE ESPERAN  ·  ⌥G"), ("k", k, "TRABAJANDO"),
-                           ("z", z, "EN PAUSA  ·  ya la viste, sigue siendo tuya"), ("p", p, "PENDIENTES")):
-        s(f"myturn.h.{key}", f"drawing={'on' if rows else 'off'}", f"label={hdr}")
-        for i in range(SLOTS[key]):
-            if i < len(rows):
-                t = rows[i]
-                s(f"myturn.{key}.{i}", "drawing=on",
-                  f"label={trunc(t['title'], 46)}   {trunc(' · '.join(t['why']), 36)}")
-            else:
-                s(f"myturn.{key}.{i}", "drawing=off")
-    foot = []
-    if st["background"]:
-        foot.append(plural(st["background"], "sesión sin prioridad", "sesiones sin prioridad"))
-    if st["untracked"]:
-        foot.append(f"{st['untracked']} sin rastrear (myturn import)")
-    if not st["herdr_ok"]:
-        foot.append("herdr no responde")
-    s("myturn.footer", f"label={' · '.join(foot) or 'nada más'}", "drawing=on")
-    s("myturn.empty", f"drawing={'off' if (w or k or z or p) else 'on'}")
+    dot, color, label = bar_label(st)
+    s("myturn", f"icon={dot}", f"icon.color={C[color]}", f"label={label}", f"label.color={C[color]}")
+    rows = st["prios"]
+    for i in range(ROWS):
+        if i < len(rows):
+            t = rows[i]
+            dot_ = {"green": "●", "dim": "◌", "white": "○"}[t["dot"]]
+            s(f"myturn.r.{i}", "drawing=on", f"icon={dot_}",
+              f"icon.color={C[t['dot']]}", f"label={trunc(t['title'], 44)}    {t['say']}",
+              f"label.color={C['white' if t['dot'] != 'dim' else 'dim']}")
+        else:
+            s(f"myturn.r.{i}", "drawing=off")
+    s("myturn.empty", f"drawing={'off' if rows else 'on'}")
+    hint = "clic = ir al agente · ⌥G siguiente · ⌥T marcar/desmarcar"
+    s("myturn.hint", f"label={hint}" + ("" if st["herdr_ok"] else " · herdr no responde"))
     subprocess.run(["sketchybar", *a], capture_output=True, timeout=5)
 
 
@@ -619,29 +636,15 @@ def refresh() -> dict:
 
 
 def click(slot: str) -> None:
-    key, _, i = slot.partition(".")
-    rows = load_state().get({"w": "waiting", "k": "working", "z": "paused", "p": "pending"}.get(key, ""), [])
+    """Clic en una fila = ir a ese agente. Siempre lo mismo."""
+    _, _, i = slot.partition(".")
+    rows = load_state().get("prios", [])
+    subprocess.run(["sketchybar", "--set", "myturn", "popup.drawing=off"], capture_output=True)
     if i.isdigit() and int(i) < len(rows):
-        subprocess.run(["sketchybar", "--set", "myturn", "popup.drawing=off"], capture_output=True)
         t = fold().get(rows[int(i)]["id"])
         if t:
             go(t)
     refresh()
-
-
-def palette() -> dict:
-    """Lo que necesita la paleta ⌥T: el agente enfocado y su tarea, y las filas para buscar."""
-    st = compute()
-    a = focused_agent()
-    foc = None
-    if a:
-        t = task_for_agent(a, create=False)
-        foc = {"title": (t or {}).get("title") or clean_title(a.get("terminal_title")) or "agente",
-               "prio": (t or {}).get("prio"), "id": (t or {}).get("id")}
-    rows = [{"id": t["id"], "title": t["title"], "why": t["why"], "group": g}
-            for g, key in (("te espera", "waiting"), ("trabajando", "working"), ("en pausa", "paused"),
-                           ("pendiente", "pending")) for t in st[key]]
-    return {"focused": foc, "rows": rows}
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────────────────────────
@@ -671,7 +674,7 @@ def main(argv: list[str]) -> None:
     sub.add_parser("import")
     sub.add_parser("garden").add_argument("--ai", action="store_true")
     sub.add_parser("track")
-    sub.add_parser("palette").add_argument("--json", action="store_true")
+    sub.add_parser("toggle")
     sub.add_parser("sketchybar")
     sub.add_parser("click").add_argument("slot")
     sub.add_parser("enrich").add_argument("id")
@@ -700,8 +703,8 @@ def main(argv: list[str]) -> None:
         return enrich(a.id)
     if cmd == "jump":
         return print(jump())
-    if cmd == "palette":
-        return print(json.dumps(palette(), ensure_ascii=False))
+    if cmd == "toggle":
+        return print(toggle())
     if cmd == "import":
         n = import_sessions()
         refresh()
