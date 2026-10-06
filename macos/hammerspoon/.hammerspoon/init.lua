@@ -14,7 +14,7 @@ local windowManager = require("window-manager")
 local screenshot = require("screenshot")
 local pdfVim = require("pdf-vim")
 local sleepWake = require("sleep-wake")
-local tkCapture = require("tk") -- ⌥T captura (docs/tk.md)
+local myturn = require("myturn") -- ⌥T paleta · ⌥G siguiente que te espera (docs/myturn.md)
 
 -- ============================================================
 -- MODULE INITIALIZATION

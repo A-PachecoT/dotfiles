@@ -15,9 +15,9 @@ require("bar")
 require("default")
 require("items")
 
--- tk: la tarea de ahora + popup (reemplazó al widget de Spotify, 2026-10-05). SSOT: ~/dotfiles/docs/tk.md
+-- myturn: qué agente te espera + popup (reemplazó al widget de Spotify, 2026-10-05). SSOT: ~/dotfiles/docs/myturn.md
 -- Spotify sigue en items/spotify.sh por si se quiere volver.
-sbar.exec("bash ~/.config/sketchybar/items/tk.sh")
+sbar.exec("bash ~/.config/sketchybar/items/myturn.sh")
 
 -- Load shell-based audio mode indicator
 sbar.exec("bash ~/.config/sketchybar/items/audio_mode.sh")
@@ -25,7 +25,7 @@ sbar.exec("bash ~/.config/sketchybar/items/audio_mode.sh")
 -- Load shell-based mic status indicator
 sbar.exec("bash ~/.config/sketchybar/items/mic_status.sh")
 -- Force initialization after short delay to ensure items are created
-sbar.exec("bash -c 'sleep 1 && sketchybar --trigger tk_update' &")
+sbar.exec("bash -c 'sleep 1 && sketchybar --trigger myturn_update' &")
 
 sbar.end_config()
 
