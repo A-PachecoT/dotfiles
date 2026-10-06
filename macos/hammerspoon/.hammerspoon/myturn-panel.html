@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #2e3440; --line: #434c5e; --row: #3b4252; --text: #e5e9f0; --dim: #9aa3b5;
+    --green: #a3be8c; --yellow: #ebcb8b; --red: #bf616a; --accent: #88c0d0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; font: 13px -apple-system, "SF Pro Text", system-ui, sans-serif;
+    color: var(--text); -webkit-user-select: none; overflow: hidden; }
+  #card { margin: 6px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.45); padding: 12px; }
+  .new { display: flex; gap: 8px; }
+  .new input { flex: 1; background: var(--row); border: 1px solid var(--line); border-radius: 9px; color: var(--text);
+    font: inherit; padding: 9px 11px; outline: none; -webkit-user-select: text; }
+  .new input:focus { border-color: var(--accent); }
+  button { font: inherit; color: var(--text); background: var(--row); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+  button:hover { border-color: var(--accent); }
+  .prio { min-width: 38px; font-weight: 700; }
+  .p1 { color: var(--red); } .p2 { color: var(--yellow); } .p0 { color: var(--dim); font-weight: 400; }
+  .label { margin: 14px 2px 6px; font-size: 10px; font-weight: 700; letter-spacing: .06em; color: var(--dim); }
+  .row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 9px; }
+  .row:hover { background: rgba(255,255,255,.04); }
+  .dot { width: 14px; text-align: center; font-size: 12px; color: var(--dim); }
+  .waiting .dot, .waiting .say { color: var(--green); }
+  .main { flex: 1; min-width: 0; }
+  .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
+  .title input { width: 100%; background: var(--row); border: 1px solid var(--accent); border-radius: 6px;
+    color: var(--text); font: inherit; padding: 2px 6px; outline: none; -webkit-user-select: text; }
+  .say { font-size: 11px; color: var(--dim); margin-top: 2px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; }
+  .act { min-width: 132px; }
+  .waiting .act { border-color: var(--green); color: var(--green); }
+  .icon { padding: 6px 8px; color: var(--dim); }
+  .empty { color: var(--dim); padding: 18px 4px 8px; text-align: center; }
+  .foot { margin-top: 10px; font-size: 11px; color: var(--dim); text-align: center; }
+  #toast { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: rgba(163,190,140,.15);
+    color: var(--green); display: none; text-align: center; }
+</style>
+</head>
+<body>
+<div id="card">
+  <div class="new">
+    <input id="new" placeholder="Nueva tarea… (Enter para agregar)" autocomplete="off">
+    <button id="newprio" class="prio p0" title="Prioridad de la nueva tarea">—</button>
+  </div>
+  <div id="list"></div>
+  <div id="toast"></div>
+  <div class="foot">doble clic en el título para editarlo · clic en ! cambia la prioridad · Esc cierra · ⌥G va al que te espera</div>
+</div>
+<script>
+  const send = (m) => window.webkit.messageHandlers.myturn.postMessage(m);
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  const PRIO = { null: ["—", "p0"], 1: ["!1", "p1"], 2: ["!2", "p2"] };
+  const nextPrio = (p) => (p == null ? 1 : p === 1 ? 2 : 0);
+  let data = { rows: [] }, newPrio = null, editing = null;
+
+  function resize() { send({ action: "resize", h: Math.ceil($("#card").getBoundingClientRect().height) + 12 }); }
+  function toast(msg) {
+    const t = $("#toast"); t.textContent = msg; t.style.display = "block"; resize();
+    clearTimeout(t._h); t._h = setTimeout(() => { t.style.display = "none"; resize(); }, 4000);
+  }
+
+  function actionFor(r) {
+    if (r.can_go) return ["go", r.state === "waiting" ? "Ir · te espera" : "Ir al agente"];
+    if (r.can_resume) return ["go", "Reabrir agente"];
+    return ["copy", "Copiar para Claude"];
+  }
+
+  function rowHtml(r) {
+    const [ptxt, pcls] = PRIO[r.prio ?? null];
+    const [act, label] = actionFor(r);
+    return `<div class="row ${r.state}" data-id="${r.id}">
+      <span class="dot">${r.dot}</span>
+      <div class="main"><div class="title" title="Doble clic para editar">${esc(r.title)}</div>
+        <div class="say">${esc(r.say)}</div></div>
+      <button class="prio ${pcls}" data-do="prio" title="Cambiar prioridad">${ptxt}</button>
+      <button class="act" data-do="${act}">${label}</button>
+      <button class="icon" data-do="done" title="Hecha">✓</button>
+      <button class="icon" data-do="archive" title="Archivar (se puede deshacer)">✕</button>
+    </div>`;
+  }
+
+  window.render = (d) => {
+    data = d; if (editing) return;
+    const waiting = d.rows.filter((r) => r.state === "waiting"), rest = d.rows.filter((r) => r.state !== "waiting");
+    let h = "";
+    if (waiting.length) h += `<div class="label">TE ESPERAN</div>` + waiting.map(rowHtml).join("");
+    if (rest.length) h += `<div class="label">MIS TAREAS</div>` + rest.map(rowHtml).join("");
+    if (!d.rows.length) h = `<div class="empty">No tienes tareas. Escribe arriba la primera.</div>`;
+    if (!d.herdr_ok) h += `<div class="empty">herdr no responde: no veo a tus agentes.</div>`;
+    $("#list").innerHTML = h; resize();
+  };
+  window.focusInput = () => { $("#new").focus(); };
+
+  $("#new").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.value.trim()) {
+      send({ action: "add", title: e.target.value.trim(), prio: newPrio });
+      toast(`Agregada: ${e.target.value.trim()}`); e.target.value = "";
+      newPrio = null; const [t, c] = PRIO[null]; $("#newprio").textContent = t; $("#newprio").className = `prio ${c}`;
+    }
+  });
+  $("#newprio").addEventListener("click", () => {
+    const n = nextPrio(newPrio); newPrio = n || null;
+    const [t, c] = PRIO[newPrio]; $("#newprio").textContent = t; $("#newprio").className = `prio ${c}`;
+    $("#new").focus();
+  });
+
+  $("#list").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-do]"); if (!b) return;
+    const id = b.closest(".row").dataset.id, r = data.rows.find((x) => x.id === id), act = b.dataset.do;
+    if (act === "prio") send({ action: "prio", id, level: nextPrio(r.prio) });
+    else if (act === "copy") { send({ action: "copy", text: r.prompt });
+      toast("Copiado. Pégalo en cualquier Claude: se enlaza solo a esta tarea y aquí verás cuándo termina."); }
+    else if (act === "go") send({ action: "go", id });
+    else if (act === "done") { send({ action: "done", id }); toast(`Hecha: ${r.title}`); }
+    else if (act === "archive") { send({ action: "archive", id }); toast(`Archivada: ${r.title}`); }
+  });
+
+  $("#list").addEventListener("dblclick", (e) => {
+    const el = e.target.closest(".title"); if (!el) return;
+    const id = el.closest(".row").dataset.id, r = data.rows.find((x) => x.id === id);
+    editing = id; el.innerHTML = `<input value="${esc(r.title)}">`;
+    const inp = el.querySelector("input"); inp.focus(); inp.select();
+    const finish = (save) => {
+      if (editing !== id) return; editing = null;
+      if (save && inp.value.trim() && inp.value.trim() !== r.title) send({ action: "edit", id, title: inp.value.trim() });
+      else window.render(data);
+    };
+    inp.addEventListener("keydown", (k) => { if (k.key === "Enter") finish(true); if (k.key === "Escape") { k.stopPropagation(); finish(false); } });
+    inp.addEventListener("blur", () => finish(true));
+  });
+
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !editing) send({ action: "close" }); });
+  window.render(data);
+</script>
+</body>
+</html>

@@ -17,59 +17,62 @@ por context switching me olvidé de volver a ellos. Además ahora tengo como 60 
 
 ### Qué es y qué no es
 
-- **Es** una cola de retorno: «estos agentes te esperan, en este orden». Un solo concepto en la UI: **mis
-  prioridades**. (Las capturas sueltas sin agente existen en el CLI, `myturn add`, pero no en la UI del v1.)
+- **Es** tu lista de tareas *y* quién trabaja en cada una. Todo se opera desde el widget de la barra (André,
+  2026-10-06: *«tiene que ser todo vía UI desde el mismo widget»*): anotar, editar, cambiar prioridad, copiar la
+  tarea para un Claude, ir al agente, cerrar.
 - **No es** un gestor de proyectos ni de equipo (eso es Vikunja), ni un orquestador de agentes (eso es herdr y
-  `/cto`), ni un lugar donde planificar. Si tienes que abrir myturn para *mantenerlo*, falló.
+  `/cto`). Si tienes que *mantenerlo*, falló.
 
 ### El flujo, de punta a punta
 
-1. **Lanzas un agente como siempre** (un pane de herdr, escribes el prompt). Un hook de Claude Code lo registra
-   solo; el título es el que Claude Code ya le pone a la sesión. Cero ceremonia.
-2. **Marcas lo que importa**: ⌥T sobre el agente que estás mirando → aviso «★ Fix webhook — te aviso cuando
-   termine». ⌥T otra vez lo desmarca («☆ … ya no es prioridad»). Sin menú. Lo no marcado se rastrea en silencio
-   y nunca te interrumpe.
-3. **Te vas a otra cosa.** Cuando un agente prioritario termina o te pregunta algo (idle/blocked) y no lo has visto,
-   entra a la cola **te esperan**, suena una vez y la barra se pone verde: `● 2 te esperan: Fix webhook Fovente`.
-4. **⌥G te lleva al siguiente** que te espera (ventana de herdr + pane). Mirarlo cuenta como visto: sale de la
-   cola hasta su próximo cambio de estado.
-5. **Terminas**: ⌥T lo desmarca, o cierras el pane. Lo que muere solo (sin prioridad, idle >12 h o sesión cerrada)
-   lo archiva el jardinero; todo es reversible.
+1. **Anotas** en el widget: clic en la barra (o ⌥T) → escribes → Enter. Opcional: `!1`/`!2` antes de agregar.
+2. **Se la das a un Claude**: botón «Copiar para Claude» → lo pegas en cualquier sesión. El texto le pide correr
+   `myturn link <id>`, y desde ahí esa sesión *es* el agente de la tarea.
+3. **Te vas a otra cosa.** Cuando el agente termina o te pregunta algo y no lo has visto, la tarea sube a **TE
+   ESPERAN**, suena una vez y la barra se pone verde: `● Cotización Ecoverde · te espera`.
+4. **Vuelves**: botón «Ir · te espera» en el widget, o ⌥G desde cualquier lado. Mirarlo cuenta como visto.
+5. **Cierras**: ✓ (hecha) o ✕ (archivar, reversible). Doble clic en el título lo edita; clic en `!` rota la
+   prioridad (— → !1 → !2 → —).
+
+Las sesiones de Claude que abres sin tarea igual las registra el hook (`myturn track`), en silencio: no aparecen
+en el widget, solo existen para que el enlace sea instantáneo y para que el jardinero las pode.
 
 ### Principios
 
-1. **La sesión es la unidad.** Una tarea con agente *es* su sesión de Claude (el id de sesión que herdr expone),
-   no un ítem que alguien tiene que mantener enlazado.
-2. **Solo interrumpe lo que marcaste.** Prioridad = permiso para interrumpir. El resto existe pero calla.
-3. **Visto apaga la alarma.** Un agente idle que ya miraste no es «te espera»; vuelve a serlo solo con una
-   transición nueva (respondiste, trabajó, terminó otra vez).
-4. **Una tecla, una acción; un clic, siempre lo mismo.** ⌥T marca/desmarca, ⌥G va al siguiente (⌥N no: en US
-   International-PC es la ñ); clic en una fila = ir a ese agente. Nada de menús mixtos. El popup es para mirar, no
-   para operar.
-5. **El código escribe el porqué; la IA, solo donde hay juicio.** Títulos: los de Claude Code. Estados: los de
-   herdr. La IA (`claude -p`) queda para lo ambiguo: fechas y prioridad en capturas sueltas, poda y (v2) resumir
-   qué hizo el agente que te espera.
+1. **Todo desde el widget.** El CLI y la skill existen para el panel y para los agentes, no para André.
+2. **La tarea es tuya; el agente se engancha a ella.** El enlace lo hace el agente (`myturn link`), con el texto
+   que copiaste: cero pasos manuales de vinculación.
+3. **Visto apaga la alarma.** Un agente idle que ya miraste no «te espera»; vuelve a hacerlo con una transición
+   nueva (respondiste, trabajó, terminó otra vez).
+4. **Cada botón dice lo que hace.** «Ir al agente», «Reabrir agente», «Copiar para Claude», ✓, ✕. Nada de menús
+   mixtos ni teclas con significado oculto: ⌥T abre el widget, ⌥G va al que te espera (⌥N no: en US
+   International-PC es la ñ).
+5. **El código escribe el estado; la IA solo donde hay juicio.** Estados: los de herdr. Títulos: los tuyos (o los
+   de Claude Code para sesiones sin tarea). La IA (`claude -p`) queda para la poda y (v2) resumir qué hizo el
+   agente que te espera.
 6. **Nada se borra.** Podar = archivar con razón; `myturn restore`.
 7. **Local-first, sin servidor.** Un repo git privado con un log append-only (`merge=union`) sincroniza el Mac y
    el Arch; herdr de la otra caja se lee por ssh.
 
 ## Diseño
 
-### Estados de una tarea con agente
+### Estados de una tarea
 
 ```
-                  hook (1.er prompt)            prio marcada
-  (sesión nueva) ───────────────────> rastreada ────────────> prioritaria
-                                                                  │
-         herdr: working ──────────────────────> trabajando  <─────┤
-         herdr: idle/blocked  & no visto ─────> TE ESPERA  ───────┤  (sonido 1× por transición)
-         herdr: idle/blocked  & visto ────────> en pausa  ────────┘
-         sesión desaparece ───────────────────> agente cerrado (prio: queda en pendientes; sin prio: archivada)
+  anotada en el widget ──> sin agente («Copiar para Claude»)
+                                 │  el agente corre `myturn link <id>`
+                                 ▼
+         herdr: working ─────────────────────> trabajando…        (gris)
+         herdr: idle/blocked  & no visto ────> TE ESPERA          (verde, sonido 1× por transición)
+         herdr: idle/blocked  & visto ───────> ya lo viste        (blanco)
+         la sesión desaparece ───────────────> agente cerrado     («Reabrir agente» = claude --resume)
+  ✓ hecha · ✕ archivada (reversible)
 ```
 
 - **Visto** = después de la última transición, el pane estuvo enfocado en herdr *y* la ventana de herdr al frente
-  (muestreo cada 20 s), o llegaste por ⌥G / clic (inmediato).
-- **Orden de la cola**: prioridad (1 antes que 2), luego quien espera hace más tiempo.
+  (muestreo cada 20 s), o llegaste por ⌥G / «Ir al agente» (inmediato).
+- **Orden**: primero las que te esperan (la que espera hace más tiempo arriba), luego por prioridad, fecha y
+  antigüedad.
 
 ### Piezas
 
@@ -77,8 +80,8 @@ por context switching me olvidé de volver a ellos. Además ahora tengo como 60 
 |---|---|
 | CLI, store, estados, foco, poda | `scripts/tk` (→ `~/.local/bin/tk` en ambas cajas) |
 | Hook de registro | `myturn track` en `UserPromptSubmit` (`shared/claude/settings.template.json`) |
-| Barra y popup | `macos/sketchybar/.config/sketchybar/items/myturn.sh` + `plugins/myturn.sh` |
-| ⌥T marcar/desmarcar y ⌥G salto | `macos/hammerspoon/.hammerspoon/myturn.lua` |
+| Barra (etiqueta + clic abre el panel) | `macos/sketchybar/.config/sketchybar/items/myturn.sh` + `plugins/myturn.sh` |
+| Panel del widget (clic / ⌥T) y salto ⌥G | `macos/hammerspoon/.hammerspoon/myturn.lua` + `myturn-panel.html` (webview: sketchybar no tiene campos de texto) |
 | Skill para agentes | `shared/claude/skills/myturn/SKILL.md` |
 | Datos | repo privado `A-PachecoT/tasks` en `~/tasks` (`events.jsonl`; `state.json` derivado) |
 | Caché | `~/.cache/myturn/` (estados vistos, avisos dados, última poda) |
@@ -105,10 +108,18 @@ por context switching me olvidé de volver a ellos. Además ahora tengo como 60 
   imprime nada; `import` registró 66 sesiones en el Mac y 16 en el Arch; un agente idle priorizado entró a
   «te espera», sonó una vez (`notified`) y la popup lo mostró en el monitor externo.
 
+- 2026-10-06, v1.2 (panel): 13 smoke tests + ruff. En vivo, en el panel: agregar (con y sin prioridad), rotar
+  prioridad, editar con doble clic, «Copiar para Claude» (portapapeles verificado) y ✓; se abre por URL
+  `hammerspoon://myturn-panel` y toma el foco. Gotchas: un número de JS llega a Lua como `1.0` (usa
+  `string.format("%d")`); el foco hay que pedirlo con un timer después de `show()`; `print` dentro de un callback
+  de `evaluateJavaScript` lanzado desde `hs -c` revienta el IPC.
+
 ## Roadmap
 
-- **v1 (esta):** registro automático por hook, «mis prioridades» con visto, ⌥G, sonido por transición, ⌥T
-  marcar/desmarcar el agente que miras, importación única de las sesiones existentes, poda de sesiones muertas.
+- **v1:** registro automático por hook, cola con visto, ⌥G, sonido por transición, importación única de las
+  sesiones existentes, poda de sesiones muertas.
+- **v1.2 (esta, 2026-10-06):** el widget es la UI completa (panel webview): anotar, editar, prioridad, copiar para
+  Claude + `myturn link`, ir/reabrir agente, ✓/✕. ⌥T abre el widget.
   2026-10-05 noche: André no entendía la paleta ⌥T ni los clics («no entiendo nada») — mezclaba captura,
   acciones sobre un agente invisible y la lista; con seis estados de jerga. Se redujo a un concepto, una tecla
   por acción y un clic que siempre hace lo mismo (mockup aprobado por él).

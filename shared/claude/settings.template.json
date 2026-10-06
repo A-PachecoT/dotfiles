@@ -71,5 +71,10 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(myturn:*)"
+    ]
   }
 }

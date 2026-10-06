@@ -1,30 +1,23 @@
 ---
 name: myturn
 description: >
-  André's personal agent-return queue (`myturn` CLI, alias `tk`; shown in his SketchyBar). Every Claude
-  session inside herdr is registered automatically; this skill is for marking the CURRENT session as a
-  priority (so André is pulled back here when you finish), closing it, or capturing a loose to-do.
-  Triggers: "/myturn", "/tk", "esto es prioridad", "márcalo prioritario", "avísame cuando termines",
-  "anótalo en myturn", "agrégalo a mis pendientes", "qué me espera", "marca la tarea como hecha".
+  André's task list + agent tracker (`myturn` CLI, alias `tk`; lives in his SketchyBar widget). Use when André
+  pastes «Ayúdame con esta tarea: … corre `myturn link <id>`» (link THIS session to that task first), when he says
+  «esto es prioridad», «avísame cuando termines», «anótalo en myturn», «agrégalo a mis tareas», or «/myturn».
   NOT for Cofoundy team tasks (Vikunja) or delegating to Hermes (hermes-delegate).
 ---
 
-# myturn — tus agentes te esperan
+# myturn — tus tareas y quién trabaja en ellas
 
-SSOT: `~/dotfiles/docs/myturn.md`. CLI: `myturn --help`.
+SSOT: `~/dotfiles/docs/myturn.md`. André opera todo desde el widget de la barra; el CLI es para ti.
 
-## Qué hacer según el pedido
-
-| André dice | Corre |
+| Situación | Corre |
 |---|---|
-| «esto es prioridad» / «avísame cuando termines» / te deja trabajando en algo del día | `myturn prio 1` — prioriza ESTA sesión (usa tu `HERDR_PANE_ID`, no el pane enfocado). `myturn prio 0` = quitar. André lo hace él mismo con ⌥T |
-| «anota X» / «agrégalo a mis pendientes» (algo que no es esta sesión) | `myturn add --raw "X"` — la IA saca fecha y prioridad en segundo plano. Si él dio prioridad o fecha, pásalas: `myturn add "X" --prio 1 --due 2026-10-06` |
-| «qué me espera» / «qué tengo» | `myturn ls` |
-| «listo, ciérrala» | `myturn done` (esta sesión) o `myturn done --id <id>` — solo cuando André lo confirma; terminar tu turno NO cierra la tarea |
+| André te pega «Ayúdame con esta tarea: «X». Antes de empezar, corre `myturn link tXXXX`…» | `myturn link tXXXX` **antes de empezar** — enlaza ESTA sesión a la tarea; desde ahí André ve en la barra cuándo terminas o le preguntas algo |
+| «esto es prioridad» / «avísame cuando termines» y no hay tarea | `myturn add "<título corto>" --prio 1` y luego `myturn link <id que imprime>` |
+| «anota X» / «agrégalo a mis tareas» (otra cosa, no esta sesión) | `myturn add "X"` (con `--prio 1` si dijo que es urgente) |
+| «qué tengo» | `myturn ls` |
+| «listo, ciérrala» (solo si André lo confirma) | `myturn done <id>` |
 
-## Reglas
-
-- No hace falta registrar la sesión: el hook `UserPromptSubmit` (`myturn track`) ya lo hizo. Lo único que agrega valor es la **prioridad** — sin ella, myturn nunca interrumpe a André por esta sesión.
-- `myturn prio` / `myturn done` sin `--id`, corridos por ti, actúan sobre **tu propia sesión** (vía `HERDR_PANE_ID`). Fuera de herdr usan el agente enfocado.
-- No edites `~/tasks/events.jsonl` a mano (append-only, sincronizado por git entre el Mac y el Arch). Para corregir: `myturn archive <id>` / `myturn restore <id>`.
-- No inventes prioridad ni fecha que André no dijo.
+Reglas: terminar tu turno NO cierra la tarea (André la cierra con ✓). No edites `~/tasks/events.jsonl` a mano.
+No inventes prioridad ni fecha que André no dijo.

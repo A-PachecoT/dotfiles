@@ -2,20 +2,20 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""myturn — tus agentes te esperan; myturn te lleva a ellos. SSOT: ~/dotfiles/docs/myturn.md
+"""myturn — tus tareas y los agentes que trabajan en ellas, en la barra. SSOT: ~/dotfiles/docs/myturn.md
 
-  myturn                         ⌥G: salta al siguiente agente que te espera (= myturn jump)
-  myturn ls [--json]             te esperan · trabajando · pendientes
-  myturn add "texto" [--raw] [--prio 1|2] [--due YYYY-MM-DD]   pendiente suelto (--raw: la IA saca fecha/prio)
-  myturn prio [1|2|0] [--id ID]  prioridad del agente enfocado en herdr (o de ID); 0 = quitar
-  myturn done [--id ID]          cerrar (sin --id: el agente enfocado)
-  myturn go ID                   ir al agente de esa tarea (o abrir uno con /goal si es un pendiente)
-  myturn archive|restore ID      podar a mano / deshacer
-  myturn import                  registrar las sesiones de herdr que ya existían (sin prioridad)
-  myturn garden [--ai]           poda: sesiones sin prio inactivas >12 h o cerradas; pendientes muertos
-  myturn track                   hook UserPromptSubmit de Claude Code (lee el JSON del hook por stdin)
-  myturn toggle                  ⌥T: marca/desmarca como prioridad el agente que estás mirando en herdr
-  myturn sketchybar              pinta la barra (Mac)
+La UI es el panel del widget (clic en la barra o ⌥T). Este CLI es lo que el panel y los agentes llaman:
+
+  myturn                          ⌥G: salta al siguiente agente que te espera (= myturn jump)
+  myturn add "título" [--prio 1|2] [--raw]   nueva tarea (--raw: la IA saca fecha y prioridad)
+  myturn edit ID "nuevo título"   renombrar
+  myturn prio 0|1|2 [--id ID]     prioridad (0 = sin prioridad); sin --id: tu propia sesión si eres un agente
+  myturn done|archive|restore ID  cerrar / podar / deshacer
+  myturn link ID                  (lo corre un agente) enlaza ESTA sesión de Claude a la tarea ID
+  myturn go ID                    ir al agente de la tarea (o reabrirlo si se cerró)
+  myturn ls [--json]              tus tareas, las que te esperan primero
+  myturn panel                    JSON para el panel de Hammerspoon
+  myturn import | garden [--ai] | track | sketchybar     mantenimiento, poda, hook y barra
 
 Store: $MYTURN_HOME (default ~/tasks): events.jsonl append-only (merge=union), sincronizado por git.
 """
@@ -32,7 +32,6 @@ import shutil
 import subprocess
 import sys
 import time
-import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -47,8 +46,8 @@ HERDR_WINDOW = {"mac": "herdr-mac", "arch": "herdr-arch"}
 NO_SYNC = os.environ.get("MYTURN_NO_SYNC") == "1"
 SELF = str(Path(__file__).resolve())
 WAITING = {"idle", "blocked", "done"}
-STALE_DAYS = 14          # pendiente suelto sin tocar
-DEAD_AGENT_H = 12        # sesión sin prioridad inactiva
+STALE_DAYS = 14          # tarea sin agente y sin tocar
+DEAD_AGENT_H = 12        # sesión registrada por el hook, que no es tuya, inactiva
 SOUND = "/System/Library/Sounds/Glass.aiff"
 
 # sketchybar, Hammerspoon y los hooks arrancan con PATH mínimo
@@ -111,8 +110,20 @@ def fold() -> dict[str, dict]:
     return tasks
 
 
+def mine(t: dict) -> bool:
+    """Tus tareas: las que escribiste tú (o un agente por ti) y las sesiones a las que les pusiste prioridad.
+    Las sesiones que el hook registra solo existen para poder enlazarlas; no se muestran."""
+    return t["status"] == "open" and (t.get("source") != "agent" or bool(t.get("prio")))
+
+
 def by_session(tasks: dict) -> dict[str, dict]:
-    return {t["link"]["session"]: t for t in tasks.values() if t.get("link")}
+    """Sesión → tarea abierta enlazada; si hay varias, gana la tuya sobre la registrada por el hook."""
+    out: dict[str, dict] = {}
+    for t in tasks.values():
+        s = (t.get("link") or {}).get("session")
+        if s and t["status"] == "open" and (s not in out or mine(t)):
+            out[s] = t
+    return out
 
 
 def new_id() -> str:
@@ -120,7 +131,7 @@ def new_id() -> str:
 
 
 def find(tasks: dict, ref: str) -> dict:
-    hits = [t for t in tasks.values() if t["id"].startswith(ref)]
+    hits = [t for t in tasks.values() if t["id"].startswith(ref.lstrip("#"))]
     if len(hits) != 1:
         sys.exit(f"myturn: no encuentro una única tarea '{ref}'")
     return hits[0]
@@ -148,7 +159,6 @@ def do_sync() -> None:
         g("commit", "-qm", f"myturn: {LOCAL} {iso(now())}")
         g("pull", "-q", "--rebase")
         g("push", "-q")
-        (CACHE / "last_pull").write_text(str(time.time()))
 
 
 def every(name: str, seconds: float) -> bool:
@@ -189,7 +199,7 @@ def herdr_json(args: list[str], host: str = LOCAL, timeout: float = 4) -> dict |
 
 
 def herdr_agents(host: str) -> list[dict] | None:
-    """Agentes de herdr de esa caja; None si no se pudo leer. Lo remoto se cachea 60 s."""
+    """Agentes de Claude en herdr de esa caja; None si no se pudo leer. Lo remoto se cachea 60 s."""
     cache = CACHE / f"agents-{host}.json"
     if host != LOCAL and cache.exists() and time.time() - cache.stat().st_mtime < 60:
         return json.loads(cache.read_text())
@@ -244,7 +254,7 @@ def notify(msg: str, sound: bool = False) -> None:
     run(["osascript", "-e", f"display notification {json.dumps(msg)} with title \"myturn\""])
 
 
-# ── estado: qué agente te espera ──────────────────────────────────────────────────────────────────
+# ── estado: en qué está cada tarea ────────────────────────────────────────────────────────────────
 def load_seen() -> dict:
     try:
         return json.loads((CACHE / "seen.json").read_text())
@@ -269,8 +279,8 @@ def ago(ts: str) -> str:
     return f"{m} min" if m < 60 else f"{m // 60} h" if m < 1440 else f"{m // 1440} d"
 
 
-def observe(tasks: dict, lists: dict[str, list | None], front: str | None, t0: datetime) -> dict[str, dict]:
-    """Actualiza las transiciones y el «visto» de cada sesión. {session: info}"""
+def observe(lists: dict[str, list | None], front: str | None, t0: datetime) -> dict[str, dict]:
+    """Registra transiciones y «visto» de cada sesión. {session: info}"""
     seen = load_seen()
     info: dict[str, dict] = {}
     for host, agents in lists.items():
@@ -285,76 +295,72 @@ def observe(tasks: dict, lists: dict[str, list | None], front: str | None, t0: d
             if st in WAITING and a.get("focused") and front == host and not rec.get("seen_at"):
                 rec["seen_at"] = iso(t0)
             seen[s] = rec
-            info[s] = rec | {"pane": a.get("pane_id"), "host": host, "title": clean_title(a.get("terminal_title")),
-                             "cwd": a.get("cwd"), "focused": a.get("focused")}
+            info[s] = rec | {"pane": a.get("pane_id"), "host": host, "title": clean_title(a.get("terminal_title"))}
     save_seen(seen)
     return info
 
 
+# estado de la fila → (punto, texto); el orden de este dict es el orden de la lista
+STATES = {"waiting": "●", "working": "◌", "seen": "○", "closed": "○", "none": "○"}
+
+
 def classify(tasks: dict, info: dict[str, dict], lists: dict[str, list | None]) -> dict:
     t0, today = now(), date.today()
-    waiting, working, paused, pending, background = [], [], [], [], 0
+    rows, background = [], 0
     for t in tasks.values():
-        if t["status"] != "open":
-            continue
         link = t.get("link")
-        if link:
-            ag = info.get(link["session"])
-            if ag and not t.get("title_fixed") and ag["title"]:
-                t["title"] = ag["title"]
-            t["agent"] = ag
-            if not t.get("prio"):
-                background += 1
-                continue
-            if ag and ag["status"] == "working":
-                working.append(t | {"why": [f"p{t['prio']}", f"trabajando hace {ago(ag['since'])}"]})
-            elif ag and ag["status"] in WAITING:
-                verb = "te pregunta algo" if ag["status"] == "blocked" else "terminó"
-                row = t | {"why": [f"p{t['prio']}", f"{verb} hace {ago(ag['since'])}"]}
-                (paused if ag.get("seen_at") else waiting).append(row)
-            continue  # agente cerrado: no se muestra; garden lo archiva
-        why, tier = [], 2
+        if not mine(t):
+            background += bool(link and t["status"] == "open")
+            continue
+        row = {k: t.get(k) for k in ("id", "title", "prio", "due", "created", "link", "source")}
+        ag = info.get(link["session"]) if link else None
+        if ag and t.get("source") == "agent" and not t.get("title_fixed") and ag["title"]:
+            row["title"] = ag["title"]
+        since = ag["since"] if ag else t["created"]
+        if not link:
+            state, say = "none", "sin agente · cópiala a un Claude"
+        elif not ag:
+            known = lists.get(link["host"]) is not None
+            state, say = ("closed", "agente cerrado") if known else ("closed", "no veo su caja")
+        elif ag["status"] == "working":
+            state, say = "working", "trabajando…"
+        elif ag["status"] in WAITING and not ag.get("seen_at"):
+            state = "waiting"
+            say = "te hizo una pregunta" if ag["status"] == "blocked" else f"terminó hace {ago(ag['since'])}"
+        else:
+            state, say = "seen", "ya lo viste"
         due = date.fromisoformat(t["due"]) if t.get("due") else None
         if due:
             d = (due - today).days
-            why.append("vence hoy" if d == 0 else f"vencida hace {-d} d" if d < 0 else
-                       "vence mañana" if d == 1 else f"vence en {d} d")
-            tier = 1 if d <= 0 else tier
-        if t.get("prio"):
-            why.append(f"p{t['prio']}")
-        why.append(f"capturada hace {ago(t['created'])}")
-        pending.append(t | {"why": why, "_key": (tier, t.get("prio") or 3, due or date.max, t["created"])})
-    waiting.sort(key=lambda t: (t["prio"], t["agent"]["since"]))
-    working.sort(key=lambda t: (t["prio"], t["agent"]["since"]))
-    pending.sort(key=lambda t: t["_key"])
-    for t in pending:
-        t.pop("_key", None)
+            say += " · " + ("vence hoy" if d == 0 else f"vencida hace {-d} d" if d < 0 else
+                            "vence mañana" if d == 1 else f"vence el {due.strftime('%d/%m')}")
+        row |= {"state": state, "dot": STATES[state], "say": say, "since": since,
+                "can_go": bool(ag), "can_resume": bool(link and not ag)}
+        rows.append(row)
+    order = list(STATES)
+    rows.sort(key=lambda r: (order.index(r["state"]) if r["state"] == "waiting" else 1, r["prio"] or 9,
+                             r["due"] or "9999", r["since"] if r["state"] == "waiting" else r["created"]))
     tracked = set(by_session(tasks))
     untracked = sum(1 for agents in lists.values() for a in agents or [] if session_of(a) not in tracked)
-    prios = ([t | {"dot": "green", "say": "te hizo una pregunta" if t["agent"]["status"] == "blocked"
-                   else f"terminó hace {ago(t['agent']['since'])}"} for t in waiting]
-             + [t | {"dot": "dim", "say": "trabajando…"} for t in working]
-             + [t | {"dot": "white", "say": "ya lo viste"} for t in paused])
-    return {"updated": iso(t0), "prios": prios, "waiting": waiting, "working": working, "paused": paused,
-            "pending": pending,
-            "background": background, "untracked": untracked,
+    by = {s: [r for r in rows if r["state"] == s] for s in STATES}
+    return {"updated": iso(t0), "rows": rows, "waiting": by["waiting"], "working": by["working"],
+            "seen": by["seen"], "background": background, "untracked": untracked,
             "herdr_ok": lists.get(LOCAL) is not None}
 
 
 def compute(notify_new: bool = False) -> dict:
     tasks = fold()
-    hosts = {LOCAL} | {t["link"]["host"] for t in tasks.values() if t["status"] == "open" and t.get("link")
-                       and t.get("prio")}
+    hosts = {LOCAL} | {t["link"]["host"] for t in tasks.values() if mine(t) and t.get("link")}
     lists = {h: herdr_agents(h) for h in hosts}
-    info = observe(tasks, lists, herdr_frontmost(), now())
+    info = observe(lists, herdr_frontmost(), now())
     state = classify(tasks, info, lists)
     if notify_new:
         seen, fresh = load_seen(), []
-        for t in state["waiting"]:
-            s = t["link"]["session"]
+        for r in state["waiting"]:
+            s = r["link"]["session"]
             if not seen.get(s, {}).get("notified"):
                 seen.setdefault(s, {})["notified"] = True
-                fresh.append(t)
+                fresh.append(r)
         if fresh:
             save_seen(seen)
             notify(f"Te espera: {fresh[0]['title']}" + (f" (+{len(fresh) - 1})" if len(fresh) > 1 else ""),
@@ -363,112 +369,82 @@ def compute(notify_new: bool = False) -> dict:
     return state
 
 
-def load_state() -> dict:
-    try:
-        return json.loads(STATE.read_text())
-    except (OSError, ValueError):
-        return compute()
-
-
 # ── acciones ──────────────────────────────────────────────────────────────────────────────────────
-def open_agent(t: dict, host: str, cmd: str) -> None:
-    res = herdr_json(["tab", "create", "--cwd", t.get("cwd") or str(HOME), "--label", t["title"][:24], "--focus"],
-                     host, timeout=8)
-    pane = ((res or {}).get("root_pane") or {}).get("pane_id")
-    if not pane:
-        notify(f"No pude abrir una pestaña en herdr ({host})")
-        return
-    run(["herdr", "pane", "run", pane, cmd], host, timeout=8)
-    focus_window(host)
-
-
-def go(t: dict) -> None:
+def go(t: dict) -> str:
     link = t.get("link")
-    if not link:  # pendiente suelto → agente nuevo, ya enlazado
-        sid = str(uuid.uuid4())
-        emit("link", t["id"], link={"host": LOCAL, "session": sid})
-        sync_bg()
-        open_agent(t, LOCAL, f"claude --session-id {sid} {sh_quote('/goal ' + t['title'])}")
-        return
+    if not link:
+        return "Esta tarea no tiene agente: cópiala y pégasela a un Claude"
     agents = herdr_agents(link["host"]) or []
     ag = next((a for a in agents if session_of(a) == link["session"]), None)
     if ag:
         focus_window(link["host"])
         run(["herdr", "agent", "focus", ag["pane_id"]], link["host"])
         mark_seen(link["session"])
-    else:
-        open_agent(t, link["host"], f"claude --resume {link['session']}")
+        return f"→ {t['title']}"
+    res = herdr_json(["tab", "create", "--cwd", t.get("cwd") or str(HOME), "--label", t["title"][:24], "--focus"],
+                     link["host"], timeout=8)
+    pane = ((res or {}).get("root_pane") or {}).get("pane_id")
+    if not pane:
+        return f"No pude abrir una pestaña en herdr ({link['host']})"
+    run(["herdr", "pane", "run", pane, f"claude --resume {link['session']}"], link["host"], timeout=8)
+    focus_window(link["host"])
+    return f"↻ Reabriendo el agente de {t['title']}"
 
 
 def jump() -> str:
     st = compute()
     if not st["waiting"]:
         return "nadie te espera"
-    t = st["waiting"][0]
-    go(t)
-    refresh()
-    return f"→ {t['title']}"
-
-
-def focused_agent(host: str = LOCAL) -> dict | None:
-    """El agente de Claude enfocado en el herdr de esa caja (lectura fresca, sin caché)."""
-    if host != LOCAL:
-        (CACHE / f"agents-{host}.json").unlink(missing_ok=True)
-    return next((a for a in herdr_agents(host) or [] if a.get("focused") and session_of(a)), None)
-
-
-def task_for_agent(a: dict, create: bool, host: str = LOCAL) -> dict | None:
-    tasks = fold()
-    t = by_session(tasks).get(session_of(a))
-    if t or not create:
-        return t
-    tid = new_id()
-    emit("add", tid, title=clean_title(a.get("terminal_title")) or "agente", source="agent", cwd=a.get("cwd"),
-         link={"host": host, "session": session_of(a), "pane": a.get("pane_id")})
-    return fold()[tid]
-
-
-def toggle() -> str:
-    """⌥T: marca o desmarca como prioridad el agente que estás mirando. Devuelve el texto del aviso."""
-    host = herdr_frontmost() if LOCAL == "mac" else LOCAL
-    if not host:
-        return "Abre herdr, enfoca un agente y vuelve a presionar ⌥T"
-    a = focused_agent(host)
-    if not a:
-        return "Este pane de herdr no tiene un agente de Claude"
-    t = task_for_agent(a, create=True, host=host)
-    title = trunc(t["title"], 50)
-    if t.get("prio"):
-        emit("update", t["id"], set={"prio": None})
-        msg = f"☆ {title} — ya no es prioridad"
-    else:
-        emit("update", t["id"], set={"prio": 1})
-        msg = f"★ {title} — te aviso cuando termine"
-    sync_bg()
+    msg = go(fold()[st["waiting"][0]["id"]])
     refresh()
     return msg
 
 
-def target(ref: str | None, create: bool = True) -> dict:
+def here() -> dict | None:
+    """El pane de herdr de ESTE proceso (cuando lo corre un agente)."""
+    if not os.environ.get("HERDR_PANE_ID"):
+        return None
+    cur = (herdr_json(["pane", "current"]) or {}).get("pane")
+    return cur if cur and session_of(cur) else None
+
+
+def link_here(tid: str) -> str:
+    """Un agente se enlaza a una tarea: desde ahora su estado es el de la tarea."""
+    tasks, cur = fold(), here()
+    if not cur:
+        sys.exit("myturn: link solo funciona dentro de un pane de herdr con Claude")
+    t, s = find(tasks, tid), session_of(cur)
+    emit("link", t["id"], link={"host": LOCAL, "session": s, "pane": cur.get("pane_id")})
+    for other in tasks.values():  # la sesión que el hook registró queda fusionada en la tarea
+        if other["id"] != t["id"] and other["status"] == "open" and other.get("source") == "agent" \
+                and (other.get("link") or {}).get("session") == s:
+            emit("archive", other["id"], reason=f"fusionada con {t['id']}", by="link")
+    sync_bg()
+    refresh()
+    return f"Enlazado: esta sesión trabaja en «{t['title']}» ({t['id']}). André verá cuándo terminas."
+
+
+def target(ref: str | None) -> dict:
     if ref:
         return find(fold(), ref)
-    if os.environ.get("HERDR_PANE_ID"):  # lo corre un agente: actúa sobre su propia sesión, no sobre la enfocada
-        cur = (herdr_json(["pane", "current"]) or {}).get("pane")
-        if cur and session_of(cur):
-            return task_for_agent(cur, create)
-    a = focused_agent()
-    if not a:
-        sys.exit("myturn: no hay un agente de Claude enfocado en herdr; usa --id")
-    return task_for_agent(a, create)
+    cur = here()
+    if not cur:
+        sys.exit("myturn: dime la tarea con --id")
+    t = by_session(fold()).get(session_of(cur))
+    if t:
+        return t
+    tid = new_id()
+    emit("add", tid, title=clean_title(cur.get("terminal_title")) or "agente", source="agent", cwd=cur.get("cwd"),
+         link={"host": LOCAL, "session": session_of(cur), "pane": cur.get("pane_id")})
+    return fold()[tid]
 
 
 def track(payload: dict) -> None:
-    """Hook UserPromptSubmit: registra la sesión la primera vez. Silencioso (su stdout iría al contexto)."""
+    """Hook UserPromptSubmit: registra la sesión la primera vez, para poder enlazarla. Silencioso."""
     sid, pane = payload.get("session_id"), os.environ.get("HERDR_PANE_ID")
     if not sid or not pane:
         return
-    tasks = fold()
-    if sid in by_session(tasks):
+    if sid in by_session(fold()):
         return
     cur = herdr_json(["pane", "current"], timeout=2) or {}
     if session_of(cur.get("pane") or {}) != sid:  # p. ej. un `claude -p` que corre dentro de un pane
@@ -481,8 +457,7 @@ def track(payload: dict) -> None:
 
 
 def import_sessions() -> int:
-    tasks, n = fold(), 0
-    tracked = set(by_session(tasks))
+    tracked, n = set(by_session(fold())), 0
     for a in herdr_agents(LOCAL) or []:
         s = session_of(a)
         if s and s not in tracked:
@@ -495,7 +470,13 @@ def import_sessions() -> int:
     return n
 
 
-# ── IA (solo para pendientes sueltos) ─────────────────────────────────────────────────────────────
+def claude_prompt(t: dict) -> str:
+    """Lo que el botón «Copiar para Claude» pone en el portapapeles."""
+    return (f"Ayúdame con esta tarea: «{t['title']}». Antes de empezar, corre `myturn link {t['id']}` para "
+            "enlazar esta sesión a la tarea (así André ve en su barra cuándo terminas).")
+
+
+# ── IA (opcional, solo para capturas con --raw) ───────────────────────────────────────────────────
 def claude_json(prompt: str, schema: dict, model: str = "haiku", timeout: int = 120) -> dict | None:
     exe = shutil.which("claude")
     if not exe:
@@ -535,8 +516,8 @@ def enrich(tid: str) -> None:
 
 def garden(use_ai: bool) -> list[dict]:
     tasks, t0, acts = fold(), now(), []
-    lists = {LOCAL: herdr_agents(LOCAL)}
-    live = {session_of(a): a for a in lists[LOCAL] or []}
+    agents = herdr_agents(LOCAL)
+    live = {session_of(a): a for a in agents or []}
     seen = load_seen()
 
     def archive(t: dict, reason: str) -> None:
@@ -547,14 +528,13 @@ def garden(use_ai: bool) -> list[dict]:
         if t["status"] != "open":
             continue
         link = t.get("link")
-        if link and link["host"] == LOCAL and lists[LOCAL] is not None:
+        if link and t.get("source") == "agent" and not mine(t) and link["host"] == LOCAL and agents is not None:
             a = live.get(link["session"])
             since = parse(seen.get(link["session"], {}).get("since"))
             if not a:
                 archive(t, "sesión cerrada")
-            elif (not t.get("prio") and a.get("agent_status") in WAITING and since
-                  and t0 - since > timedelta(hours=DEAD_AGENT_H)):
-                archive(t, f"sin prioridad, inactiva hace {ago(iso(since))}")
+            elif a.get("agent_status") in WAITING and since and t0 - since > timedelta(hours=DEAD_AGENT_H):
+                archive(t, f"sesión inactiva hace {ago(iso(since))}")
         elif not link and t.get("prio") != 1:
             idle = (t0 - parse(t["touched"])).days
             live_due = t.get("due") and (date.fromisoformat(t["due"]) - date.today()).days > -STALE_DAYS
@@ -567,7 +547,7 @@ def garden(use_ai: bool) -> list[dict]:
             "properties": {"id": {"type": "string"}, "reason": {"type": "string"}}}}}}
         rows = [{"id": t["id"], "title": t["title"], "prio": t.get("prio"), "due": t.get("due"),
                  "tocada_hace_d": (t0 - parse(t["touched"])).days} for t in loose]
-        out = claude_json(f"{today_line()}\nEres el jardinero de los pendientes de André. Propón archivar solo lo "
+        out = claude_json(f"{today_line()}\nEres el jardinero de las tareas de André. Propón archivar solo lo "
                           "claramente muerto o duplicado (es reversible). Sé conservador; razones de ≤8 palabras.\n\n"
                           + json.dumps(rows, ensure_ascii=False), schema, model="sonnet", timeout=240)
         ids = {t["id"]: t for t in loose}
@@ -579,9 +559,8 @@ def garden(use_ai: bool) -> list[dict]:
     return acts
 
 
-# ── sketchybar ────────────────────────────────────────────────────────────────────────────────────
+# ── barra y panel ─────────────────────────────────────────────────────────────────────────────────
 C = {"white": "0xffe5e9f0", "dim": "0xff9aa3b5", "green": "0xffa3be8c"}
-ROWS = 6  # filas fijas de «mis prioridades» en items/myturn.sh
 
 
 def trunc(s: str, n: int) -> str:
@@ -589,43 +568,24 @@ def trunc(s: str, n: int) -> str:
 
 
 def bar_label(st: dict) -> tuple[str, str, str]:
-    """(punto, color, texto) de la barra. Solo habla de tus prioridades:
-    te espera (verde) > trabajando (gris) > ya lo viste (blanco) > sin prioridades."""
-    w, k, z = st["waiting"], st["working"], st["paused"]
+    """(punto, color, texto) de la barra: te espera (verde) > trabajando > tu tarea más importante."""
+    w = st["waiting"]
     if w:
         head = "te espera" if len(w) == 1 else f"{len(w)} te esperan"
-        return "●", "green", f"{trunc(w[0]['title'], 36)} · {head}"
-    if k:
-        return "◌", "dim", f"{trunc(k[0]['title'], 36)} · trabajando"
-    if z:
-        return "○", "white", f"{trunc(z[0]['title'], 36)} · ya lo viste"
-    return "○", "dim", "sin prioridades · ⌥T en un agente para marcarlo"
+        return "●", "green", f"{trunc(w[0]['title'], 38)} · {head}"
+    if st["working"]:
+        k = st["working"]
+        return "◌", "dim", f"{trunc(k[0]['title'], 38)} · trabajando" + (f" (+{len(k) - 1})" if len(k) > 1 else "")
+    if st["rows"]:
+        return "○", "white", trunc(st["rows"][0]["title"], 44)
+    return "○", "dim", "sin tareas · clic para anotar"
 
 
 def sketchybar(st: dict) -> None:
-    if not shutil.which("sketchybar"):
-        return
-    a: list[str] = []
-
-    def s(item: str, *props: str) -> None:
-        a.extend(["--set", item, *props])
-
-    dot, color, label = bar_label(st)
-    s("myturn", f"icon={dot}", f"icon.color={C[color]}", f"label={label}", f"label.color={C[color]}")
-    rows = st["prios"]
-    for i in range(ROWS):
-        if i < len(rows):
-            t = rows[i]
-            dot_ = {"green": "●", "dim": "◌", "white": "○"}[t["dot"]]
-            s(f"myturn.r.{i}", "drawing=on", f"icon={dot_}",
-              f"icon.color={C[t['dot']]}", f"label={trunc(t['title'], 44)}    {t['say']}",
-              f"label.color={C['white' if t['dot'] != 'dim' else 'dim']}")
-        else:
-            s(f"myturn.r.{i}", "drawing=off")
-    s("myturn.empty", f"drawing={'off' if rows else 'on'}")
-    hint = "clic = ir al agente · ⌥G siguiente · ⌥T marcar/desmarcar"
-    s("myturn.hint", f"label={hint}" + ("" if st["herdr_ok"] else " · herdr no responde"))
-    subprocess.run(["sketchybar", *a], capture_output=True, timeout=5)
+    if shutil.which("sketchybar"):
+        dot, color, label = bar_label(st)
+        subprocess.run(["sketchybar", "--set", "myturn", f"icon={dot}", f"icon.color={C[color]}", f"label={label}",
+                        f"label.color={C[color]}"], capture_output=True, timeout=5)
 
 
 def refresh() -> dict:
@@ -635,23 +595,14 @@ def refresh() -> dict:
     return st
 
 
-def click(slot: str) -> None:
-    """Clic en una fila = ir a ese agente. Siempre lo mismo."""
-    _, _, i = slot.partition(".")
-    rows = load_state().get("prios", [])
-    subprocess.run(["sketchybar", "--set", "myturn", "popup.drawing=off"], capture_output=True)
-    if i.isdigit() and int(i) < len(rows):
-        t = fold().get(rows[int(i)]["id"])
-        if t:
-            go(t)
-    refresh()
+def panel() -> dict:
+    st = refresh()
+    rows = [{k: r[k] for k in ("id", "title", "prio", "due", "state", "dot", "say", "can_go", "can_resume")}
+            | {"prompt": claude_prompt(r)} for r in st["rows"]]
+    return {"rows": rows, "background": st["background"], "herdr_ok": st["herdr_ok"]}
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────────────────────────
-def show(t: dict) -> str:
-    return f"{t['id']}  {t['title']}  — {' · '.join(t.get('why', []))}"
-
-
 def main(argv: list[str]) -> None:
     ap = argparse.ArgumentParser(prog="myturn", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -661,24 +612,19 @@ def main(argv: list[str]) -> None:
     p.add_argument("--raw", action="store_true")
     p.add_argument("--prio", type=int, choices=[1, 2])
     p.add_argument("--due")
-    p.add_argument("--json", action="store_true")
-    sub.add_parser("ls").add_argument("--json", action="store_true")
+    p = sub.add_parser("edit")
+    p.add_argument("id")
+    p.add_argument("title", nargs="+")
     p = sub.add_parser("prio")
-    p.add_argument("level", nargs="?", type=int, default=1, choices=[0, 1, 2])
+    p.add_argument("level", type=int, choices=[0, 1, 2])
     p.add_argument("--id")
-    sub.add_parser("done").add_argument("--id")
-    sub.add_parser("go").add_argument("id")
-    sub.add_parser("archive").add_argument("id")
-    sub.add_parser("restore").add_argument("id")
-    sub.add_parser("jump")
-    sub.add_parser("import")
+    for name in ("done", "archive", "restore", "go", "link"):
+        sub.add_parser(name).add_argument("id", nargs="?" if name == "done" else None)
+    sub.add_parser("ls").add_argument("--json", action="store_true")
+    for name in ("jump", "import", "track", "panel", "sketchybar", "_sync"):
+        sub.add_parser(name)
     sub.add_parser("garden").add_argument("--ai", action="store_true")
-    sub.add_parser("track")
-    sub.add_parser("toggle")
-    sub.add_parser("sketchybar")
-    sub.add_parser("click").add_argument("slot")
     sub.add_parser("enrich").add_argument("id")
-    sub.add_parser("_sync")
     a = ap.parse_args(argv)
     cmd = a.cmd or "jump"
 
@@ -694,17 +640,14 @@ def main(argv: list[str]) -> None:
         if every("pull", 120):
             sync_bg()
         if every("garden", 6 * 3600):
-            spawn("garden", "--ai")
-        st = compute(notify_new=True)
-        return sketchybar(st)
-    if cmd == "click":
-        return click(a.slot)
+            spawn("garden")
+        return sketchybar(compute(notify_new=True))
     if cmd == "enrich":
         return enrich(a.id)
     if cmd == "jump":
         return print(jump())
-    if cmd == "toggle":
-        return print(toggle())
+    if cmd == "panel":
+        return print(json.dumps(panel(), ensure_ascii=False))
     if cmd == "import":
         n = import_sessions()
         refresh()
@@ -714,40 +657,37 @@ def main(argv: list[str]) -> None:
             print(json.dumps(act, ensure_ascii=False))
         refresh()
         return
-    if cmd == "add":
-        text, tid = " ".join(a.text).strip(), new_id()
-        emit("add", tid, title=text[:80], raw=text if a.raw else None, prio=a.prio, due=a.due, source="capture")
-        if a.raw:
-            spawn("enrich", tid)
-        sync_bg()
-        refresh()
-        return print(json.dumps({"id": tid}) if a.json else tid)
+    if cmd == "link":
+        return print(link_here(a.id))
+    if cmd == "go":
+        return print(go(find(fold(), a.id)))
     if cmd == "ls":
         st = refresh()
         if a.json:
             return print(json.dumps(st, ensure_ascii=False, default=str))
-        for label, key in (("TE ESPERAN", "waiting"), ("TRABAJANDO", "working"), ("EN PAUSA", "paused"),
-                           ("PENDIENTES", "pending")):
-            if st[key]:
-                print(label)
-                for t in st[key]:
-                    print("  " + show(t))
-        print(f"({st['background']} sin prioridad · {st['untracked']} sin rastrear)")
-        return
+        for r in st["rows"]:
+            print(f"{r['dot']} {r['id']}  {r['title']}" + (f"  !{r['prio']}" if r["prio"] else "") + f"  — {r['say']}")
+        return print(f"({st['background']} sesiones sin tarea)")
 
-    if cmd == "prio":
+    if cmd == "add":
+        text, tid = " ".join(a.text).strip(), new_id()
+        emit("add", tid, title=text[:120], raw=text if a.raw else None, prio=a.prio, due=a.due, source="capture")
+        if a.raw:
+            spawn("enrich", tid)
+        msg, t = "nueva", {"id": tid, "title": text}
+    elif cmd == "edit":
+        t = find(fold(), a.id)
+        emit("update", t["id"], set={"title": " ".join(a.title).strip()})
+        msg = "renombrada"
+    elif cmd == "prio":
         t = target(a.id)
         emit("update", t["id"], set={"prio": a.level or None})
-        msg = f"p{a.level}" if a.level else "sin prioridad"
+        msg = f"!{a.level}" if a.level else "sin prioridad"
     elif cmd == "done":
-        t = target(a.id, create=False)
-        if not t:
-            sys.exit("myturn: ese agente no tiene tarea")
+        t = target(a.id)
         emit("done", t["id"])
         msg = "hecha"
-    elif cmd == "go":
-        return go(find(fold(), a.id))
-    else:
+    else:  # archive | restore
         t = find(fold(), a.id)
         emit(cmd, t["id"], **({"reason": "a mano", "by": "user"} if cmd == "archive" else {}))
         msg = cmd

@@ -1,4 +1,4 @@
-"""Smoke tests de myturn: store, visto, cola, hook y poda. Correr: uv run --with pytest pytest scripts/tests/"""
+"""Smoke tests de myturn: store, estados, enlace, hook y poda. Correr: uv run --with pytest pytest scripts/tests/"""
 import importlib.machinery
 import importlib.util
 import io
@@ -16,6 +16,7 @@ def mt(tmp_path, monkeypatch):
     monkeypatch.setenv("MYTURN_HOME", str(tmp_path / "tasks"))
     monkeypatch.setenv("MYTURN_CACHE", str(tmp_path / "cache"))
     monkeypatch.setenv("MYTURN_NO_SYNC", "1")
+    monkeypatch.delenv("HERDR_PANE_ID", raising=False)
     loader = importlib.machinery.SourceFileLoader("myturn", str(SCRIPT))
     spec = importlib.util.spec_from_loader("myturn", loader)
     mod = importlib.util.module_from_spec(spec)
@@ -30,13 +31,16 @@ def agent(session, status, pane="w:p1", focused=False, title="✳ Fix webhook"):
 
 def state(mt, agents, front=None):
     lists = {mt.LOCAL: agents}
-    tasks = mt.fold()
-    info = mt.observe(tasks, lists, front, mt.now())
-    return mt.classify(tasks, info, lists)
+    info = mt.observe(lists, front, mt.now())
+    return mt.classify(mt.fold(), info, lists)
 
 
 def link(mt, s):
     return {"host": mt.LOCAL, "session": s, "pane": "w:p1"}
+
+
+def ids(rows):
+    return [r["id"] for r in rows]
 
 
 def test_clean_title_strips_claude_status_glyph(mt):
@@ -45,53 +49,66 @@ def test_clean_title_strips_claude_status_glyph(mt):
     assert mt.clean_title("✳ Claude Code") == ""
 
 
-def test_prio_agent_idle_unseen_waits_then_seen_pauses(mt):
-    mt.emit("add", "a", title="x", source="agent", prio=1, link=link(mt, "s1"))
+def test_my_tasks_show_hook_sessions_dont(mt):
+    mt.emit("add", "mine", title="Cotización Ecoverde")
+    mt.emit("add", "hook", title="x", source="agent", link=link(mt, "s1"))
     st = state(mt, [agent("s1", "idle")])
-    assert [t["id"] for t in st["waiting"]] == ["a"]
-    assert st["waiting"][0]["title"] == "Fix webhook"  # título vivo de Claude Code
-    # enfocado + ventana de herdr al frente → visto → en pausa
+    assert ids(st["rows"]) == ["mine"] and st["background"] == 1
+    assert st["rows"][0]["state"] == "none" and "cópiala" in st["rows"][0]["say"]
+
+
+def test_linked_task_waits_then_seen_then_waits_again(mt):
+    mt.emit("add", "a", title="Fix webhook Fovente", link=link(mt, "s1"))
+    st = state(mt, [agent("s1", "idle", title="✳ otra cosa")])
+    assert ids(st["waiting"]) == ["a"]
+    assert st["rows"][0]["title"] == "Fix webhook Fovente"  # el título que escribiste no lo pisa Claude
     st = state(mt, [agent("s1", "idle", focused=True)], front=mt.LOCAL)
-    assert st["waiting"] == [] and [t["id"] for t in st["paused"]] == ["a"]
-    # nueva transición (trabajó y terminó otra vez) → vuelve a esperar
-    state(mt, [agent("s1", "working")])
-    st = state(mt, [agent("s1", "idle")])
-    assert [t["id"] for t in st["waiting"]] == ["a"]
+    assert st["waiting"] == [] and st["rows"][0]["say"] == "ya lo viste"
+    assert state(mt, [agent("s1", "working")])["rows"][0]["say"] == "trabajando…"
+    assert ids(state(mt, [agent("s1", "blocked")])["waiting"]) == ["a"]
 
 
 def test_focused_without_herdr_frontmost_is_not_seen(mt):
-    mt.emit("add", "a", title="x", source="agent", prio=1, link=link(mt, "s1"))
-    st = state(mt, [agent("s1", "idle", focused=True)], front=None)
-    assert [t["id"] for t in st["waiting"]] == ["a"]
+    mt.emit("add", "a", title="x", link=link(mt, "s1"))
+    assert ids(state(mt, [agent("s1", "idle", focused=True)], front=None)["waiting"]) == ["a"]
 
 
-def test_unprioritized_agents_never_interrupt(mt):
-    mt.emit("add", "a", title="x", source="agent", link=link(mt, "s1"))
-    st = state(mt, [agent("s1", "idle")])
-    assert st["waiting"] == [] and st["background"] == 1
-
-
-def test_queue_order_prio_then_wait_time(mt):
-    for tid, s, p in (("p2", "s2", 2), ("p1", "s1", 1), ("p1b", "s3", 1)):
-        mt.emit("add", tid, title=tid, source="agent", prio=p, link=link(mt, s))
-    early = mt.iso(mt.now() - timedelta(minutes=30))  # s3 espera desde antes
-    mt.save_seen({"s3": {"status": "idle", "since": early, "seen_at": None, "notified": False}})
-    st = state(mt, [agent(s, "idle", pane=f"w:{s}") for s in ("s1", "s2", "s3")])
-    assert [t["id"] for t in st["waiting"]] == ["p1b", "p1", "p2"]
-
-
-def test_closed_prio_agent_is_hidden_and_untracked_counted(mt):
-    mt.emit("add", "a", title="x", source="agent", prio=1, link=link(mt, "gone"))
-    st = state(mt, [agent("other", "idle")])
-    assert st["prios"] == [] and st["pending"] == []
-    assert st["untracked"] == 1
-
-
-def test_loose_pending_order(mt):
+def test_order_waiting_first_then_prio(mt):
     mt.emit("add", "low", title="baja")
-    mt.emit("add", "due", title="vence", due=date.today().isoformat())
     mt.emit("add", "p1", title="urgente", prio=1)
-    assert [t["id"] for t in state(mt, [])["pending"]] == ["due", "p1", "low"]
+    mt.emit("add", "w", title="espera", prio=2, link=link(mt, "s1"))
+    assert ids(state(mt, [agent("s1", "idle")])["rows"]) == ["w", "p1", "low"]
+
+
+def test_closed_agent_offers_resume(mt):
+    mt.emit("add", "a", title="x", link=link(mt, "gone"))
+    row = state(mt, [agent("other", "idle")])["rows"][0]
+    assert row["state"] == "closed" and row["can_resume"] and not row["can_go"]
+
+
+def test_bar_label(mt):
+    assert mt.bar_label(state(mt, []))[2].startswith("sin tareas")
+    mt.emit("add", "a", title="Cotización", prio=1)
+    assert mt.bar_label(state(mt, [])) == ("○", "white", "Cotización")
+    mt.emit("add", "w", title="Fix webhook", link=link(mt, "s1"))
+    assert mt.bar_label(state(mt, [agent("s1", "idle")])) == ("●", "green", "Fix webhook · te espera")
+
+
+def test_link_here_binds_session_and_merges_hook_task(mt, monkeypatch):
+    mt.emit("add", "task", title="Cotización Ecoverde")
+    mt.emit("add", "hook", title="sesión", source="agent", link=link(mt, "s9"))
+    monkeypatch.setenv("HERDR_PANE_ID", "w:p9")
+    monkeypatch.setattr(mt, "herdr_json", lambda *a, **k: {"pane": {"agent_session": {"value": "s9"},
+                                                                       "pane_id": "w:p9"}})
+    monkeypatch.setattr(mt, "refresh", lambda: {})
+    assert "Cotización Ecoverde" in mt.link_here("#task")
+    tasks = mt.fold()
+    assert tasks["task"]["link"]["session"] == "s9" and tasks["hook"]["status"] == "archived"
+    assert mt.by_session(tasks)["s9"]["id"] == "task"
+
+
+def test_claude_prompt_tells_the_agent_how_to_link(mt):
+    assert "myturn link tabc123" in mt.claude_prompt({"id": "tabc123", "title": "Fix"})
 
 
 def test_track_hook_registers_once_and_skips_foreign_sessions(mt, monkeypatch):
@@ -102,30 +119,27 @@ def test_track_hook_registers_once_and_skips_foreign_sessions(mt, monkeypatch):
     mt.track({"session_id": "s9", "prompt": "otra cosa"})
     mt.track({"session_id": "claude-p-run", "prompt": "x"})  # el pane es de otra sesión
     tasks = list(mt.fold().values())
-    assert len(tasks) == 1 and tasks[0]["title"] == "Arma la cotización"
-    assert tasks[0]["link"] == {"host": mt.LOCAL, "session": "s9", "pane": "w:p9"}
+    assert len(tasks) == 1 and tasks[0]["title"] == "Arma la cotización" and tasks[0]["source"] == "agent"
 
 
-def test_track_outside_herdr_is_noop(mt, monkeypatch):
-    monkeypatch.delenv("HERDR_PANE_ID", raising=False)
+def test_track_outside_herdr_is_noop_and_never_raises(mt, monkeypatch):
     mt.track({"session_id": "s1", "prompt": "x"})
     assert mt.fold() == {}
-
-
-def test_main_track_never_raises(mt, monkeypatch):
     monkeypatch.setattr("sys.stdin", io.StringIO("no es json"))
     mt.main(["track"])
 
 
-def test_garden_archives_dead_unprioritized_sessions_only(mt, monkeypatch):
-    for tid, s, p in (("closed", "gone", None), ("prio", "gone2", 1), ("alive", "s1", None)):
-        mt.emit("add", tid, title=tid, source="agent", prio=p, link=link(mt, s))
+def test_garden_prunes_hook_sessions_and_stale_tasks_not_yours(mt, monkeypatch):
+    for tid, s in (("closed", "gone"), ("alive", "s1")):
+        mt.emit("add", tid, title=tid, source="agent", link=link(mt, s))
+    mt.emit("add", "linked_mine", title="mía", link=link(mt, "gone2"))
     old = mt.iso(mt.now() - timedelta(days=30))
     with open(mt.EVENTS, "a") as f:
         f.write(json.dumps({"ts": old, "host": mt.LOCAL, "op": "add", "id": "stale", "title": "vieja"}) + "\n")
+    mt.emit("add", "due", title="con fecha", due=date.today().isoformat())
     monkeypatch.setattr(mt, "herdr_agents", lambda host: [agent("s1", "working")])
     acts = {a["id"]: a["archive"] for a in mt.garden(use_ai=False)}
-    assert acts == {"closed": "sesión cerrada", "prio": "sesión cerrada", "stale": "sin tocar hace 30 d"}
+    assert acts == {"closed": "sesión cerrada", "stale": "sin tocar hace 30 d"}
     mt.emit("restore", "closed")
     assert mt.fold()["closed"]["status"] == "open"
 
@@ -136,41 +150,3 @@ def test_fold_tolerates_interleaved_union_merge(mt):
              {"ts": "2026-10-05T10:00:01-05:00", "host": "mac", "op": "add", "id": "x", "title": "x"}]
     mt.EVENTS.write_text("".join(json.dumps(ln) + "\n" for ln in lines))
     assert mt.fold()["x"]["status"] == "done"
-
-
-def test_bar_says_ya_lo_viste_when_a_prio_task_is_seen(mt):
-    mt.emit("add", "a", title="x", source="agent", prio=1, link=link(mt, "s1"))
-    st = state(mt, [agent("s1", "idle", focused=True)], front=mt.LOCAL)
-    dot, color, label = mt.bar_label(st)
-    assert label == "Fix webhook · ya lo viste" and color == "white"
-    assert [r["say"] for r in st["prios"]] == ["ya lo viste"]
-
-
-def test_bar_waiting_is_green_and_prios_order(mt):
-    mt.emit("add", "w", title="w", source="agent", prio=1, link=link(mt, "s1"))
-    mt.emit("add", "k", title="k", source="agent", prio=1, link=link(mt, "s2"))
-    st = state(mt, [agent("s1", "blocked", title="✳ Cotización"), agent("s2", "working", pane="w:p2")])
-    assert mt.bar_label(st) == ("●", "green", "Cotización · te espera")
-    assert [(r["id"], r["say"]) for r in st["prios"]] == [("w", "te hizo una pregunta"), ("k", "trabajando…")]
-
-
-def test_bar_without_prios_says_so(mt):
-    mt.emit("add", "bg", title="x", source="agent", link=link(mt, "s1"))  # sin prioridad
-    assert mt.bar_label(state(mt, [agent("s1", "idle")]))[2].startswith("sin prioridades")
-
-
-def test_toggle_marks_and_unmarks_the_agent_you_are_looking_at(mt, monkeypatch):
-    monkeypatch.setattr(mt, "herdr_frontmost", lambda: mt.LOCAL)
-    monkeypatch.setattr(mt, "LOCAL", "mac")
-    monkeypatch.setattr(mt, "herdr_agents", lambda host: [agent("s1", "working", focused=True)])
-    monkeypatch.setattr(mt, "refresh", lambda: {})
-    assert mt.toggle() == "★ Fix webhook — te aviso cuando termine"
-    assert next(iter(mt.fold().values()))["prio"] == 1
-    assert mt.toggle() == "☆ Fix webhook — ya no es prioridad"
-    assert next(iter(mt.fold().values()))["prio"] is None
-
-
-def test_toggle_needs_herdr_in_front(mt, monkeypatch):
-    monkeypatch.setattr(mt, "LOCAL", "mac")
-    monkeypatch.setattr(mt, "herdr_frontmost", lambda: None)
-    assert mt.toggle().startswith("Abre herdr")
