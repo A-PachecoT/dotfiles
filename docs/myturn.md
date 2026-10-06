@@ -56,6 +56,28 @@ en el widget, solo existen para que el enlace sea instantáneo y para que el jar
 
 ## Diseño
 
+### Obsidian (desde 2026-10-06)
+
+André: *«necesito que el task manager esté sincronizado con Obsidian; el sistema anterior era Obsidian pero me
+costaba tenerlo updated»*. La causa medida: `daily_prep.py` (Hermes) copiaba cada mañana todo `- [ ]` no marcado,
+incluidos eventos 📅 de días pasados, así que nada expiraba nunca.
+
+- **myturn es la única casa; Obsidian es un espejo vivo.** `05. System/myturn/Tareas.md` lo reescribe el timer
+  `myturn-obsidian` del Arch cada minuto (único escritor, respeta `~/.local/bin/vault-write-gate.py`, escritura
+  atómica para Syncthing). Formato del plugin Tasks: `- [ ] Título ⏫ 📅 2026-10-09 [agente:: te espera] ^t1a2b3`.
+- **El daily note muestra la lista viva** con una consulta ```tasks``` (`path includes 05. System/myturn/Tareas`)
+  bajo la línea GOAL; la pone el template (`05. System/Templates/Daily by name.md` y el de `daily_prep.py`).
+- **Ida y vuelta.** En `Tareas.md`: `[x]` cierra, editar texto/⏫/🔼/📅 actualiza, `- [ ] …` sin `^id` crea (se
+  compara contra la última escritura, así una edición del widget no se pierde). En el `### To-do` del daily note:
+  cada `- [ ] …` tuyo que no sea 📅 ni placeholder entra a myturn (los accionables de reunión como «Reu X: …») y la
+  línea queda `- [>] … → myturn`: no se borra nada y no se cuenta doble. Lo que daily_prep copió de ayer se marca,
+  no se duplica.
+- **daily_prep ya no arrastra** eventos 📅 ni `- [ ] —` vacíos. Reuniones, eventos y journaling siguen siendo de
+  Hermione (`daily_note_events.py`).
+- **El morning-brief** lee `myturn ls --json` (Step 3b) para «Tus tareas» y la prioridad del día.
+- Latencia medida: widget → Obsidian del Mac 50 s; `[x]` en Obsidian → cerrada en myturn ~100 s.
+
+
 ### Estados de una tarea
 
 ```
@@ -83,6 +105,7 @@ en el widget, solo existen para que el enlace sea instantáneo y para que el jar
 | Barra (etiqueta + clic abre el panel) | `macos/sketchybar/.config/sketchybar/items/myturn.sh` + `plugins/myturn.sh` |
 | Panel del widget (clic / ⌥T) y salto ⌥G | `macos/hammerspoon/.hammerspoon/myturn.lua` + `myturn-panel.html` (webview: sketchybar no tiene campos de texto) |
 | Skill para agentes | `shared/claude/skills/myturn/SKILL.md` |
+| Espejo en Obsidian | `myturn obsidian` + `linux/myturn/.config/systemd/user/myturn-obsidian.{service,timer}` (Arch, cada minuto) |
 | Datos | repo privado `A-PachecoT/tasks` en `~/tasks` (`events.jsonl`; `state.json` derivado) |
 | Caché | `~/.cache/myturn/` (estados vistos, avisos dados, última poda) |
 | Tests | `scripts/tests/test_myturn.py` |
@@ -94,6 +117,7 @@ en el widget, solo existen para que el enlace sea instantáneo y para que el jar
 | herdr | `agent list` (estado, `focused`, `terminal_title`), `agent focus`, `tab create`, `pane run`, `pane current` |
 | AeroSpace | `list-windows` / `focus --window-id` sobre las ventanas `herdr-mac` y `herdr-arch` |
 | Claude Code | hook `UserPromptSubmit` (session_id + `HERDR_PANE_ID`); `claude -p --json-schema` para la IA |
+| Obsidian (BrainFlow) | `Tareas.md` espejo + consulta ```tasks``` en el daily note + importación de `- [ ]` del To-do; `daily_prep.py` y morning-brief (Hermes) parcheados |
 | Vikunja, calendario, celular | fuera de alcance por ahora |
 
 ## Validación
@@ -113,6 +137,12 @@ en el widget, solo existen para que el enlace sea instantáneo y para que el jar
   `hammerspoon://myturn-panel` y toma el foco. Gotchas: un número de JS llega a Lua como `1.0` (usa
   `string.format("%d")`); el foco hay que pedirlo con un timer después de `show()`; `print` dentro de un callback
   de `evaluateJavaScript` lanzado desde `hs -c` revienta el IPC.
+
+- 2026-10-06, Obsidian: 17 smoke tests (importar del daily con padre de reunión, idempotencia y sin duplicar lo
+  copiado de ayer; ida y vuelta de Tareas.md con [x]/edición/línea nueva; la edición del widget gana sobre una
+  línea sin tocar; gate ocupado = no escribe). En vivo: primera pasada importó 8 pendientes del To-do (y rescató
+  «Melissa», que una edición manual de Hermione había borrado de la nota de hoy); ciclo widget → Obsidian → [x] →
+  myturn verificado en el Mac.
 
 ## Roadmap
 
