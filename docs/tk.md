@@ -1,7 +1,7 @@
 # tk — la lista que se mantiene sola (SSOT)
 
 > Task manager personal y AI-first de André. Vive en la barra (SketchyBar, en el lugar del widget de Spotify),
-> captura con ⌃⌥T y cada tarea puede apuntar a un agente de herdr. Uso personal, no es un sistema de Cofoundy
+> captura con ⌥T y cada tarea puede apuntar a un agente de herdr. Uso personal, no es un sistema de Cofoundy
 > (por eso no está en `handbook/infrastructure/SYSTEMS.md`). MVP del 2026-10-05; candidato a OSS en la cuenta
 > personal (A-PachecoT) cuando se estabilice.
 
@@ -30,7 +30,7 @@ agente** cuando termina.
 ## Flujo
 
 ```
-⌃⌥T (Hammerspoon) ─┐                    ┌─> claude -p (haiku): título/prio/fecha   [tk enrich, async]
+⌥T (Hammerspoon) ─┐                    ┌─> claude -p (haiku): título/prio/fecha   [tk enrich, async]
 /tk (skill) ───────┼─> tk add ─> events.jsonl ──git pull/push──> Arch (y viceversa)
 popup (clics) ─────┘                    │
                                         └─> tk sketchybar: fold + herdr agent list (+ ssh Arch, caché 60 s)
@@ -57,14 +57,14 @@ clic en la tarea ─> tk go: aerospace focus (ventana herdr-mac|herdr-arch) + he
 | CLI, store, ranking, IA, foco | `scripts/tk` (→ `~/.local/bin/tk`, en ambas cajas) |
 | Tests | `scripts/tests/test_tk.py` (`uv run --with pytest pytest scripts/tests/test_tk.py`) |
 | Barra y popup | `macos/sketchybar/.config/sketchybar/items/tk.sh` + `plugins/tk.sh` (wrapper con PATH) |
-| Captura | `macos/hammerspoon/.hammerspoon/tk.lua` (⌃⌥T) |
+| Captura | `macos/hammerspoon/.hammerspoon/tk.lua` (⌥T) |
 | Skill para agentes | `shared/claude/skills/tk/SKILL.md` (→ `~/.claude/skills/tk`) |
 | Datos | repo privado `A-PachecoT/tasks` en `~/tasks` (`events.jsonl`; `state.json` es derivado e ignorado) |
 | Caché local | `~/.cache/tk/` (estados vistos de agentes, última poda, último pull) |
 
 ## Entradas
 
-`tk --help` · ⌃⌥T · hover sobre la tarea en la barra · `/tk` dentro de Claude.
+`tk --help` · ⌥T · hover sobre la tarea en la barra · `/tk` dentro de Claude.
 
 ## Validación (2026-10-05)
 

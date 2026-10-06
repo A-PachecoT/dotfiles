@@ -1,4 +1,4 @@
--- tk: captura en un segundo (⌃⌥T). Escribe → Enter agrega (la IA la ordena después).
+-- tk: captura en un segundo (⌥T). Escribe → Enter agrega (la IA la ordena después).
 -- Elegir una tarea existente te lleva a su agente o la vuelve la de ahora. SSOT: ~/dotfiles/docs/tk.md
 local M = {}
 
@@ -60,6 +60,6 @@ function M.show()
   end)
 end
 
-hs.hotkey.bind({ "ctrl", "alt" }, "t", M.show)
+hs.hotkey.bind({ "alt" }, "t", M.show)
 
 return M

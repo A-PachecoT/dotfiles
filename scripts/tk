@@ -478,7 +478,7 @@ def sketchybar(state: dict) -> None:
         label = f"⏳ {trunc(wk[0]['title'], 40)}" if wk else "Nada pendiente"
         s("tk.anchor", "drawing=on", "icon=󰄲", f"icon.color={C['dim']}", f"label={label}",
           f"label.color={C['dim']}")
-        title = "Tus agentes están trabajando" if wk else "Nada pendiente · ⌃⌥T para capturar"
+        title = "Tus agentes están trabajando" if wk else "Nada pendiente · ⌥T para capturar"
         s("tk.now.title", f"label={title}", "drawing=on")
         for it in ("tk.now.why", "tk.act.go", "tk.act.done", "tk.act.next", "tk.act.snooze"):
             s(it, "drawing=off")
