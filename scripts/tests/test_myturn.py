@@ -150,3 +150,97 @@ def test_fold_tolerates_interleaved_union_merge(mt):
              {"ts": "2026-10-05T10:00:01-05:00", "host": "mac", "op": "add", "id": "x", "title": "x"}]
     mt.EVENTS.write_text("".join(json.dumps(ln) + "\n" for ln in lines))
     assert mt.fold()["x"]["status"] == "done"
+
+
+# ── Obsidian ──────────────────────────────────────────────────────────────────────────────────────
+@pytest.fixture
+def vault(mt, tmp_path, monkeypatch):
+    v = tmp_path / "vault"
+    v.mkdir()
+    monkeypatch.setattr(mt, "VAULT", v)
+    monkeypatch.setattr(mt, "TAREAS", v / "05. System" / "myturn" / "Tareas.md")
+    monkeypatch.setattr(mt, "GATE", tmp_path / "no-gate")
+    monkeypatch.setattr(mt, "herdr_agents", lambda host: [])
+    monkeypatch.setattr(mt, "herdr_frontmost", lambda: None)
+    return v
+
+
+DAILY = """# Tuesday
+## Plan
+### To-do
+- [ ] ***GOAL FOR TODAY:*** [due:: 2026-10-06]
+```tasks
+not done
+```
+- [ ] 📅 10:00 — 📩 Indusegur — toque
+- [ ] Callejon terminar
+\t- [ ] Q pase menu
+- [x] ya hecha
+- Reu Founders. Accionables:
+\t- [ ] enviar coti a Marx
+\t- [ ] —
+
+## Journaling
+- [ ] esto no es del To-do
+"""
+
+
+def test_import_daily_moves_my_tasks_and_leaves_forward_marks(mt, vault):
+    note = mt.daily_path(date.today())
+    note.parent.mkdir(parents=True)
+    note.write_text(DAILY)
+    titles = mt.import_daily(note)
+    assert titles == ["Callejon terminar", "Callejon terminar: Q pase menu", "Reu Founders: enviar coti a Marx"]
+    text = note.read_text()
+    assert "- [>] Callejon terminar → myturn" in text and "\t- [>] enviar coti a Marx → myturn" in text
+    assert "- [ ] 📅 10:00" in text and "\t- [ ] —" in text and "- [ ] esto no es del To-do" in text
+    assert mt.import_daily(note) == []  # idempotente: no reimporta
+    assert {t["title"] for t in mt.fold().values()} == set(titles)
+    # la nota del día siguiente trae las mismas líneas (daily_prep): se marcan, no se duplican
+    tomorrow = mt.daily_path(date.today() + timedelta(days=1))
+    tomorrow.parent.mkdir(parents=True, exist_ok=True)
+    tomorrow.write_text(DAILY)
+    assert mt.import_daily(tomorrow) == []
+    assert "- [>] Callejon terminar → myturn" in tomorrow.read_text()
+    assert len(mt.fold()) == 3
+
+
+def test_tareas_roundtrip_edit_done_and_new_line(mt, vault):
+    mt.emit("add", "t000001", title="Cotización Ecoverde", prio=1)
+    mt.emit("add", "t000002", title="Llamar contador")
+    out = mt.obsidian_sync()
+    assert out["wrote"]
+    text = mt.TAREAS.read_text()
+    assert "- [ ] Cotización Ecoverde ⏫ ^t000001" in text and "- [ ] Llamar contador ^t000002" in text
+    # André edita en Obsidian: marca una, renombra y baja la prioridad de otra, y agrega una nueva
+    text = text.replace("- [ ] Llamar contador ^t000002", "- [x] Llamar contador ^t000002")
+    text = text.replace("Cotización Ecoverde ⏫ ^t000001", "Cotización Ecoverde v2 🔼 📅 2026-10-09 ^t000001")
+    mt.TAREAS.write_text(text + "- [ ] Nueva desde Obsidian ⏫\n")
+    out = mt.obsidian_sync()
+    tasks = mt.fold()
+    assert out["edits"] == 3
+    assert tasks["t000002"]["status"] == "done"
+    assert (tasks["t000001"]["title"], tasks["t000001"]["prio"], tasks["t000001"]["due"]) == \
+        ("Cotización Ecoverde v2", 2, "2026-10-09")
+    new = [t for t in tasks.values() if t["title"] == "Nueva desde Obsidian"]
+    assert len(new) == 1 and new[0]["prio"] == 1
+    text = mt.TAREAS.read_text()
+    assert "Llamar contador" not in text and f"^{new[0]['id']}" in text
+    assert mt.obsidian_sync() == {"imported": [], "edits": 0, "wrote": False}  # estable
+
+
+def test_widget_edit_wins_over_unchanged_obsidian_line(mt, vault):
+    mt.emit("add", "t000001", title="viejo")
+    mt.obsidian_sync()
+    mt.emit("update", "t000001", set={"title": "nuevo desde el widget"})
+    mt.obsidian_sync()
+    assert mt.fold()["t000001"]["title"] == "nuevo desde el widget"
+    assert "nuevo desde el widget ^t000001" in mt.TAREAS.read_text()
+
+
+def test_busy_gate_skips_the_file(mt, vault, tmp_path, monkeypatch):
+    gate = tmp_path / "gate.py"
+    gate.write_text("import sys; sys.exit(2)")
+    monkeypatch.setattr(mt, "GATE", gate)
+    mt.emit("add", "t000001", title="x")
+    assert mt.obsidian_sync()["wrote"] is False and not mt.TAREAS.exists()

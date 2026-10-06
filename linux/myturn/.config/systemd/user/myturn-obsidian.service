@@ -1,0 +1,9 @@
+[Unit]
+Description=myturn: espejo de tareas en Obsidian (Tareas.md) e importación del daily note
+Documentation=https://github.com/A-PachecoT/dotfiles/blob/main/docs/myturn.md
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/myturn obsidian
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Nice=10

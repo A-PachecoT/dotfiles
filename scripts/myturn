@@ -15,6 +15,7 @@ La UI es el panel del widget (clic en la barra o ⌥T). Este CLI es lo que el pa
   myturn go ID                    ir al agente de la tarea (o reabrirlo si se cerró)
   myturn ls [--json]              tus tareas, las que te esperan primero
   myturn panel                    JSON para el panel de Hammerspoon
+  myturn obsidian                 (timer del Arch) espejo Tareas.md + importar lo anotado en el daily note
   myturn import | garden [--ai] | track | sketchybar     mantenimiento, poda, hook y barra
 
 Store: $MYTURN_HOME (default ~/tasks): events.jsonl append-only (merge=union), sincronizado por git.
@@ -49,6 +50,9 @@ WAITING = {"idle", "blocked", "done"}
 STALE_DAYS = 14          # tarea sin agente y sin tocar
 DEAD_AGENT_H = 12        # sesión registrada por el hook, que no es tuya, inactiva
 SOUND = "/System/Library/Sounds/Glass.aiff"
+VAULT = Path(os.environ.get("MYTURN_VAULT", HOME / "BrainFlow"))
+TAREAS = VAULT / "05. System" / "myturn" / "Tareas.md"
+GATE = Path(os.environ.get("MYTURN_GATE", HOME / ".local/bin/vault-write-gate.py"))
 
 # sketchybar, Hammerspoon y los hooks arrancan con PATH mínimo
 os.environ["PATH"] = os.pathsep.join(
@@ -559,6 +563,186 @@ def garden(use_ai: bool) -> list[dict]:
     return acts
 
 
+# ── Obsidian: Tareas.md es el espejo vivo; el daily note, un lugar más donde anotar ──────────────
+# Un solo escritor (el timer del Arch, `myturn obsidian`). Ida y vuelta:
+#   Tareas.md   ← myturn la reescribe; tú puedes marcar [x], editar el texto o agregar `- [ ] …` sin ^id
+#   daily note  → cada `- [ ] …` tuyo del ### To-do (no 📅, no placeholder) entra a myturn y queda `- [>] … → myturn`
+PRIO_EMOJI = {1: "⏫", 2: "🔼"}
+TASK_LINE = re.compile(r"^(?P<ind>\s*)- \[(?P<box>.)\] (?P<desc>.*?)\s*$")
+BLOCK_ID = re.compile(r"\s*\^(t[0-9a-f]{6})\s*$")
+DUE_EMOJI = re.compile(r"\s*📅\s*(\d{4}-\d{2}-\d{2})")
+DUE_FIELD = re.compile(r"\s*\[due::\s*(\d{4}-\d{2}-\d{2})\s*\]")
+AGENT_FIELD = re.compile(r"\s*\[agente::[^\]]*\]")
+MEETING = re.compile(r"^-\s+(?P<title>.+?)\.\s*Accionables:\s*$")
+FORWARDED = "→ myturn"
+AGENT_WORD = {"waiting": "te espera", "working": "trabajando", "seen": "ya lo viste", "closed": "agente cerrado"}
+TAREAS_HEAD = ("# Tareas\n\n> Espejo vivo de myturn: se reescribe solo. Puedes marcar `[x]`, editar el texto, cambiar\n"
+               "> ⏫ / 🔼 o agregar `- [ ] …` al final. No borres los `^t…` del final de cada línea.\n\n")
+
+
+def gate_quiet(path: Path) -> bool:
+    """El vault-write-gate de Hermes: 2 = André está escribiendo ese archivo ahora mismo."""
+    if not GATE.exists():
+        return True
+    p = subprocess.run([sys.executable, str(GATE), str(path)], capture_output=True)
+    return p.returncode != 2
+
+
+def write_atomic(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.myturn-tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
+def parse_desc(desc: str) -> tuple[str, int | None, str | None]:
+    prio = 1 if "⏫" in desc else 2 if "🔼" in desc else None
+    m = DUE_EMOJI.search(desc) or DUE_FIELD.search(desc)
+    title = DUE_FIELD.sub("", DUE_EMOJI.sub("", AGENT_FIELD.sub("", desc)))
+    title = re.sub(r"\s+", " ", title.replace("⏫", "").replace("🔼", "")).strip()
+    return title, prio, (m.group(1) if m else None)
+
+
+def tareas_line(r: dict) -> str:
+    parts = [r["title"]]
+    if r.get("prio"):
+        parts.append(PRIO_EMOJI[r["prio"]])
+    if r.get("due"):
+        parts.append(f"📅 {r['due']}")
+    if r.get("link") and r["state"] in AGENT_WORD:
+        parts.append(f"[agente:: {AGENT_WORD[r['state']]}]")
+    return f"- [ ] {' '.join(parts)} ^{r['id']}"
+
+
+def read_tareas(tasks: dict, last: dict[str, str]) -> int:
+    """Aplica lo que André cambió en Tareas.md desde la última escritura. Devuelve cuántos cambios."""
+    if not TAREAS.exists():
+        return 0
+    n = 0
+    for line in TAREAS.read_text().splitlines():
+        m = TASK_LINE.match(line)
+        if not m or m["ind"]:
+            continue
+        bid = BLOCK_ID.search(m["desc"])
+        desc = BLOCK_ID.sub("", m["desc"])
+        if not bid:
+            if m["box"] == " " and desc.strip():
+                title, prio, due = parse_desc(desc)
+                emit("add", new_id(), title=title, prio=prio, due=due, source="obsidian")
+                n += 1
+            continue
+        tid = bid.group(1)
+        t = tasks.get(tid)
+        if not t or t["status"] != "open" or last.get(tid) == line:
+            continue  # sin cambios tuyos (o ya cerrada): manda myturn
+        if m["box"].lower() == "x":
+            emit("done", tid, by="obsidian")
+            n += 1
+            continue
+        title, prio, due = parse_desc(desc)
+        changed = {k: v for k, v in (("title", title), ("prio", prio), ("due", due)) if v != t.get(k)}
+        if changed.get("title") == "":
+            changed.pop("title")
+        if changed:
+            emit("update", tid, set=changed, by="obsidian")
+            n += 1
+    return n
+
+
+def render_tareas(rows: list[dict]) -> tuple[str, dict[str, str]]:
+    lines = [tareas_line(r) for r in rows]
+    text = TAREAS_HEAD + "\n".join(lines) + ("\n" if lines else "")
+    return text, {r["id"]: ln for r, ln in zip(rows, lines, strict=True)}
+
+
+def import_daily(path: Path) -> list[str]:
+    """Lo que escribiste como tarea en el ### To-do del daily note pasa a myturn; la línea queda `[>] … → myturn`.
+    Primero escribe la nota y solo si eso funcionó emite los eventos: nunca importa dos veces."""
+    if not path.exists() or not gate_quiet(path):
+        return []
+    content = path.read_text()
+    m = re.search(r"### To-do\n(.*?)(?=\n## |\Z)", content, re.DOTALL)
+    if not m:
+        return []
+    lines, adds, fence, changed = m.group(1).split("\n"), [], False, False
+    # daily_prep copia cada pendiente al día siguiente: la misma línea vive en varias notas; se importa una vez
+    known = {norm_title(t["title"]) for t in fold().values() if t["status"] == "open"}
+    for i, line in enumerate(lines):
+        if line.strip().startswith("```"):
+            fence = not fence
+            continue
+        t = TASK_LINE.match(line)
+        if fence or not t or t["box"] != " ":
+            continue
+        desc = t["desc"]
+        if "📅" in desc or "GOAL FOR TODAY" in desc or "<%" in desc or desc.strip(" —-") == "" \
+                or desc.endswith(FORWARDED):
+            continue
+        parent = ""
+        if t["ind"]:
+            for prev in reversed(lines[:i]):
+                pm = TASK_LINE.match(prev)
+                ind = len(prev) - len(prev.lstrip())
+                if prev.strip() and ind < len(t["ind"]):
+                    mm = MEETING.match(prev.strip())
+                    parent = mm["title"] if mm else parse_desc(pm["desc"].replace(FORWARDED, ""))[0] if pm else ""
+                    break
+        title, prio, due = parse_desc(desc)
+        full = f"{parent}: {title}" if parent else title
+        if norm_title(full) not in known:
+            adds.append({"title": full, "prio": prio, "due": due})
+            known.add(norm_title(full))
+        lines[i] = f"{t['ind']}- [>] {desc} {FORWARDED}"
+        changed = True
+    if not changed:
+        return []
+    body = "\n".join(lines)
+    write_atomic(path, content[:m.start(1)] + body + content[m.end(1):])
+    for a in adds:
+        emit("add", new_id(), source="obsidian", by="daily", **a)
+    return [a["title"] for a in adds]
+
+
+def norm_title(s: str) -> str:
+    return re.sub(r"\W+", " ", s.lower()).strip()
+
+
+def daily_path(d: date) -> Path:
+    return VAULT / "Calendar" / f"{d:%Y}" / f"{d:%m}" / f"{d:%Y-%m-%d}.md"
+
+
+def obsidian_sync() -> dict:
+    """Una pasada del timer del Arch. Idempotente; si André está escribiendo un archivo, lo deja para la próxima."""
+    if not VAULT.exists():
+        sys.exit(f"myturn: no hay vault en {VAULT}")
+    CACHE.mkdir(parents=True, exist_ok=True)
+    with open(CACHE / "obsidian.lock", "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return {"skip": "otra pasada en curso"}
+        if not NO_SYNC:
+            do_sync()
+        last_f = CACHE / "obsidian-last.json"
+        try:
+            last = json.loads(last_f.read_text())
+        except (OSError, ValueError):
+            last = {}
+        out: dict = {"imported": [], "edits": 0, "wrote": False}
+        for d in (date.today() - timedelta(days=1), date.today()):
+            out["imported"] += import_daily(daily_path(d))
+        if gate_quiet(TAREAS):
+            out["edits"] = read_tareas(fold(), last)
+            text, last = render_tareas(compute()["rows"])
+            if not TAREAS.exists() or TAREAS.read_text() != text:
+                write_atomic(TAREAS, text)
+                out["wrote"] = True
+            last_f.write_text(json.dumps(last, ensure_ascii=False))
+        if (out["imported"] or out["edits"]) and not NO_SYNC:
+            do_sync()
+        return out
+
+
 # ── barra y panel ─────────────────────────────────────────────────────────────────────────────────
 C = {"white": "0xffe5e9f0", "dim": "0xff9aa3b5", "green": "0xffa3be8c"}
 
@@ -621,7 +805,7 @@ def main(argv: list[str]) -> None:
     for name in ("done", "archive", "restore", "go", "link"):
         sub.add_parser(name).add_argument("id", nargs="?" if name == "done" else None)
     sub.add_parser("ls").add_argument("--json", action="store_true")
-    for name in ("jump", "import", "track", "panel", "sketchybar", "_sync"):
+    for name in ("jump", "import", "track", "panel", "sketchybar", "obsidian", "_sync"):
         sub.add_parser(name)
     sub.add_parser("garden").add_argument("--ai", action="store_true")
     sub.add_parser("enrich").add_argument("id")
@@ -646,6 +830,8 @@ def main(argv: list[str]) -> None:
         return enrich(a.id)
     if cmd == "jump":
         return print(jump())
+    if cmd == "obsidian":
+        return print(json.dumps(obsidian_sync(), ensure_ascii=False))
     if cmd == "panel":
         return print(json.dumps(panel(), ensure_ascii=False))
     if cmd == "import":
