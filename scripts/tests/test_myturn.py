@@ -136,3 +136,16 @@ def test_fold_tolerates_interleaved_union_merge(mt):
              {"ts": "2026-10-05T10:00:01-05:00", "host": "mac", "op": "add", "id": "x", "title": "x"}]
     mt.EVENTS.write_text("".join(json.dumps(ln) + "\n" for ln in lines))
     assert mt.fold()["x"]["status"] == "done"
+
+
+def test_bar_never_says_nothing_when_a_prio_task_is_paused(mt):
+    mt.emit("add", "a", title="x", source="agent", prio=1, link=link(mt, "s1"))
+    st = state(mt, [agent("s1", "idle", focused=True)], front=mt.LOCAL)  # ya la viste
+    assert st["waiting"] == [] and st["paused"]
+    icon, _, label = mt.bar_label(st)
+    assert label.startswith("en pausa") and "Fix webhook" in label
+
+
+def test_bar_empty_and_background_only_says_nada_prioritario(mt):
+    mt.emit("add", "bg", title="x", source="agent", link=link(mt, "s1"))  # sin prioridad
+    assert mt.bar_label(state(mt, [agent("s1", "idle")]))[2] == "nada prioritario"

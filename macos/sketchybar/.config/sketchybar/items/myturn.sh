@@ -21,7 +21,7 @@ sketchybar --add event myturn_update \
     popup.align=center \
   --subscribe myturn mouse.entered mouse.exited.global myturn_update system_woke \
   --add item myturn.empty popup.myturn \
-  --set myturn.empty "${row[@]}" label="Al día · ⌥T captura o prioriza el agente enfocado" label.color=$DIM
+  --set myturn.empty "${row[@]}" label="Nada prioritario · ⌥T prioriza el agente enfocado o captura algo" label.color=$DIM
 
 add_section() {  # $1 = clave (w|k|p), $2 = filas
   sketchybar --add item myturn.h.$1 popup.myturn --set myturn.h.$1 "${hdr[@]}"
@@ -32,6 +32,7 @@ add_section() {  # $1 = clave (w|k|p), $2 = filas
 }
 add_section w 4   # te esperan
 add_section k 3   # trabajando
+add_section z 3   # en pausa (vista, sigue siendo tuya)
 add_section p 3   # pendientes
 
 sketchybar --add item myturn.footer popup.myturn \
