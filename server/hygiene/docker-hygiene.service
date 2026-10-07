@@ -1,0 +1,10 @@
+[Unit]
+Description=Higiene de disco Docker (volúmenes huérfanos de CI, imágenes colgantes, caché de build)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/docker-hygiene.sh
+Nice=10
+IOSchedulingClass=idle
