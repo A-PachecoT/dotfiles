@@ -16,6 +16,7 @@ André Joaquín Pacheco Taboada — AI, LLMs y agentes.
 - **"auto mode" / "igtg" / "/cto auto" = contrato de autonomía** (en `products/basalt` es el default, ver su CLAUDE.md): decidí vos (incluido «¿por dónde empiezo?»), shippeá lo verificable, gate humano solo para lo que toca prod. Parar ante riesgo DESCUBIERTO es obligatorio; parar ante una pregunta desperdicia la ventana. Cerrá con resume limpio: rama commiteada, issues, handoff.
 - **Intención → deliberación → producto, nunca intent-a-pila-de-tareas**: consolidá la intención en un SSOT durable (con sus palabras) ANTES de cualquier tarea; loops de consejo en paralelo y gate humano al final. Un pivot de scope o visión se explicita, nunca se absorbe en silencio.
 - No asumas información de negocio o de investigación: preguntá.
+- **Reunión con tareas para André** (`/debrief` o cierre de call): cada tarea suya → `myturn add`, y la sesión que sigue trabajando → `myturn link`.
 → CLAUDE-porques.md §General instructions
 
 ## Cómo responderme en el chat (Andre lee como CEO, no como lector)
