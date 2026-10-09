@@ -3,6 +3,7 @@ import importlib.machinery
 import importlib.util
 import io
 import json
+import os
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -244,3 +245,19 @@ def test_busy_gate_skips_the_file(mt, vault, tmp_path, monkeypatch):
     monkeypatch.setattr(mt, "GATE", gate)
     mt.emit("add", "t000001", title="x")
     assert mt.obsidian_sync()["wrote"] is False and not mt.TAREAS.exists()
+
+
+def test_remote_agents_never_wait_for_ssh(mt, monkeypatch):
+    calls, spawned = [], []
+    monkeypatch.setattr(mt, "herdr_json", lambda *a, **k: calls.append(a) or {"agents": [agent("s1", "idle")]})
+    monkeypatch.setattr(mt, "spawn", lambda *a: spawned.append(a))
+    remote = "arch" if mt.LOCAL == "mac" else "mac"
+    assert mt.herdr_agents(remote)[0]["agent_status"] == "idle" and len(calls) == 1  # sin caché: lee
+    cache = mt.CACHE / f"agents-{remote}.json"
+    old = cache.stat().st_mtime - 120
+    os.utime(cache, (old, old))
+    assert mt.herdr_agents(remote) and len(calls) == 1 and spawned == [("_agents", remote)]  # viejo: sirve y renueva
+    old -= 600
+    os.utime(cache, (old, old))
+    assert mt.herdr_agents(remote) is None  # muy viejo: la otra caja no responde
+    assert mt.herdr_agents(remote, fresh=True) and len(calls) == 2  # go lee en el acto

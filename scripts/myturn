@@ -202,18 +202,28 @@ def herdr_json(args: list[str], host: str = LOCAL, timeout: float = 4) -> dict |
         return None
 
 
-def herdr_agents(host: str) -> list[dict] | None:
-    """Agentes de Claude en herdr de esa caja; None si no se pudo leer. Lo remoto se cachea 60 s."""
+def herdr_agents(host: str, fresh: bool = False) -> list[dict] | None:
+    """Agentes de Claude en herdr de esa caja; None si no se pudo leer.
+
+    Lo remoto (ssh, hasta 6 s si la red tarda) sale del caché y, si pasó de 60 s, se renueva en segundo plano: un
+    clic en el panel nunca espera a la red. Un caché de más de 10 min no se cree (la otra caja no responde).
+    `fresh` lo lee en el acto: `go` no debe reabrir un agente que solo le falta al caché."""
     cache = CACHE / f"agents-{host}.json"
-    if host != LOCAL and cache.exists() and time.time() - cache.stat().st_mtime < 60:
-        return json.loads(cache.read_text())
+    if host != LOCAL and not fresh:
+        try:
+            age, agents = time.time() - cache.stat().st_mtime, json.loads(cache.read_text())
+        except (OSError, ValueError):
+            age, agents = None, None
+        if age is not None:
+            if age > 60 and every(f"agents-{host}", 20):
+                spawn("_agents", host)
+            return agents if age < 600 else None
     res = herdr_json(["agent", "list"], host, timeout=4 if host == LOCAL else 6)
     if res is None:
         return None
     agents = [a for a in res.get("agents", []) if a.get("agent") == "claude"]
     if host != LOCAL:
-        CACHE.mkdir(parents=True, exist_ok=True)
-        cache.write_text(json.dumps(agents))
+        write_atomic(cache, json.dumps(agents))
     return agents
 
 
@@ -378,7 +388,7 @@ def go(t: dict) -> str:
     link = t.get("link")
     if not link:
         return "Esta tarea no tiene agente: cópiala y pégasela a un Claude"
-    agents = herdr_agents(link["host"]) or []
+    agents = herdr_agents(link["host"], fresh=True) or []
     ag = next((a for a in agents if session_of(a) == link["session"]), None)
     if ag:
         focus_window(link["host"])
@@ -807,6 +817,7 @@ def main(argv: list[str]) -> None:
     sub.add_parser("ls").add_argument("--json", action="store_true")
     for name in ("jump", "import", "track", "panel", "sketchybar", "obsidian", "_sync"):
         sub.add_parser(name)
+    sub.add_parser("_agents").add_argument("host")
     sub.add_parser("garden").add_argument("--ai", action="store_true")
     sub.add_parser("enrich").add_argument("id")
     a = ap.parse_args(argv)
@@ -814,6 +825,9 @@ def main(argv: list[str]) -> None:
 
     if cmd == "_sync":
         return do_sync()
+    if cmd == "_agents":
+        herdr_agents(a.host, fresh=True)
+        return
     if cmd == "track":
         try:
             track(json.loads(sys.stdin.read() or "{}"))

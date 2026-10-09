@@ -9,7 +9,7 @@ local HTML = HOME .. "/.hammerspoon/myturn-panel.html"
 local ENV = { PATH = HOME .. "/.local/bin:/opt/homebrew/bin:/usr/bin:/bin", HOME = HOME, USER = os.getenv("USER") }
 local W = 640
 
-local panel, hiddenAt = nil, 0
+local panel, hiddenAt, maxH = nil, 0, 2000
 local LOG = HOME .. "/.cache/myturn/panel.log"
 
 local function log(...)
@@ -47,7 +47,7 @@ local function onMessage(msg)
     M.hide()
   elseif a == "resize" and panel then
     local f = panel:frame()
-    f.h = b.h
+    f.h = math.min(b.h, maxH)
     panel:frame(f)
   elseif a == "add" then
     local args = { "add", b.title }
@@ -87,7 +87,9 @@ function M.show()
   if not panel then build() end
   local scr = hs.mouse.getCurrentScreen():fullFrame()
   local f = panel:frame()
-  panel:frame({ x = scr.x + (scr.w - W) / 2, y = scr.y + 40, w = W, h = f.h })
+  maxH = scr.h - 40 - 16 -- nunca más alto que la pantalla: la lista scrollea
+  panel:frame({ x = scr.x + (scr.w - W) / 2, y = scr.y + 40, w = W, h = math.min(f.h, maxH) })
+  panel:evaluateJavaScript(string.format("window.setMaxH(%d)", maxH))
   panel:show()
   panel:bringToFront(true)
   push()
@@ -117,6 +119,10 @@ end
 
 -- depurar desde la terminal: hs -c 'require("myturn").eval("document.title")'
 function M.eval(js) if panel then panel:evaluateJavaScript(js, function(r, e) log("eval", hs.inspect(r), hs.inspect(e)) end) end end
+
+-- precargado: el primer clic tras recargar Hammerspoon no paga crear el webview
+build()
+push()
 
 hs.urlevent.bind("myturn-panel", function() M.toggle() end)
 hs.hotkey.bind({ "alt" }, "t", M.toggle)

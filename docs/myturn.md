@@ -166,6 +166,12 @@ tarea.
   «Melissa», que una edición manual de Hermione había borrado de la nota de hoy); ciclo widget → Obsidian → [x] →
   myturn verificado en el Mac.
 
+- 2026-10-09, panel lento y sin scroll: con 23 tareas el panel medía 1210 px en una pantalla de 1080 (`overflow:
+  hidden`, lo de abajo quedaba fuera); y cada clic recalculaba con ssh al Arch, hasta 6 s por llamada cuando la red
+  tarda, sin cachear el fallo. Ahora el panel topa con la pantalla y la lista scrollea; lo remoto se sirve del caché
+  y se renueva en segundo plano (`_agents`; >10 min = la otra caja no responde; `go` sí lee en el acto); los botones
+  cambian la UI al instante; el webview se crea al cargar Hammerspoon. 18 smoke tests + ruff; medido en vivo.
+
 ## Roadmap
 
 - **v1:** registro automático por hook, cola con visto, ⌥G, sonido por transición, importación única de las
