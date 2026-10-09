@@ -134,6 +134,10 @@ keybind = cmd+shift+g=text:\x02G
 # cmd+shift+j/k = space siguiente/anterior (abajo/arriba en el panel, como vim j/k)
 keybind = cmd+shift+j=text:\x02N
 keybind = cmd+shift+k=text:\x02P
+# cmd+shift+t / cmd+shift+s = renombrar tab / space (pisa el undo default de Ghostty en cmd+shift+t)
+keybind = cmd+shift+t=unbind
+keybind = cmd+shift+t=text:\x02T
+keybind = cmd+shift+s=text:\x02S
 
 # Herdr NAVIGATOR (goto = prefix+g): fuzzy jumper vim-native (tu viejo `tp`).
 # j/k mover · h/l cambiar nivel (ws↔tab↔pane) · / buscar · Enter saltar ·

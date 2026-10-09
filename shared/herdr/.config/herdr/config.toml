@@ -34,7 +34,7 @@ switch_tab  = "prefix+1..9"         # cmd+1-9 saltar proyecto (tmux: cmd+1-9)
 next_tab    = "prefix+n"            # ctrl+b n
 previous_tab= "prefix+p"            # ctrl+b p
 close_tab   = "prefix+shift+w"      # cmd+shift+w  cerrar proyecto (escalación: shift = mata todo el proyecto)
-rename_tab  = "prefix+shift+t"
+rename_tab  = "prefix+shift+t"      # cmd+shift+t  renombrar proyecto/tab
 
 # --- WORKSPACES = capa SOBRE proyectos (agrupa tabs dentro de una empresa/session) ---
 # Habilitado 2026-07-14. Familia cmd+shift = capa workspace. Nav por picker, SIN
@@ -44,6 +44,7 @@ workspace_picker   = "prefix+shift+g"  # cmd+shift+g  fuzzy jump entre workspace
 next_workspace     = "prefix+shift+n"  # cmd+shift+j  siguiente workspace (Ghostty manda prefix+N; prefix+shift+j es swap_pane)
 previous_workspace = "prefix+shift+p"  # cmd+shift+k  workspace anterior (Ghostty manda prefix+P)
 close_workspace    = ""                # sin binding (prefix+shift+d lo usa split_horizontal); cerrá desde el picker
+rename_workspace   = "prefix+shift+s"  # cmd+shift+s  renombrar space (default prefix+shift+w lo pisa close_tab; shift+r es reload_config)
 
 # --- AGENTES (orden del agent panel; con agent_panel_sort = "priority" el 1 es el más urgente) ---
 next_agent     = "prefix+]"           # cmd+]  siguiente agente
