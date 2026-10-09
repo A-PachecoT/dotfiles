@@ -170,7 +170,9 @@ tarea.
   hidden`, lo de abajo quedaba fuera); y cada clic recalculaba con ssh al Arch, hasta 6 s por llamada cuando la red
   tarda, sin cachear el fallo. Ahora el panel topa con la pantalla y la lista scrollea; lo remoto se sirve del caché
   y se renueva en segundo plano (`_agents`; >10 min = la otra caja no responde; `go` sí lee en el acto); los botones
-  cambian la UI al instante; el webview se crea al cargar Hammerspoon. 18 smoke tests + ruff; medido en vivo.
+  cambian la UI al instante; el webview se crea al cargar Hammerspoon. 18 smoke tests + ruff; medido en vivo. Luego, el congelamiento real de ~1 s era
+  `panel:hswindow():focus()` (accesibilidad, 1,6 s medidos): ahora `hs.focus()` + `show()`; y hay skeleton + barra de
+  carga. Prueba de foco: `hs.eventtap.keyStrokes` y leer el input (`document.hasFocus()` miente).
 
 ## Roadmap
 

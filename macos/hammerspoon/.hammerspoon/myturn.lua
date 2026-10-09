@@ -27,8 +27,11 @@ local function run(args, cb)
 end
 
 local function push()
+  if panel then panel:evaluateJavaScript("window.loading && window.loading(true)") end
   run({ "panel" }, function(code, out)
-    if panel and code == 0 and out ~= "" then panel:evaluateJavaScript("window.render(" .. out .. ")") end
+    if not panel then return end
+    if code == 0 and out ~= "" then panel:evaluateJavaScript("window.render(" .. out .. ")") end
+    panel:evaluateJavaScript("window.loading(false)")
   end)
 end
 
@@ -94,11 +97,13 @@ function M.show()
   panel:bringToFront(true)
   push()
   -- sin activar Hammerspoon el campo no recibe teclas; recién mostrada, la ventana todavía no acepta el foco
+  -- win:focus() (accesibilidad) congelaba Hammerspoon 1,6 s: se activa la app y, ya activa, show() la vuelve clave
   hs.timer.doAfter(0.12, function()
     hs.focus()
-    local win = panel:hswindow()
-    if win then win:focus() end
-    panel:evaluateJavaScript("window.focusInput()")
+    hs.timer.doAfter(0.05, function()
+      panel:show()
+      panel:evaluateJavaScript("window.focusInput()")
+    end)
   end)
 end
 

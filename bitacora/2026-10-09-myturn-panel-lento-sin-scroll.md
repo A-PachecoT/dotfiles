@@ -14,3 +14,9 @@
 - Webview precargado al cargar Hammerspoon.
 
 **Validación.** 18 smoke tests (nuevo: `test_remote_agents_never_wait_for_ssh`) + ruff. En vivo: panel 1024 px, lista 926 px visibles de 1124, scroll al fondo con el pie visible (captura).
+
+## Segunda vuelta (mismo día): el congelamiento de ~1 s
+
+André: «sigue colgándose… pasó por 1 segundo, ¿no hay mejor UI/UX como skeletons?». Instrumenté el clic en Hammerspoon: url → show 6 ms, `myturn panel` ~100 ms, **`panel:hswindow():focus()` 1 625 ms** (accesibilidad, bloquea el hilo de Hammerspoon y con él el panel). Se reemplazó por `hs.focus()` + `show()` 50 ms después (la activación es asíncrona; ya activa, `show()` la vuelve ventana clave). Verificado escribiendo con `hs.eventtap.keyStrokes`: 3/3 llegan al campo. Ojo: `document.hasFocus()` da `false` aunque el teclado sí llega; no sirve como prueba.
+
+UX: barra fina animada arriba mientras el CLI responde, skeleton (4 filas con shimmer) si todavía no hay datos, y la tarea nueva aparece al instante como «guardando…».
