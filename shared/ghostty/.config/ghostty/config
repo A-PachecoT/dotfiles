@@ -142,9 +142,11 @@ keybind = cmd+p=text:\x02g
 
 # Herdr AGENTES (orden del agent panel, sort = priority). Pisan los defaults de
 # Ghostty (goto_split / reset_font_size), que no usamos: los splits son de herdr.
-keybind = cmd+bracket_right=text:\x02]
-keybind = cmd+bracket_left=text:\x02{
-keybind = cmd+digit_0=text:\x02!
+# Ojo: forma unicode (cmd+[ / cmd+0), no física (bracket_left / digit_0): los
+# defaults de Ghostty son unicode y le ganan a un binding físico.
+keybind = cmd+]=text:\x02]
+keybind = cmd+[=text:\x02{
+keybind = cmd+0=text:\x02!
 
 # Herdr AYUDA: cmd+/ = lista de todos los atajos (prefix+?)
 keybind = cmd+slash=text:\x02?
