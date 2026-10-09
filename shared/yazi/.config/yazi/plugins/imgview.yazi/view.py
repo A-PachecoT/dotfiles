@@ -30,9 +30,10 @@ def wrap_tmux(seq: str) -> str:
     return seq
 
 
-def term_size() -> tuple[int, int, float]:
-    """(cols, rows, cell h:w) from the real tty: under yazi's `shell --block`
-    stdout/env can report the 80x24 fallback, which shrank the image."""
+def term_size() -> tuple[int, int, float, float]:
+    """(cols, rows, cell_w_px, cell_h_px) from the real tty: under yazi's
+    `shell --block` stdout/env can report the 80x24 fallback, which shrank the
+    image. Pixel sizes fall back to a 10x19 cell when the terminal reports none."""
     for fd_src in ("/dev/tty", None):
         try:
             fd = os.open(fd_src, os.O_RDONLY) if fd_src else sys.stdout.fileno()
@@ -42,12 +43,33 @@ def term_size() -> tuple[int, int, float]:
             if fd_src:
                 os.close(fd)
             if cols and rows:
-                cell = (yp / rows) / (xp / cols) if xp and yp else 1.9
-                return cols, rows, cell
+                if xp and yp:
+                    return cols, rows, xp / cols, yp / rows
+                return cols, rows, 10.0, 19.0
         except OSError:
             pass
-    cols, rows, cell = term_size()
-    return cols, rows, 1.9
+    cols, rows = shutil.get_terminal_size((80, 24))
+    return cols, rows, 10.0, 19.0
+
+
+def encode(path: str, max_w: int, max_h: int) -> bytes:
+    """PNG bytes no larger than the pane in pixels. Sending a 4K screenshot
+    whole costs ~1.5 MB of base64 through herdr + ET; downscaled it is ~5x less."""
+    raw = open(path, "rb").read()
+    try:
+        import io
+
+        from PIL import Image
+
+        with Image.open(path) as im:
+            if im.format == "PNG" and im.width <= max_w * 1.2 and im.height <= max_h * 1.2:
+                return raw
+            im.thumbnail((max_w, max_h), Image.BILINEAR, reducing_gap=2.0)
+            buf = io.BytesIO()
+            im.save(buf, "PNG", compress_level=1)
+            return buf.getvalue()
+    except Exception:
+        return raw
 
 
 def main() -> None:
@@ -64,7 +86,8 @@ def main() -> None:
     except Exception:
         pass
 
-    cols, rows, cell = term_size()
+    cols, rows, cw, ch_px = term_size()
+    cell = ch_px / cw
     view_rows = max(1, rows - 1)  # reserve the last line for the hint
 
     # Columns to span, preserving aspect. Kitty infers the row count from the
@@ -77,7 +100,8 @@ def main() -> None:
         c = cols
     x = max(0, (cols - c) // 2)
 
-    b64 = base64.standard_b64encode(open(path, "rb").read()).decode()
+    data = encode(path, int(c * cw), int(view_rows * ch_px))
+    b64 = base64.standard_b64encode(data).decode()
     chunks = [b64[i : i + 4096] for i in range(0, len(b64), 4096)] or [""]
 
     kitty = []
