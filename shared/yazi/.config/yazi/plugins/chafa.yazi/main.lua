@@ -14,6 +14,10 @@
 local M = {}
 
 local function is_remote()
+	-- herdr >= 0.8 renders Kitty graphics in its panes, even over ET: native wins.
+	if os.getenv("HERDR_ENV") then
+		return false
+	end
 	if os.getenv("SSH_CONNECTION") or os.getenv("SSH_CLIENT") or os.getenv("SSH_TTY") then
 		return true
 	end

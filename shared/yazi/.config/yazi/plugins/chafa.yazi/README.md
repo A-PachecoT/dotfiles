@@ -5,6 +5,8 @@ graphics protocol, so previews work over a `tmux → Eternal Terminal → Ghostt
 chain where yazi's native Kitty *unicode-placeholder* adapter is corrupted in
 transit (blank panel + leaked `+++++` glyphs).
 
+Inside herdr (>= 0.8, `HERDR_ENV`) it always defers to native graphics.
+
 Only takes over in **remote** sessions (`SSH_CONNECTION` / ET's
 `et_forward_sock`); locally it defers to yazi's built-in `image` previewer so
 native graphics still apply.
