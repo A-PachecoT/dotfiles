@@ -45,12 +45,17 @@ next_workspace     = "prefix+shift+n"  # cmd+shift+n  siguiente workspace
 previous_workspace = "prefix+shift+p"  # cmd+shift+p  workspace anterior
 close_workspace    = ""                # sin binding (prefix+shift+d lo usa split_horizontal); cerrá desde el picker
 
+# --- AGENTES (orden del agent panel; con agent_panel_sort = "priority" el 1 es el más urgente) ---
+next_agent     = "prefix+]"           # cmd+]  siguiente agente
+previous_agent = "prefix+{"           # cmd+[  agente anterior (prefix+[ ya es copy_mode)
+focus_agent    = "prefix+shift+1..9"  # cmd+0  → "!" = agente 1 = el más prioritario
+
 # --- SISTEMA ---
 toggle_sidebar = "prefix+b"         # ctrl+b b  -> EL panel de estados de agentes (blocked/working/done). Lo más importante.
 goto           = "prefix+g"         # cmd+p / ctrl+b g -> NAVIGATOR: fuzzy jumper vim (j/k mover, h/l nivel, / buscar, Enter saltar, b/w/i/d/a estados). Tu viejo `tp`.
 resize_mode    = "prefix+r"         # cmd+r     (ojo: en tmux era reload; reload ahora = `herdr server reload-config`)
 detach         = "prefix+q"         # ctrl+b q
-help           = "prefix+?"         # ctrl+b ?
+help           = "prefix+?"         # cmd+/ o ctrl+b ?  -> lista de TODOS los atajos (¿olvidaste uno? empieza aquí)
 copy_mode      = "prefix+["         # ctrl+b [   (edit_scrollback en prefix+e también sirve)
 
 # --- HOP -> yazi (portamos la ÚNICA parte de tu hop que valías: saltar a archivos con yazi) ---
