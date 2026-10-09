@@ -48,6 +48,16 @@
   .sk { height: 46px; margin: 6px 0; border-radius: 9px; background: linear-gradient(90deg, var(--row) 30%,
     #434c5e 50%, var(--row) 70%); background-size: 300% 100%; animation: shimmer 1.2s ease-in-out infinite; }
   @keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+  /* teclado: fila elegida (j/k) y su botón elegido (h/l) */
+  .row.sel { background: rgba(136,192,208,.10); box-shadow: inset 2px 0 0 var(--accent); }
+  .row.sel .cur { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row.sel .title.cur { outline-offset: 3px; border-radius: 4px; }
+  .find { display: none; margin-top: 8px; flex-shrink: 0; }
+  .find.on { display: flex; }
+  .find input { flex: 1; background: var(--row); border: 1px solid var(--line); border-radius: 9px; color: var(--text);
+    font: inherit; padding: 7px 11px; outline: none; -webkit-user-select: text; }
+  .find input:focus { border-color: var(--accent); }
+  kbd { font: 10px ui-monospace, monospace; padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; }
   .pending { opacity: .55; } .pending button { pointer-events: none; }
   .empty { color: var(--dim); padding: 18px 4px 8px; text-align: center; }
   .foot { flex-shrink: 0; margin-top: 10px; font-size: 11px; color: var(--dim); text-align: center; }
@@ -59,12 +69,14 @@
 <div id="card">
   <div id="bar"></div>
   <div class="new">
-    <input id="new" placeholder="Nueva tarea… (Enter para agregar)" autocomplete="off">
+    <input id="new" placeholder="Nueva tarea… (n · Enter agrega · Esc vuelve a la lista)" autocomplete="off">
     <button id="newprio" class="prio p0" title="Prioridad de la nueva tarea">—</button>
   </div>
+  <div class="find" id="findbox"><input id="find" placeholder="Buscar… (Enter elige · Esc limpia)" autocomplete="off"></div>
   <div id="list"></div>
   <div id="toast"></div>
-  <div class="foot">doble clic en el título para editarlo · clic en ! cambia la prioridad · Esc cierra · ⌥G va al que te espera</div>
+  <div class="foot"><kbd>n</kbd> nueva · <kbd>f</kbd> buscar · <kbd>hjkl</kbd> moverse · <kbd>Enter</kbd>/<kbd>Espacio</kbd> elegir ·
+    <kbd>Esc</kbd> vuelve a tu ventana · <kbd>⌥G</kbd> va al que te espera</div>
 </div>
 <script>
   const send = (m) => window.webkit.messageHandlers.myturn.postMessage(m);
@@ -73,6 +85,9 @@
   const PRIO = { null: ["—", "p0"], 1: ["!1", "p1"], 2: ["!2", "p2"] };
   const nextPrio = (p) => (p == null ? 1 : p === 1 ? 2 : 0);
   let data = null, newPrio = null, editing = null;
+  // teclado: fila elegida (por id, sobrevive a cada render) y columna: 0 título, 1 prioridad, 2 acción, 3 ✓, 4 ✕
+  let sel = null, selIdx = 0, col = 2, query = "";
+  const norm = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
   function resize() { send({ action: "resize", h: Math.ceil($("#card").getBoundingClientRect().height) + 12 }); }
   function toast(msg) {
@@ -104,15 +119,49 @@
   window.render = (d) => {
     if (!d) { $("#list").innerHTML = `<div class="label">MIS TAREAS</div>` + `<div class="sk"></div>`.repeat(4); return; }
     data = d; if (editing) return;
-    const waiting = d.rows.filter((r) => r.state === "waiting"), rest = d.rows.filter((r) => r.state !== "waiting");
+    const q = norm(query), rows = q ? d.rows.filter((r) => norm(r.title).includes(q)) : d.rows;
+    const waiting = rows.filter((r) => r.state === "waiting"), rest = rows.filter((r) => r.state !== "waiting");
     let h = "";
     if (waiting.length) h += `<div class="label">TE ESPERAN</div>` + waiting.map(rowHtml).join("");
     if (rest.length) h += `<div class="label">MIS TAREAS</div>` + rest.map(rowHtml).join("");
     if (!d.rows.length) h = `<div class="empty">No tienes tareas. Escribe arriba la primera.</div>`;
+    else if (!rows.length) h = `<div class="empty">Nada coincide con «${esc(query)}».</div>`;
     if (!d.herdr_ok) h += `<div class="empty">herdr no responde: no veo a tus agentes.</div>`;
-    $("#list").innerHTML = h; resize();
+    $("#list").innerHTML = h; paintSel(); resize();
   };
   window.focusInput = () => { $("#new").focus(); };
+  // ⌥T abre aquí: sin campo enfocado, las teclas son de la lista
+  window.focusList = () => {
+    query = ""; $("#find").value = ""; $("#findbox").classList.remove("on");
+    sel = null; selIdx = 0; col = 2; document.activeElement?.blur(); window.render(data);
+  };
+
+  const rowEls = () => [...document.querySelectorAll("#list .row")];
+  const cells = (row) => [row.querySelector(".title"), ...row.querySelectorAll("button[data-do]")];
+  function paintSel() {
+    const els = rowEls();
+    document.querySelectorAll("#list .sel, #list .cur").forEach((x) => x.classList.remove("sel", "cur"));
+    if (!els.length) return;
+    let i = els.findIndex((x) => x.dataset.id === sel);
+    if (i < 0) i = Math.min(selIdx, els.length - 1); // la elegida se cerró: queda la que tomó su lugar
+    selIdx = i; sel = els[i].dataset.id;
+    els[i].classList.add("sel"); cells(els[i])[col]?.classList.add("cur");
+    els[i].scrollIntoView({ block: "nearest" });
+  }
+  function move(dr, dc) {
+    const els = rowEls(); if (!els.length) return;
+    selIdx = Math.max(0, Math.min(els.length - 1, selIdx + dr)); sel = els[selIdx].dataset.id;
+    col = Math.max(0, Math.min(4, col + dc)); paintSel();
+  }
+  function choose() {
+    const row = rowEls()[selIdx]; if (!row || row.classList.contains("pending")) return;
+    const c = cells(row)[col];
+    if (col === 0) startEdit(c); else c.click();
+  }
+  function closeFind(clear) {
+    if (clear) { query = ""; $("#find").value = ""; $("#findbox").classList.remove("on"); window.render(data); }
+    $("#find").blur(); resize();
+  }
   window.setMaxH = (h) => { document.documentElement.style.setProperty("--maxh", `${h - 12}px`); resize(); };
   // el CLI tarda; la UI cambia ya y el próximo render del CLI la corrige si hace falta
   const drop = (id) => { data.rows = data.rows.filter((x) => x.id !== id); window.render(data); };
@@ -144,8 +193,8 @@
     else if (act === "archive") { send({ action: "archive", id }); drop(id); toast(`Archivada: ${r.title}`); }
   });
 
-  $("#list").addEventListener("dblclick", (e) => {
-    const el = e.target.closest(".title"); if (!el) return;
+  $("#list").addEventListener("dblclick", (e) => { const el = e.target.closest(".title"); if (el) startEdit(el); });
+  function startEdit(el) {
     const id = el.closest(".row").dataset.id, r = data.rows.find((x) => x.id === id);
     editing = id; el.innerHTML = `<input value="${esc(r.title)}">`;
     const inp = el.querySelector("input"); inp.focus(); inp.select();
@@ -156,11 +205,39 @@
       }
       window.render(data);
     };
-    inp.addEventListener("keydown", (k) => { if (k.key === "Enter") finish(true); if (k.key === "Escape") { k.stopPropagation(); finish(false); } });
+    inp.addEventListener("keydown", (k) => { k.stopPropagation();
+      if (k.key === "Enter") finish(true); if (k.key === "Escape") finish(false); });
     inp.addEventListener("blur", () => finish(true));
+  }
+
+  $("#find").addEventListener("input", (e) => { query = e.target.value; selIdx = 0; sel = null; window.render(data); });
+  $("#find").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeFind(true); }
+    else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); closeFind(!query); }
+  });
+  $("#new").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); e.target.blur(); }
   });
 
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !editing) send({ action: "close" }); });
+  // el mouse no deja botones enfocados (Espacio los dispararía dos veces); el clic también mueve la selección
+  $("#list").addEventListener("mousedown", (e) => {
+    const row = e.target.closest(".row"); if (row) { sel = row.dataset.id; selIdx = rowEls().indexOf(row); paintSel(); }
+    if (e.target.closest("button")) e.preventDefault();
+  });
+
+  // modo lista (ningún campo enfocado): n nueva, f buscar, hjkl / flechas, Enter / Espacio, Esc sale
+  document.addEventListener("keydown", (e) => {
+    if (editing || e.metaKey || e.ctrlKey || e.altKey || e.target.tagName === "INPUT") return;
+    const k = e.key, go = { j: [1, 0], ArrowDown: [1, 0], k: [-1, 0], ArrowUp: [-1, 0],
+      h: [0, -1], ArrowLeft: [0, -1], l: [0, 1], ArrowRight: [0, 1] }[k];
+    if (k === "Escape") send({ action: "close" });
+    else if (k === "n") $("#new").focus();
+    else if (k === "f") { $("#findbox").classList.add("on"); resize(); $("#find").focus(); $("#find").select(); }
+    else if (go) move(...go);
+    else if (k === "Enter" || k === " ") choose();
+    else return;
+    e.preventDefault();
+  });
   window.render(data);
 </script>
 </body>

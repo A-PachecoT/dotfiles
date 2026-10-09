@@ -25,7 +25,7 @@ por context switching me olvidé de volver a ellos. Además ahora tengo como 60 
 
 ### El flujo, de punta a punta
 
-1. **Anotas** en el widget: clic en la barra (o ⌥T) → escribes → Enter. Opcional: `!1`/`!2` antes de agregar.
+1. **Anotas** en el widget: clic en la barra (o ⌥T) → `n` → escribes → Enter. Opcional: `!1`/`!2` antes de agregar.
 2. **Se la das a un Claude**: botón «Copiar para Claude» → lo pegas en cualquier sesión. El texto le pide correr
    `myturn link <id>`, y desde ahí esa sesión *es* el agente de la tarea.
 3. **Te vas a otra cosa.** Cuando el agente termina o te pregunta algo y no lo has visto, la tarea sube a **TE
@@ -77,6 +77,21 @@ incluidos eventos 📅 de días pasados, así que nada expiraba nunca.
 - **El morning-brief** lee `myturn ls --json` (Step 3b) para «Tus tareas» y la prioridad del día.
 - Latencia medida: widget → Obsidian del Mac 50 s; `[x]` en Obsidian → cerrada en myturn ~100 s.
 
+
+### Teclado del panel (desde 2026-10-09)
+
+André: *«cuando le doy a alt + t quiero que se focusee en el panel y que si le doy n se pone en crear nueva task y si
+le doy f se pone a buscar y que pueda hacer navegación con hjkl enter/space y que cuando le dé escape vuelva al
+aerospace panel donde me quedé»*.
+
+- ⌥T abre en **modo lista** (ningún campo enfocado), con la primera fila elegida en su botón de acción.
+- `j`/`k` (o flechas) cambian de fila; `h`/`l` de columna: título · prioridad · acción · ✓ · ✕. `Enter`/`Espacio`
+  la ejecuta (en el título, edita). Lo mismo que hace el clic, sin atajos ocultos.
+- `n` enfoca «Nueva tarea»; `f` abre «Buscar» (filtra por título, sin tildes ni mayúsculas; `Enter` vuelve a la
+  lista con el filtro, `Esc` lo limpia). En un campo, `Esc` vuelve a la lista.
+- En la lista, `Esc` (o ⌥T otra vez) cierra y te devuelve a la ventana donde estabas (`aerospace focus
+  --window-id`, tomada con `hs.window.frontmostWindow()` antes de mostrar el panel). Perder el foco por un clic
+  afuera solo cierra.
 
 ### Estados de una tarea
 
@@ -173,6 +188,11 @@ tarea.
   cambian la UI al instante; el webview se crea al cargar Hammerspoon. 18 smoke tests + ruff; medido en vivo. Luego, el congelamiento real de ~1 s era
   `panel:hswindow():focus()` (accesibilidad, 1,6 s medidos): ahora `hs.focus()` + `show()`; y hay skeleton + barra de
   carga. Prueba de foco: `hs.eventtap.keyStrokes` y leer el input (`document.hasFocus()` miente).
+
+- 2026-10-09, teclado del panel: en vivo, la lógica de hjkl/n/f/edición/Esc con eventos de teclado sintéticos
+  (`require("myturn").eval`), las teclas físicas (`hs.eventtap.keyStroke`) mueven la selección, y Esc devuelve el
+  foco de Hammerspoon a Ghostty. Gotcha: `hs.eventtap.keyStroke({"alt"},"t")` no dispara el hotkey del propio
+  Hammerspoon (prueba con `require("myturn").show()`); y las teclas físicas llegan con retraso respecto del `eval`.
 
 ## Roadmap
 

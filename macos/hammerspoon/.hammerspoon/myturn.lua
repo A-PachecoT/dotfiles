@@ -1,4 +1,5 @@
 -- myturn: el panel del widget (clic en la barra o ⌥T) y ⌥G para ir al agente que te espera.
+-- Se abre en modo lista (teclado: n nueva, f buscar, hjkl, Enter/Espacio, Esc vuelve a tu ventana).
 -- El panel es un webview (sketchybar no tiene campos de texto); habla con el CLI `myturn`.
 -- ⌥N no: en US International-PC es la ñ. SSOT: ~/dotfiles/docs/myturn.md
 local M = {}
@@ -10,6 +11,7 @@ local ENV = { PATH = HOME .. "/.local/bin:/opt/homebrew/bin:/usr/bin:/bin", HOME
 local W = 640
 
 local panel, hiddenAt, maxH = nil, 0, 2000
+local prevWin -- la ventana donde estabas al abrir el panel: Esc / ⌥T te devuelven ahí
 local LOG = HOME .. "/.cache/myturn/panel.log"
 
 local function log(...)
@@ -35,10 +37,19 @@ local function push()
   end)
 end
 
-function M.hide()
+-- back = volver a la ventana previa (cierre con teclado); perder el foco por un clic afuera no la toca
+function M.hide(back)
   if panel and panel:isVisible() then
     panel:hide()
     hiddenAt = hs.timer.secondsSinceEpoch()
+    if back and prevWin then
+      -- por AeroSpace: cambia de workspace si hace falta y no pasa por accesibilidad
+      local w = prevWin
+      local t = hs.task.new("/opt/homebrew/bin/aerospace", function(code)
+        if code ~= 0 and w:application() then w:focus() end
+      end, { "focus", "--window-id", string.format("%d", w:id()) })
+      t:start()
+    end
   end
 end
 
@@ -47,7 +58,7 @@ local function onMessage(msg)
   local a = b.action
   if a ~= "resize" then log("msg", hs.json.encode(b)) end
   if a == "close" then
-    M.hide()
+    M.hide(true)
   elseif a == "resize" and panel then
     local f = panel:frame()
     f.h = math.min(b.h, maxH)
@@ -88,6 +99,7 @@ end
 
 function M.show()
   if not panel then build() end
+  prevWin = hs.window.frontmostWindow() -- antes de mostrar: dentro del timer ya sería Hammerspoon
   local scr = hs.mouse.getCurrentScreen():fullFrame()
   local f = panel:frame()
   maxH = scr.h - 40 - 16 -- nunca más alto que la pantalla: la lista scrollea
@@ -102,7 +114,7 @@ function M.show()
     hs.focus()
     hs.timer.doAfter(0.05, function()
       panel:show()
-      panel:evaluateJavaScript("window.focusInput()")
+      panel:evaluateJavaScript("window.focusList()")
     end)
   end)
 end
@@ -110,7 +122,7 @@ end
 function M.toggle()
   -- un clic en la barra quita el foco al panel (lo cierra) justo antes de pedir abrirlo otra vez
   if (panel and panel:isVisible()) or hs.timer.secondsSinceEpoch() - hiddenAt < 0.4 then
-    M.hide()
+    M.hide(true)
   else
     M.show()
   end
