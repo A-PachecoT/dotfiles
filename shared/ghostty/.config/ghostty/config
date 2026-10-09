@@ -131,8 +131,9 @@ keybind = ctrl+shift+tab=text:\x02p
 # Sin índice directo (cmd+shift+3/4/5 = screenshots macOS); nav por picker.
 keybind = cmd+shift+c=text:\x02C
 keybind = cmd+shift+g=text:\x02G
-keybind = cmd+shift+n=text:\x02N
-keybind = cmd+shift+p=text:\x02P
+# cmd+shift+j/k = space siguiente/anterior (abajo/arriba en el panel, como vim j/k)
+keybind = cmd+shift+j=text:\x02N
+keybind = cmd+shift+k=text:\x02P
 
 # Herdr NAVIGATOR (goto = prefix+g): fuzzy jumper vim-native (tu viejo `tp`).
 # j/k mover · h/l cambiar nivel (ws↔tab↔pane) · / buscar · Enter saltar ·
@@ -159,8 +160,8 @@ keybind = cmd+e=text:\x02E
 keybind = cmd+shift+enter=toggle_split_zoom
 keybind = cmd+enter=toggle_fullscreen
 
-# Clear screen (Cmd+Shift+k to avoid conflict with tmux navigation)
-keybind = cmd+shift+k=clear_screen
+# Clear screen (cmd+shift+l, como ctrl+l; cmd+shift+k es space anterior)
+keybind = cmd+shift+l=clear_screen
 
 # =============================================================================
 # CLIPBOARD & NOTIFICATIONS
