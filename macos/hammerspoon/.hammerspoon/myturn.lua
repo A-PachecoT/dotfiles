@@ -4,6 +4,10 @@
 -- ⌥N no: en US International-PC es la ñ. SSOT: ~/dotfiles/docs/myturn.md
 local M = {}
 
+-- cargar aquí las extensiones: hs.* las carga perezosamente con un print, y si un `hs -c` cortado dejó print
+-- apuntando a un puerto IPC muerto, ese print revienta el hotkey (⌥T quedaba muerto)
+local _ = { hs.timer, hs.window, hs.mouse, hs.screen, hs.task, hs.json, hs.pasteboard, hs.alert, hs.webview, hs.urlevent, hs.hotkey }
+
 local HOME = os.getenv("HOME")
 local BIN = HOME .. "/.local/bin/myturn"
 local HTML = HOME .. "/.hammerspoon/myturn-panel.html"
@@ -42,13 +46,12 @@ function M.hide(back)
   if panel and panel:isVisible() then
     panel:hide()
     hiddenAt = hs.timer.secondsSinceEpoch()
-    if back and prevWin then
-      -- por AeroSpace: cambia de workspace si hace falta y no pasa por accesibilidad
-      local w = prevWin
-      local t = hs.task.new("/opt/homebrew/bin/aerospace", function(code)
-        if code ~= 0 and w:application() then w:focus() end
-      end, { "focus", "--window-id", string.format("%d", w:id()) })
-      t:start()
+    local app = back and prevWin and prevWin:application()
+    if app then
+      -- AeroSpace no ve el panel: cree que tu ventana sigue enfocada y su `focus` no hace nada. Hay que soltar
+      -- Hammerspoon activando la app de antes (vuelve a su ventana enfocada); AeroSpace después fija el workspace.
+      app:activate()
+      hs.task.new("/opt/homebrew/bin/aerospace", nil, { "focus", "--window-id", string.format("%d", prevWin:id()) }):start()
     end
   end
 end

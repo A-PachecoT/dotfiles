@@ -75,7 +75,7 @@
   <div class="find" id="findbox"><input id="find" placeholder="Buscar… (Enter elige · Esc limpia)" autocomplete="off"></div>
   <div id="list"></div>
   <div id="toast"></div>
-  <div class="foot"><kbd>n</kbd> nueva · <kbd>f</kbd>/<kbd>/</kbd> buscar · <kbd>hjkl</kbd> moverse · <kbd>Enter</kbd>/<kbd>Espacio</kbd> elegir ·
+  <div class="foot"><kbd>n</kbd> nueva · <kbd>f</kbd>/<kbd>/</kbd> buscar · <kbd>hjkl</kbd> <kbd>gg</kbd> <kbd>G</kbd> moverse · <kbd>Enter</kbd>/<kbd>Espacio</kbd> elegir ·
     <kbd>Esc</kbd> vuelve a tu ventana · <kbd>⌥G</kbd> va al que te espera</div>
 </div>
 <script>
@@ -86,7 +86,7 @@
   const nextPrio = (p) => (p == null ? 1 : p === 1 ? 2 : 0);
   let data = null, newPrio = null, editing = null;
   // teclado: fila elegida (por id, sobrevive a cada render) y columna: 0 título, 1 prioridad, 2 acción, 3 ✓, 4 ✕
-  let sel = null, selIdx = 0, col = 2, query = "";
+  let sel = null, selIdx = 0, col = 2, query = "", lastG = 0;
   const norm = (t) => String(t ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
   function resize() { send({ action: "resize", h: Math.ceil($("#card").getBoundingClientRect().height) + 12 }); }
@@ -225,7 +225,7 @@
     if (e.target.closest("button")) e.preventDefault();
   });
 
-  // modo lista (ningún campo enfocado): n nueva, f o / buscar, hjkl / flechas, Enter / Espacio, Esc sale
+  // modo lista (ningún campo enfocado): n nueva, f o / buscar, hjkl / flechas, gg inicio, G final, Enter / Espacio, Esc sale
   document.addEventListener("keydown", (e) => {
     if (editing || e.metaKey || e.ctrlKey || e.altKey || e.target.tagName === "INPUT") return;
     const k = e.key, go = { j: [1, 0], ArrowDown: [1, 0], k: [-1, 0], ArrowUp: [-1, 0],
@@ -234,6 +234,8 @@
     else if (k === "n") $("#new").focus();
     else if (k === "f" || k === "/") { $("#findbox").classList.add("on"); resize(); $("#find").focus(); $("#find").select(); }
     else if (go) move(...go);
+    else if (k === "G") move(Infinity, 0);
+    else if (k === "g") { if (e.timeStamp - lastG < 500) { move(-Infinity, 0); lastG = 0; } else lastG = e.timeStamp; }
     else if (k === "Enter" || k === " ") choose();
     else return;
     e.preventDefault();

@@ -24,4 +24,11 @@ envía `close` y el frente vuelve de Hammerspoon a Ghostty.
 - `hs.eventtap.keyStroke({"alt"},"t")` no dispara un hotkey del propio Hammerspoon: para probar, `require("myturn").show()`.
 - Las teclas físicas sintetizadas llegan después de que `hs -c` vuelve: un `eval` inmediato lee el estado anterior.
   Para la lógica, mejor `KeyboardEvent` sintético dentro del webview (determinista).
+- Después: `/` también busca y `gg`/`G` van a la primera/última fila.
+- Bug encontrado en uso: Esc dejaba el foco en Hammerspoon. AeroSpace no ve el panel (borderless, popUpMenu), cree
+  que la ventana previa sigue enfocada y `aerospace focus` es no-op. Fix: `app:activate()` de la app previa y luego
+  AeroSpace. Medido: vuelve en <0,15 s.
+- Bug inducido por las pruebas: ⌥T muerto. Un `hs -c` cortado por `alarm 4` deja `print` redirigido a un puerto IPC
+  muerto; la carga perezosa de `hs.*` imprime y revienta el callback del hotkey. Fix: precargar las extensiones en
+  `myturn.lua` + reinicio limpio de Hammerspoon.
 - Probar abriendo el panel lo pone en la pantalla de André: un clic suyo durante la prueba es una acción real.

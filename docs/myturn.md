@@ -85,13 +85,14 @@ le doy f se pone a buscar y que pueda hacer navegación con hjkl enter/space y q
 aerospace panel donde me quedé»*.
 
 - ⌥T abre en **modo lista** (ningún campo enfocado), con la primera fila elegida en su botón de acción.
-- `j`/`k` (o flechas) cambian de fila; `h`/`l` de columna: título · prioridad · acción · ✓ · ✕. `Enter`/`Espacio`
+- `j`/`k` (o flechas) cambian de fila, `gg` va a la primera y `G` a la última; `h`/`l` de columna: título · prioridad · acción · ✓ · ✕. `Enter`/`Espacio`
   la ejecuta (en el título, edita). Lo mismo que hace el clic, sin atajos ocultos.
 - `n` enfoca «Nueva tarea»; `f` o `/` abre «Buscar» (filtra por título, sin tildes ni mayúsculas; `Enter` vuelve a la
   lista con el filtro, `Esc` lo limpia). En un campo, `Esc` vuelve a la lista.
-- En la lista, `Esc` (o ⌥T otra vez) cierra y te devuelve a la ventana donde estabas (`aerospace focus
-  --window-id`, tomada con `hs.window.frontmostWindow()` antes de mostrar el panel). Perder el foco por un clic
-  afuera solo cierra.
+- En la lista, `Esc` (o ⌥T otra vez) cierra y te devuelve a la ventana donde estabas (tomada con
+  `hs.window.frontmostWindow()` antes de mostrar el panel): se activa su app y luego `aerospace focus --window-id`.
+  Solo AeroSpace no basta: no ve el panel, cree que tu ventana sigue enfocada y su `focus` no hace nada (el foco se
+  quedaba en Hammerspoon). Perder el foco por un clic afuera solo cierra.
 
 ### Estados de una tarea
 
@@ -193,6 +194,9 @@ tarea.
   (`require("myturn").eval`), las teclas físicas (`hs.eventtap.keyStroke`) mueven la selección, y Esc devuelve el
   foco de Hammerspoon a Ghostty. Gotcha: `hs.eventtap.keyStroke({"alt"},"t")` no dispara el hotkey del propio
   Hammerspoon (prueba con `require("myturn").show()`); y las teclas físicas llegan con retraso respecto del `eval`.
+  **No cortes un `hs -c` con timeout corto** (`alarm 4`): deja el `print` de Hammerspoon apuntando a un puerto IPC
+  muerto, y el siguiente `print` (la carga perezosa de una extensión `hs.*`) revienta el hotkey: ⌥T quedó muerto.
+  `myturn.lua` ahora precarga sus extensiones; si pasa igual, `killall Hammerspoon; open -g -a Hammerspoon`.
 
 ## Roadmap
 
