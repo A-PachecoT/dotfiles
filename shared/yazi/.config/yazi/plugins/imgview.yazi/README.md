@@ -30,5 +30,6 @@ path. Any key returns to yazi.
 
 - The image is transmitted with `q=2` (responses suppressed) so nothing leaks
   back into the terminal input.
-- `CELL = 1.9` in `view.py` is the assumed cell height:width ratio used to cap
+- Size comes from `TIOCGWINSZ` on `/dev/tty` (cols, rows and pixels → cell h:w);
+  `1.9` is only the fallback cell ratio when the terminal reports no pixels, used to cap
   the vertical fit. Bump it if tall images leave too much margin.

@@ -12,8 +12,10 @@ CSI moves/clears are emitted normally so tmux keeps its screen model in sync.
 """
 
 import base64
+import fcntl
 import os
 import shutil
+import struct
 import sys
 import termios
 import tty
@@ -26,6 +28,26 @@ def wrap_tmux(seq: str) -> str:
     if os.environ.get("TMUX"):
         return f"{ESC}Ptmux;" + seq.replace(ESC, ESC + ESC) + f"{ESC}\\"
     return seq
+
+
+def term_size() -> tuple[int, int, float]:
+    """(cols, rows, cell h:w) from the real tty: under yazi's `shell --block`
+    stdout/env can report the 80x24 fallback, which shrank the image."""
+    for fd_src in ("/dev/tty", None):
+        try:
+            fd = os.open(fd_src, os.O_RDONLY) if fd_src else sys.stdout.fileno()
+            rows, cols, xp, yp = struct.unpack(
+                "HHHH", fcntl.ioctl(fd, termios.TIOCGWINSZ, b"\0" * 8)
+            )
+            if fd_src:
+                os.close(fd)
+            if cols and rows:
+                cell = (yp / rows) / (xp / cols) if xp and yp else 1.9
+                return cols, rows, cell
+        except OSError:
+            pass
+    cols, rows, cell = term_size()
+    return cols, rows, 1.9
 
 
 def main() -> None:
@@ -42,15 +64,14 @@ def main() -> None:
     except Exception:
         pass
 
-    cols, rows = shutil.get_terminal_size((80, 24))
+    cols, rows, cell = term_size()
     view_rows = max(1, rows - 1)  # reserve the last line for the hint
 
     # Columns to span, preserving aspect. Kitty infers the row count from the
-    # column count; CELL (~cell height:width) only sizes the vertical fit, so a
-    # slight under-estimate just leaves a small margin rather than overflowing.
-    CELL = 1.9
+    # column count; the cell h:w ratio (from the tty's pixel size) sizes the
+    # vertical fit.
     if iw > 0 and ih > 0:
-        c = int(view_rows * CELL * iw / ih)
+        c = int(view_rows * cell * iw / ih)
         c = max(1, min(cols, c))
     else:
         c = cols
