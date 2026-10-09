@@ -75,7 +75,7 @@
   <div class="find" id="findbox"><input id="find" placeholder="Buscar… (Enter elige · Esc limpia)" autocomplete="off"></div>
   <div id="list"></div>
   <div id="toast"></div>
-  <div class="foot"><kbd>n</kbd> nueva · <kbd>f</kbd> buscar · <kbd>hjkl</kbd> moverse · <kbd>Enter</kbd>/<kbd>Espacio</kbd> elegir ·
+  <div class="foot"><kbd>n</kbd> nueva · <kbd>f</kbd>/<kbd>/</kbd> buscar · <kbd>hjkl</kbd> moverse · <kbd>Enter</kbd>/<kbd>Espacio</kbd> elegir ·
     <kbd>Esc</kbd> vuelve a tu ventana · <kbd>⌥G</kbd> va al que te espera</div>
 </div>
 <script>
@@ -225,14 +225,14 @@
     if (e.target.closest("button")) e.preventDefault();
   });
 
-  // modo lista (ningún campo enfocado): n nueva, f buscar, hjkl / flechas, Enter / Espacio, Esc sale
+  // modo lista (ningún campo enfocado): n nueva, f o / buscar, hjkl / flechas, Enter / Espacio, Esc sale
   document.addEventListener("keydown", (e) => {
     if (editing || e.metaKey || e.ctrlKey || e.altKey || e.target.tagName === "INPUT") return;
     const k = e.key, go = { j: [1, 0], ArrowDown: [1, 0], k: [-1, 0], ArrowUp: [-1, 0],
       h: [0, -1], ArrowLeft: [0, -1], l: [0, 1], ArrowRight: [0, 1] }[k];
     if (k === "Escape") send({ action: "close" });
     else if (k === "n") $("#new").focus();
-    else if (k === "f") { $("#findbox").classList.add("on"); resize(); $("#find").focus(); $("#find").select(); }
+    else if (k === "f" || k === "/") { $("#findbox").classList.add("on"); resize(); $("#find").focus(); $("#find").select(); }
     else if (go) move(...go);
     else if (k === "Enter" || k === " ") choose();
     else return;

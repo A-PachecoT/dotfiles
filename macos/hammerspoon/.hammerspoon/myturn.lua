@@ -1,5 +1,5 @@
 -- myturn: el panel del widget (clic en la barra o ⌥T) y ⌥G para ir al agente que te espera.
--- Se abre en modo lista (teclado: n nueva, f buscar, hjkl, Enter/Espacio, Esc vuelve a tu ventana).
+-- Se abre en modo lista (teclado: n nueva, f o / buscar, hjkl, Enter/Espacio, Esc vuelve a tu ventana).
 -- El panel es un webview (sketchybar no tiene campos de texto); habla con el CLI `myturn`.
 -- ⌥N no: en US International-PC es la ñ. SSOT: ~/dotfiles/docs/myturn.md
 local M = {}

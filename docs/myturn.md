@@ -87,7 +87,7 @@ aerospace panel donde me quedé»*.
 - ⌥T abre en **modo lista** (ningún campo enfocado), con la primera fila elegida en su botón de acción.
 - `j`/`k` (o flechas) cambian de fila; `h`/`l` de columna: título · prioridad · acción · ✓ · ✕. `Enter`/`Espacio`
   la ejecuta (en el título, edita). Lo mismo que hace el clic, sin atajos ocultos.
-- `n` enfoca «Nueva tarea»; `f` abre «Buscar» (filtra por título, sin tildes ni mayúsculas; `Enter` vuelve a la
+- `n` enfoca «Nueva tarea»; `f` o `/` abre «Buscar» (filtra por título, sin tildes ni mayúsculas; `Enter` vuelve a la
   lista con el filtro, `Esc` lo limpia). En un campo, `Esc` vuelve a la lista.
 - En la lista, `Esc` (o ⌥T otra vez) cierra y te devuelve a la ventana donde estabas (`aerospace focus
   --window-id`, tomada con `hs.window.frontmostWindow()` antes de mostrar el panel). Perder el foco por un clic
