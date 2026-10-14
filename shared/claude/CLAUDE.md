@@ -81,6 +81,7 @@ CLIP_REMOTE="styreep@100.73.150.52" /home/andre/dotfiles/scripts/mac-clipboard p
 CLIP_REMOTE="styreep@100.73.150.52" /home/andre/dotfiles/scripts/mac-clipboard copy-text    # escribir al Mac
 ```
 - «No image data found» → hay texto (usá paste-text). Secretos con Touch ID no se escriben desde Arch: dale a André un one-liner para su Mac.
+- «mi clip», «mi último clip», «mi image clip» = lo que está en el clipboard del Mac (`paste-image`), no un video de Cap.
 - Si el ssh Arch→Mac cuelga en auth: `SSH_AUTH_SOCK= ssh -F /dev/null -i ~/.ssh/id_ed25519 styreep@100.73.150.52 …` (socket ET muerto; la IP es Tailscale). → CLAUDE-porques.md §Clipboard [Arch]
 
 ## Cofoundy Identity
