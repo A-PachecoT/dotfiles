@@ -15,6 +15,7 @@ local ENV = { PATH = HOME .. "/.local/bin:/opt/homebrew/bin:/usr/bin:/bin", HOME
 local W = 640
 
 local panel, hiddenAt, maxH = nil, 0, 2000
+local ticker -- abierto, el panel se refresca solo: una programada que llega sube sin cerrarlo y abrirlo
 local prevWin -- la ventana donde estabas al abrir el panel: Esc / ⌥T te devuelven ahí
 local LOG = HOME .. "/.cache/myturn/panel.log"
 
@@ -32,8 +33,8 @@ local function run(args, cb)
   t:start()
 end
 
-local function push()
-  if panel then panel:evaluateJavaScript("window.loading && window.loading(true)") end
+local function push(quiet)
+  if panel and not quiet then panel:evaluateJavaScript("window.loading && window.loading(true)") end
   run({ "panel" }, function(code, out)
     if not panel then return end
     if code == 0 and out ~= "" then panel:evaluateJavaScript("window.render(" .. out .. ")") end
@@ -43,6 +44,7 @@ end
 
 -- back = volver a la ventana previa (cierre con teclado); perder el foco por un clic afuera no la toca
 function M.hide(back)
+  if ticker then ticker:stop(); ticker = nil end
   if panel and panel:isVisible() then
     panel:hide()
     hiddenAt = hs.timer.secondsSinceEpoch()
@@ -59,7 +61,7 @@ end
 local function onMessage(msg)
   local b = msg.body or {}
   local a = b.action
-  if a ~= "resize" then log("msg", hs.json.encode(b)) end
+  if a ~= "resize" and a ~= "parse" then log("msg", hs.json.encode(b)) end
   if a == "close" then
     M.hide(true)
   elseif a == "resize" and panel then
@@ -67,9 +69,21 @@ local function onMessage(msg)
     f.h = math.min(b.h, maxH)
     panel:frame(f)
   elseif a == "add" then
-    local args = { "add", b.title }
+    local args = { "add", "--parse" } -- «revisar TikTok el 30»: la fecha sale del título
     if b.prio then table.insert(args, "--prio"); table.insert(args, string.format("%d", b.prio)) end
+    table.insert(args, "--"); table.insert(args, b.title)
     run(args, push)
+  elseif a == "when" then
+    run({ "when", b.id, "--", b.text }, push)
+  elseif a == "parse" then
+    local args = { "parse" }
+    if b.mode == "when" then table.insert(args, "--when") end
+    table.insert(args, "--"); table.insert(args, b.text)
+    run(args, function(code, out)
+      if panel and code == 0 and out ~= "" then
+        panel:evaluateJavaScript(string.format("window.parsed(%d, %s)", b.seq, out))
+      end
+    end)
   elseif a == "edit" then
     run({ "edit", b.id, b.title }, push)
   elseif a == "prio" then
@@ -111,6 +125,8 @@ function M.show()
   panel:show()
   panel:bringToFront(true)
   push()
+  if ticker then ticker:stop() end
+  ticker = hs.timer.doEvery(20, function() push(true) end)
   -- sin activar Hammerspoon el campo no recibe teclas; recién mostrada, la ventana todavía no acepta el foco
   -- win:focus() (accesibilidad) congelaba Hammerspoon 1,6 s: se activa la app y, ya activa, show() la vuelve clave
   hs.timer.doAfter(0.12, function()
