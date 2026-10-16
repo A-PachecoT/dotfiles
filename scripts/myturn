@@ -7,13 +7,18 @@
 La UI es el panel del widget (clic en la barra o ⌥T). Este CLI es lo que el panel y los agentes llaman:
 
   myturn                          ⌥G: salta al siguiente agente que te espera (= myturn jump)
-  myturn add "título" [--prio 1|2] [--raw]   nueva tarea (--raw: la IA saca fecha y prioridad)
+  myturn add "título" [--prio 1|2] [--desde CUÁNDO] [--due CUÁNDO] [--parse] [--raw]
+                                  nueva tarea. CUÁNDO: «el 30», «mañana 9:00», «en 2 h», «antes del vie» o ISO;
+                                  --desde la oculta hasta entonces (y ese día avisa); --parse saca las fechas del
+                                  título (lo que usa el panel); --raw: la IA saca fecha y prioridad
+  myturn when ID "cuándo"         posponer («el 30»), plazo («antes del vie»), «ya» la trae, «sin fecha» limpia
+  myturn parse [--when] "texto"   JSON: qué fechas entiende (la vista previa del panel)
   myturn edit ID "nuevo título"   renombrar
   myturn prio 0|1|2 [--id ID]     prioridad (0 = sin prioridad); sin --id: tu propia sesión si eres un agente
   myturn done|archive|restore ID  cerrar / podar / deshacer
   myturn link ID                  (lo corre un agente) enlaza ESTA sesión de Claude a la tarea ID
   myturn go ID                    ir al agente de la tarea (o reabrirlo si se cerró)
-  myturn ls [--json]              tus tareas, las que te esperan primero
+  myturn ls [--todas] [--json]    tus tareas, las que te esperan primero (--todas: también las programadas)
   myturn panel                    JSON para el panel de Hammerspoon
   myturn obsidian                 (timer del Arch) espejo Tareas.md + importar lo anotado en el daily note
   myturn import | garden [--ai] | track | sketchybar     mantenimiento, poda, hook y barra
@@ -33,6 +38,7 @@ import shutil
 import subprocess
 import sys
 import time
+import unicodedata
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -91,8 +97,8 @@ def fold() -> dict[str, dict]:
         op, tid, ts = ev["op"], ev["id"], ev["ts"]
         if op == "add":
             tasks[tid] = {"id": tid, "title": ev.get("title", ""), "raw": ev.get("raw"), "prio": ev.get("prio"),
-                          "due": ev.get("due"), "cwd": ev.get("cwd"), "status": "open", "created": ts,
-                          "touched": ts, "link": ev.get("link"), "source": ev.get("source", "capture"),
+                          "due": ev.get("due"), "start": ev.get("start"), "cwd": ev.get("cwd"), "status": "open",
+                          "created": ts, "touched": ts, "link": ev.get("link"), "source": ev.get("source", "capture"),
                           "reason": None, "by": ev.get("by"), "title_fixed": False}
             continue
         t = tasks.get(tid)
@@ -293,6 +299,215 @@ def ago(ts: str) -> str:
     return f"{m} min" if m < 60 else f"{m // 60} h" if m < 1440 else f"{m // 1440} d"
 
 
+# ── tiempo: «el 30», «mañana 9:00», «antes del vie» ───────────────────────────────────────────────
+# start = cuándo aparece (oculta hasta entonces, ese día avisa); due = plazo. 'YYYY-MM-DD' o 'YYYY-MM-DDTHH:MM' local.
+DIA = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
+WEEKDAY = {"lun": 0, "mar": 1, "mie": 2, "jue": 3, "vie": 4, "sab": 5, "dom": 6}
+MONTH = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6, "jul": 7, "ago": 8, "sep": 9, "set": 9,
+         "oct": 10, "nov": 11, "dic": 12}
+NUMBER = {"un": 1, "una": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5}
+DUE_MARKS = {"antes", "para", "hasta", "vence"}
+_MON = (r"ene(?:ro)?|feb(?:rero)?|mar(?:zo)?|abr(?:il)?|may(?:o)?|jun(?:io)?|jul(?:io)?|ago(?:sto)?"
+        r"|sep(?:t(?:iembre)?)?|set(?:iembre)?|oct(?:ubre)?|nov(?:iembre)?|dic(?:iembre)?")
+_WD = r"lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|lun|mar|mi[eé]|jue|vie|s[aá]b|dom"
+
+
+def _time_re(s: str) -> str:
+    """«a las 3», «las 15h», «9:30», «3pm». Un número suelto no es una hora."""
+    return (rf"(?:a\s+)?las?\s+(?P<h1{s}>\d{{1,2}})(?::(?P<m1{s}>\d{{2}}))?\s*(?P<p1{s}>am|pm|h(?:rs?)?)?"
+            rf"|(?P<h2{s}>\d{{1,2}}):(?P<m2{s}>\d{{2}})\s*(?P<p2{s}>am|pm|h(?:rs?)?)?"
+            rf"|(?P<h3{s}>\d{{1,2}})\s?(?P<p3{s}>am|pm)")
+
+
+WHEN = re.compile(
+    r"(?<![\w/:.-])(?:"
+    r"(?P<rel>en\s+(?P<rn>\d{1,3}|una?|dos|tres|cuatro|cinco)\s*(?P<ru>min(?:utos?)?|h(?:oras?|rs?)?|d[ií]as?|semanas?))"
+    r"|(?:(?P<mk>antes\s+del?|para(?:\s+el)?|hasta(?:\s+el)?|vence(?:\s+el)?|desde(?:\s+el)?|a\s+partir\s+del?|el)\s+)?"
+    r"(?:(?:(?P<hoy>hoy)|(?P<pmn>pasado\s+ma[nñ]ana)|(?P<mn>ma[nñ]ana)"
+    r"|(?P<nw>(?:la\s+)?(?:pr[oó]xima|otra)\s+semana|la\s+semana\s+que\s+viene)"
+    rf"|(?P<wd>{_WD})\.?(?:\s+(?P<wdd>\d{{1,2}})(?:\s*[-/]\s*(?P<wdm>{_MON}|\d{{1,2}})|\s+(?:de\s+)?(?P<wdm2>{_MON}))?)?"
+    rf"|(?P<dd>\d{{1,2}})(?:\s*[-/]\s*(?P<dm>{_MON}|\d{{1,2}})|\s+(?:de\s+)?(?P<dm2>{_MON}))"
+    r"|(?P<bare>\d{1,2}))"
+    rf"(?:(?:\s*,\s*|\s+)(?:{_time_re('a')}))?"
+    rf"|{_time_re('b')})"
+    r")(?![\w%/:])", re.I)
+ISO_WHEN = re.compile(r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?")
+
+
+def _fold(s: str) -> str:
+    return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode().lower()
+
+
+def _hm(g: dict, s: str) -> tuple[int, int] | bool | None:
+    """(hora, minuto); False si no existe (25:00); None si no se dijo hora."""
+    for i in "123":
+        if g.get(f"h{i}{s}") is not None:
+            h, mi, ap = int(g[f"h{i}{s}"]), int(g.get(f"m{i}{s}") or 0), (g.get(f"p{i}{s}") or "").lower()
+            if ap == "pm" and h < 12:
+                h += 12
+            elif ap == "am" and h == 12:
+                h = 0
+            elif ap != "am" and 1 <= h <= 7:  # «a las 3» en horario de trabajo = 15:00
+                h += 12
+            return (h, mi) if h < 24 and mi < 60 else False
+    return None
+
+
+def _on(d: int, mon: str | None, today: date) -> date | None:
+    """«30-oct», «30/10»; sin mes («el 30»): este mes o el siguiente. None si no existe o ya pasó."""
+    if not mon:
+        y, m = today.year, today.month + (d < today.day)
+        try:
+            return date(y + (m > 12), (m - 1) % 12 + 1, d)
+        except ValueError:
+            return None
+    try:
+        out = date(today.year, int(mon) if mon.isdigit() else MONTH[_fold(mon)[:3]], d)
+        if out < today:  # «5-ene» dicho en diciembre es del año que viene; «14-oct» el 16 es una referencia
+            out = out.replace(year=today.year + 1) if (today - out).days > 60 else None
+        return out
+    except ValueError:
+        return None
+
+
+def _resolve(m: re.Match, text: str, ref: datetime) -> tuple[str, str] | None:
+    """('start'|'due', valor) de una frase, o None si no es una fecha (o ya pasó)."""
+    g, today = m.groupdict(), ref.date()
+    if g["rel"]:
+        n = int(g["rn"]) if g["rn"].isdigit() else NUMBER[g["rn"].lower()]
+        unit = _fold(g["ru"])[0]
+        if unit in "mh":
+            return "start", (ref + timedelta(minutes=n if unit == "m" else 60 * n)).strftime("%Y-%m-%dT%H:%M")
+        return "start", (today + timedelta(days=n * (7 if unit == "s" else 1))).isoformat()
+    mark, prev = _fold(g["mk"] or "").split(), (_fold(text[:m.start()]).split() or [""])[-1]
+    d: date | None = None
+    if g["hoy"]:
+        d = today
+    elif g["pmn"]:
+        d = today + timedelta(days=2)
+    elif g["mn"]:
+        if not mark and prev in {"la", "esta", "cada", "por", "de", "en", "toda"}:
+            return None  # «planificar la mañana»
+        d = today + timedelta(days=1)
+    elif g["nw"]:
+        d = today + timedelta(days=7 - today.weekday())
+    elif g["wd"]:
+        if g["wdd"]:
+            d = _on(int(g["wdd"]), g["wdm"] or g["wdm2"], today)
+        elif mark or _hm(g, "a") or (len(g["wd"]) > 4 and prev not in {"del", "de", "cada", "los", "al"}):
+            d = today + timedelta(days=(WEEKDAY[_fold(g["wd"])[:3]] - today.weekday() - 1) % 7 + 1)
+        else:
+            return None  # «macro mar presencial»: una abreviatura suelta (sin «el», número ni hora) no es fecha
+    elif g["dd"]:
+        d = _on(int(g["dd"]), g["dm"] or g["dm2"], today)
+    elif g["bare"] and mark and not re.match(r"\s*\w", text[m.end():]):
+        d = _on(int(g["bare"]), None, today)  # «revisar el 30», pero no «ver el 1 de los PRs»
+    dated = any(g[k] for k in ("hoy", "pmn", "mn", "nw", "wd", "dd", "bare"))
+    hm = _hm(g, "a" if dated else "b")
+    if (dated and d is None) or hm is False:
+        return None
+    due = bool(mark) and mark[0] in DUE_MARKS
+    if hm is None:
+        return ("due" if due or (g["hoy"] and not mark) else "start"), d.isoformat()
+    when = datetime(*(d or today).timetuple()[:3], *hm).astimezone()
+    if when <= ref:
+        if dated:
+            return None  # «hoy a las 9» dicho a las 10
+        when += timedelta(days=1)
+    return ("due" if due else "start"), when.strftime("%Y-%m-%dT%H:%M")
+
+
+def parse_when(text: str, ref: datetime | None = None) -> tuple[str, str | None, str | None]:
+    """Saca del texto la primera fecha de aparición y el primer plazo: (resto, start, due).
+    Sin marca o con «el/desde» = aparece; «antes del/para/hasta/vence» y «hoy» a secas = plazo."""
+    ref, found = ref or now(), {}
+    for m in WHEN.finditer(text):
+        hit = _resolve(m, text, ref)
+        if hit and hit[0] not in found:
+            found[hit[0]] = (hit[1], m.span())
+    if not found:
+        return text, None, None
+    rest = text
+    for a, b in sorted((span for _, span in found.values()), reverse=True):
+        rest = rest[:a] + " " + rest[b:]
+    rest = re.sub(r"\s+([,.;:)])", r"\1", re.sub(r"\(\s*\)|\[\s*\]", " ", rest))
+    rest = re.sub(r"\s{2,}", " ", rest).strip().strip(",;:—–-·").strip()
+    return rest, found.get("start", (None,))[0], found.get("due", (None,))[0]
+
+
+def at(v: str) -> datetime:
+    return datetime.fromisoformat(v).astimezone()
+
+
+def day(v: str) -> date:
+    return date.fromisoformat(v[:10])
+
+
+def when_label(v: str, t0: datetime) -> str:
+    """«en 25 min», «hoy 15:00», «mañana», «el jue 30/10 9:00»."""
+    d = at(v)
+    hm, left = (f" {d.hour}:{d.minute:02d}" if "T" in v else ""), (d - t0).total_seconds()
+    if hm and 0 <= left < 3600:
+        return f"en {max(1, round(left / 60))} min"
+    n = (d.date() - t0.date()).days
+    return ("hoy" if n == 0 else "mañana" if n == 1 else f"el {DIA[d.weekday()]} {d:%d/%m}") + hm
+
+
+def due_say(v: str, t0: datetime) -> str:
+    d = at(v)
+    if "T" in v and d <= t0:
+        return f"venció hace {ago(iso(d))}"
+    n = (d.date() - t0.date()).days
+    return f"vencida hace {-n} d" if n < 0 else "vence " + when_label(v, t0)
+
+
+def when_text(start: str | None, due: str | None, t0: datetime) -> str:
+    parts = [("aparece " + when_label(start, t0)) if at(start) > t0 else "hoy toca"] if start else []
+    return " · ".join(parts + ([due_say(due, t0)] if due else []))
+
+
+def urgency(start: str | None, due: str | None, t0: datetime) -> str | None:
+    """'overdue' (vencida), 'today' (vence hoy o hoy le toca) o None."""
+    if due and (at(due) <= t0 if "T" in due else day(due) < t0.date()):
+        return "overdue"
+    return "today" if any(v and day(v) == t0.date() for v in (start, due)) else None
+
+
+def when_value(text: str, t0: datetime | None = None) -> dict:
+    """Lo que escribes en ◷ de una fila: {"set": {start/due}, "label"} o {"error"}."""
+    t0, s = t0 or now(), text.strip()
+    if _fold(s) in {"ya", "ahora"}:
+        return {"set": {"start": None}, "label": "aparece ya"}
+    if _fold(s) in {"sin fecha", "nunca"}:
+        return {"set": {"start": None, "due": None}, "label": "sin fecha"}
+    rest, start, due = ("", s, None) if ISO_WHEN.fullmatch(s) else parse_when(s, t0)
+    if not (start or due) and not ISO_WHEN.fullmatch(s):  # aquí todo el texto es la fecha: «vie», «30» = «el vie»
+        rest, start, due = parse_when(f"el {s}", t0)
+    if not (start or due) or rest:
+        return {"error": f"no entiendo «{rest if start or due else s}»"}
+    return {"set": {k: v for k, v in (("start", start), ("due", due)) if v}, "label": when_text(start, due, t0)}
+
+
+def as_when(s: str) -> str:
+    """El valor de --desde / --due: ISO o una frase («el 30», «mañana 9:00»)."""
+    if ISO_WHEN.fullmatch(s.strip()):
+        return s.strip()
+    rest, start, due = parse_when(s)
+    if not (start or due) or rest:
+        sys.exit(f"myturn: no entiendo la fecha «{s}»")
+    return start or due
+
+
+def preview(text: str, when_mode: bool) -> dict:
+    """Lo que el panel muestra mientras escribes, antes de Enter."""
+    if when_mode:
+        return when_value(text)
+    t0 = now()
+    rest, start, due = parse_when(text, t0)
+    return {"title": rest or text, "start": start, "due": due, "label": when_text(start, due, t0),
+            "later": bool(start and at(start) > t0)}
+
+
 def observe(lists: dict[str, list | None], front: str | None, t0: datetime) -> dict[str, dict]:
     """Registra transiciones y «visto» de cada sesión. {session: info}"""
     seen = load_seen()
@@ -319,14 +534,14 @@ STATES = {"waiting": "●", "working": "◌", "seen": "○", "closed": "○", "n
 
 
 def classify(tasks: dict, info: dict[str, dict], lists: dict[str, list | None]) -> dict:
-    t0, today = now(), date.today()
-    rows, background = [], 0
+    t0 = now()
+    rows, later, background = [], [], 0
     for t in tasks.values():
         link = t.get("link")
         if not mine(t):
             background += bool(link and t["status"] == "open")
             continue
-        row = {k: t.get(k) for k in ("id", "title", "prio", "due", "created", "link", "source")}
+        row = {k: t.get(k) for k in ("id", "title", "prio", "due", "start", "created", "touched", "link", "source")}
         ag = info.get(link["session"]) if link else None
         if ag and t.get("source") == "agent" and not t.get("title_fixed") and ag["title"]:
             row["title"] = ag["title"]
@@ -343,23 +558,61 @@ def classify(tasks: dict, info: dict[str, dict], lists: dict[str, list | None]) 
             say = "te hizo una pregunta" if ag["status"] == "blocked" else f"terminó hace {ago(ag['since'])}"
         else:
             state, say = "seen", "ya lo viste"
-        due = date.fromisoformat(t["due"]) if t.get("due") else None
+        row |= {"state": state, "dot": STATES[state], "since": since, "can_go": bool(ag),
+                "can_resume": bool(link and not ag)}
+        start, due = t.get("start"), t.get("due")
+        if start and at(start) > t0:  # programada: no estorba hasta su día (ni avisa si su agente termina)
+            when = when_text(start, due, t0)
+            later.append(row | {"state": "later", "dot": "◷", "say": when, "when": when, "urgency": None})
+            continue
+        when = []
+        if start and day(start) == t0.date():
+            when.append(f"toca hoy {start[11:16]}" if "T" in start else "hoy toca")
         if due:
-            d = (due - today).days
-            say += " · " + ("vence hoy" if d == 0 else f"vencida hace {-d} d" if d < 0 else
-                            "vence mañana" if d == 1 else f"vence el {due.strftime('%d/%m')}")
-        row |= {"state": state, "dot": STATES[state], "say": say, "since": since,
-                "can_go": bool(ag), "can_resume": bool(link and not ag)}
+            when.append(due_say(due, t0))
+        age = (t0 - parse(t["created"])).days
+        if not when and state == "none" and age >= 2:
+            when.append(f"anotada hace {age} d")
+        urg = urgency(start, due, t0)
+        row |= {"say": " · ".join(when + [say] if urg else [say] + when), "when": " · ".join(when), "urgency": urg,
+                "arrived": bool(start and at(start) > parse(t["created"]))}
         rows.append(row)
-    order = list(STATES)
-    rows.sort(key=lambda r: (order.index(r["state"]) if r["state"] == "waiting" else 1, r["prio"] or 9,
+    # te esperan > hoy (le toca, vence o venció) > el resto; dentro, prioridad, plazo y antigüedad
+    rows.sort(key=lambda r: (0 if r["state"] == "waiting" else 1 if r["urgency"] else 2, r["prio"] or 9,
                              r["due"] or "9999", r["since"] if r["state"] == "waiting" else r["created"]))
+    later.sort(key=lambda r: r["start"])
     tracked = set(by_session(tasks))
     untracked = sum(1 for agents in lists.values() for a in agents or [] if session_of(a) not in tracked)
     by = {s: [r for r in rows if r["state"] == s] for s in STATES}
     return {"updated": iso(t0), "rows": rows, "waiting": by["waiting"], "working": by["working"],
-            "seen": by["seen"], "background": background, "untracked": untracked,
+            "seen": by["seen"], "later": later, "background": background, "untracked": untracked,
             "herdr_ok": lists.get(LOCAL) is not None}
+
+
+def remind(st: dict) -> None:
+    """Suena una vez cuando llega una programada (su día o su hora) y la mañana en que vence una tarea."""
+    f, t0, fresh = CACHE / "reminded.json", now(), []
+    try:
+        done = json.loads(f.read_text())
+    except (OSError, ValueError):
+        done = {}
+    for r in st["rows"]:
+        mark = None
+        if r.get("arrived") and t0 - at(r["start"]) < timedelta(days=3):
+            mark = f"start:{r['start']}"
+        elif r.get("due") and day(r["due"]) == t0.date() and parse(r["touched"]).date() < t0.date():
+            mark = f"due:{r['due']}"  # si la tocaste hoy (p. ej. le pusiste «hoy») ya lo sabes
+        if mark and done.get(r["id"]) != mark:
+            done[r["id"]] = mark
+            fresh.append(r)
+    if not fresh:
+        return
+    alive = {r["id"] for r in st["rows"] + st["later"]}
+    CACHE.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps({k: v for k, v in done.items() if k in alive}))
+    r = fresh[0]
+    head = ("Toca ahora" if "T" in r["start"] else "Hoy toca") if r.get("arrived") else "Vence hoy"
+    notify(f"{head}: {r['title']}" + (f" (+{len(fresh) - 1})" if len(fresh) > 1 else ""), sound=True)
 
 
 def compute(notify_new: bool = False) -> dict:
@@ -379,6 +632,7 @@ def compute(notify_new: bool = False) -> dict:
             save_seen(seen)
             notify(f"Te espera: {fresh[0]['title']}" + (f" (+{len(fresh) - 1})" if len(fresh) > 1 else ""),
                    sound=True)
+        remind(state)
     STATE.write_text(json.dumps(state, ensure_ascii=False, indent=1, default=str))
     return state
 
@@ -515,15 +769,19 @@ def enrich(tid: str) -> None:
     t = fold().get(tid)
     if not t or not t.get("raw"):
         return
-    schema = {"type": "object", "required": ["title", "prio", "due"], "properties": {
+    schema = {"type": "object", "required": ["title", "prio", "due", "start"], "properties": {
         "title": {"type": "string", "description": "imperativo, corto (≤60 chars), en el idioma del texto"},
         "prio": {"type": ["integer", "null"], "enum": [1, 2, None],
                  "description": "1 solo si dice urgente/hoy/prioritario; 2 si dice importante; null si no hay señal"},
-        "due": {"type": ["string", "null"], "description": "YYYY-MM-DD solo si el texto da un plazo; si no, null"}}}
+        "due": {"type": ["string", "null"], "description": "YYYY-MM-DD solo si el texto da un plazo («antes del», "
+                "«para el»); si no, null"},
+        "start": {"type": ["string", "null"], "description": "YYYY-MM-DD (o YYYY-MM-DDTHH:MM) solo si el texto dice "
+                  "cuándo hacerla o recordarla («revisar el 30», «mañana a las 9»): la tarea se oculta hasta "
+                  "entonces; si no, null"}}}
     out = claude_json(f"{today_line()}\nConvierte esta captura en una tarea. No inventes plazos ni prioridad "
                       f"que el texto no diga.\n\nCaptura: {t['raw']}", schema)
     if out:
-        emit("update", tid, set={k: out[k] for k in ("title", "prio", "due") if out.get(k)}, by="ai")
+        emit("update", tid, set={k: out[k] for k in ("title", "prio", "due", "start") if out.get(k)}, by="ai")
         sync_bg()
     refresh()
 
@@ -550,11 +808,15 @@ def garden(use_ai: bool) -> list[dict]:
             elif a.get("agent_status") in WAITING and since and t0 - since > timedelta(hours=DEAD_AGENT_H):
                 archive(t, f"sesión inactiva hace {ago(iso(since))}")
         elif not link and t.get("prio") != 1:
-            idle = (t0 - parse(t["touched"])).days
-            live_due = t.get("due") and (date.fromisoformat(t["due"]) - date.today()).days > -STALE_DAYS
+            start = t.get("start")
+            if start and at(start) > t0:
+                continue  # programada: espera su día
+            idle = (t0 - max([parse(t["touched"])] + ([at(start)] if start else []))).days
+            live_due = t.get("due") and (day(t["due"]) - date.today()).days > -STALE_DAYS
             if idle >= STALE_DAYS and not live_due:
                 archive(t, f"sin tocar hace {idle} d")
-    loose = [t for t in fold().values() if t["status"] == "open" and not t.get("link")]
+    loose = [t for t in fold().values() if t["status"] == "open" and not t.get("link")
+             and not (t.get("start") and at(t["start"]) > t0)]
     if use_ai and loose:
         schema = {"type": "object", "required": ["archive"], "properties": {"archive": {"type": "array", "items": {
             "type": "object", "required": ["id", "reason"],
@@ -577,17 +839,20 @@ def garden(use_ai: bool) -> list[dict]:
 # Un solo escritor (el timer del Arch, `myturn obsidian`). Ida y vuelta:
 #   Tareas.md   ← myturn la reescribe; tú puedes marcar [x], editar el texto o agregar `- [ ] …` sin ^id
 #   daily note  → cada `- [ ] …` tuyo del ### To-do (no 📅, no placeholder) entra a myturn y queda `- [>] … → myturn`
+# Fechas en formato del plugin Tasks: 🛫 = cuándo aparece (el daily filtra `starts before tomorrow`), 📅 = plazo.
 PRIO_EMOJI = {1: "⏫", 2: "🔼"}
 TASK_LINE = re.compile(r"^(?P<ind>\s*)- \[(?P<box>.)\] (?P<desc>.*?)\s*$")
 BLOCK_ID = re.compile(r"\s*\^(t[0-9a-f]{6})\s*$")
 DUE_EMOJI = re.compile(r"\s*📅\s*(\d{4}-\d{2}-\d{2})")
+START_EMOJI = re.compile(r"\s*[🛫⏳]\s*(\d{4}-\d{2}-\d{2})")  # ⏳ (scheduled de Tasks) también vale
 DUE_FIELD = re.compile(r"\s*\[due::\s*(\d{4}-\d{2}-\d{2})\s*\]")
 AGENT_FIELD = re.compile(r"\s*\[agente::[^\]]*\]")
 MEETING = re.compile(r"^-\s+(?P<title>.+?)\.\s*Accionables:\s*$")
 FORWARDED = "→ myturn"
 AGENT_WORD = {"waiting": "te espera", "working": "trabajando", "seen": "ya lo viste", "closed": "agente cerrado"}
 TAREAS_HEAD = ("# Tareas\n\n> Espejo vivo de myturn: se reescribe solo. Puedes marcar `[x]`, editar el texto, cambiar\n"
-               "> ⏫ / 🔼 o agregar `- [ ] …` al final. No borres los `^t…` del final de cada línea.\n\n")
+               "> ⏫ / 🔼, 🛫 (cuándo aparece) / 📅 (plazo) o agregar `- [ ] …` al final («revisar X el 30» también\n"
+               "> vale). No borres los `^t…` del final de cada línea.\n\n")
 
 
 def gate_quiet(path: Path) -> bool:
@@ -605,22 +870,35 @@ def write_atomic(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
-def parse_desc(desc: str) -> tuple[str, int | None, str | None]:
+def parse_desc(desc: str) -> tuple[str, int | None, str | None, str | None]:
+    """(título, prio, due, start) de una línea en formato Tasks."""
     prio = 1 if "⏫" in desc else 2 if "🔼" in desc else None
-    m = DUE_EMOJI.search(desc) or DUE_FIELD.search(desc)
-    title = DUE_FIELD.sub("", DUE_EMOJI.sub("", AGENT_FIELD.sub("", desc)))
+    m, s = DUE_EMOJI.search(desc) or DUE_FIELD.search(desc), START_EMOJI.search(desc)
+    title = START_EMOJI.sub("", DUE_FIELD.sub("", DUE_EMOJI.sub("", AGENT_FIELD.sub("", desc))))
     title = re.sub(r"\s+", " ", title.replace("⏫", "").replace("🔼", "")).strip()
-    return title, prio, (m.group(1) if m else None)
+    return title, prio, (m.group(1) if m else None), (s.group(1) if s else None)
+
+
+def dated(title: str, due: str | None, start: str | None) -> tuple[str, str | None, str | None]:
+    """Una línea nueva sin 🛫/📅 acepta las frases del widget: «revisar TikTok el 30» → aparece el 30."""
+    if due or start:
+        return title, due, start
+    rest, start, due = parse_when(title)
+    return rest or title, due, start
 
 
 def tareas_line(r: dict) -> str:
+    """Los campos de Tasks van al final (los lee de atrás hacia adelante); el del agente, antes. Sin horas: Tasks
+    no las tiene."""
     parts = [r["title"]]
-    if r.get("prio"):
-        parts.append(PRIO_EMOJI[r["prio"]])
-    if r.get("due"):
-        parts.append(f"📅 {r['due']}")
     if r.get("link") and r["state"] in AGENT_WORD:
         parts.append(f"[agente:: {AGENT_WORD[r['state']]}]")
+    if r.get("prio"):
+        parts.append(PRIO_EMOJI[r["prio"]])
+    if r.get("start"):
+        parts.append(f"🛫 {r['start'][:10]}")
+    if r.get("due"):
+        parts.append(f"📅 {r['due'][:10]}")
     return f"- [ ] {' '.join(parts)} ^{r['id']}"
 
 
@@ -637,8 +915,9 @@ def read_tareas(tasks: dict, last: dict[str, str]) -> int:
         desc = BLOCK_ID.sub("", m["desc"])
         if not bid:
             if m["box"] == " " and desc.strip():
-                title, prio, due = parse_desc(desc)
-                emit("add", new_id(), title=title, prio=prio, due=due, source="obsidian")
+                title, prio, due, start = parse_desc(desc)
+                title, due, start = dated(title, due, start)
+                emit("add", new_id(), title=title, prio=prio, due=due, start=start, source="obsidian")
                 n += 1
             continue
         tid = bid.group(1)
@@ -649,8 +928,12 @@ def read_tareas(tasks: dict, last: dict[str, str]) -> int:
             emit("done", tid, by="obsidian")
             n += 1
             continue
-        title, prio, due = parse_desc(desc)
-        changed = {k: v for k, v in (("title", title), ("prio", prio), ("due", due)) if v != t.get(k)}
+        title, prio, due, start = parse_desc(desc)
+        # misma fecha = mismo valor: conserva la hora («15:00») que Obsidian no muestra
+        due = t["due"] if due and (t.get("due") or "")[:10] == due else due
+        start = t["start"] if start and (t.get("start") or "")[:10] == start else start
+        changed = {k: v for k, v in (("title", title), ("prio", prio), ("due", due), ("start", start))
+                   if v != t.get(k)}
         if changed.get("title") == "":
             changed.pop("title")
         if changed:
@@ -659,10 +942,12 @@ def read_tareas(tasks: dict, last: dict[str, str]) -> int:
     return n
 
 
-def render_tareas(rows: list[dict]) -> tuple[str, dict[str, str]]:
-    lines = [tareas_line(r) for r in rows]
-    text = TAREAS_HEAD + "\n".join(lines) + ("\n" if lines else "")
-    return text, {r["id"]: ln for r, ln in zip(rows, lines, strict=True)}
+def render_tareas(rows: list[dict], later: list[dict] = ()) -> tuple[str, dict[str, str]]:
+    lines = {r["id"]: tareas_line(r) for r in [*rows, *later]}
+    text = TAREAS_HEAD + "".join(lines[r["id"]] + "\n" for r in rows)
+    if later:
+        text += "\n## Programadas\n\n" + "".join(lines[r["id"]] + "\n" for r in later)
+    return text, lines
 
 
 def import_daily(path: Path) -> list[str]:
@@ -695,12 +980,17 @@ def import_daily(path: Path) -> list[str]:
                 ind = len(prev) - len(prev.lstrip())
                 if prev.strip() and ind < len(t["ind"]):
                     mm = MEETING.match(prev.strip())
-                    parent = mm["title"] if mm else parse_desc(pm["desc"].replace(FORWARDED, ""))[0] if pm else ""
+                    if mm:
+                        parent = mm["title"]
+                    elif pm:  # el título con que se importó el padre: sin sus fechas
+                        ptitle, _, pdue, pstart = parse_desc(pm["desc"].replace(FORWARDED, ""))
+                        parent = dated(ptitle, pdue, pstart)[0]
                     break
-        title, prio, due = parse_desc(desc)
+        title, prio, due, start = parse_desc(desc)
+        title, due, start = dated(title, due, start)
         full = f"{parent}: {title}" if parent else title
         if norm_title(full) not in known:
-            adds.append({"title": full, "prio": prio, "due": due})
+            adds.append({"title": full, "prio": prio, "due": due, "start": start})
             known.add(norm_title(full))
         lines[i] = f"{t['ind']}- [>] {desc} {FORWARDED}"
         changed = True
@@ -743,7 +1033,8 @@ def obsidian_sync() -> dict:
             out["imported"] += import_daily(daily_path(d))
         if gate_quiet(TAREAS):
             out["edits"] = read_tareas(fold(), last)
-            text, last = render_tareas(compute()["rows"])
+            st = compute()
+            text, last = render_tareas(st["rows"], st["later"])
             if not TAREAS.exists() or TAREAS.read_text() != text:
                 write_atomic(TAREAS, text)
                 out["wrote"] = True
@@ -754,7 +1045,7 @@ def obsidian_sync() -> dict:
 
 
 # ── barra y panel ─────────────────────────────────────────────────────────────────────────────────
-C = {"white": "0xffe5e9f0", "dim": "0xff9aa3b5", "green": "0xffa3be8c"}
+C = {"white": "0xffe5e9f0", "dim": "0xff9aa3b5", "green": "0xffa3be8c", "yellow": "0xffebcb8b", "red": "0xffbf616a"}
 
 
 def trunc(s: str, n: int) -> str:
@@ -762,16 +1053,24 @@ def trunc(s: str, n: int) -> str:
 
 
 def bar_label(st: dict) -> tuple[str, str, str]:
-    """(punto, color, texto) de la barra: te espera (verde) > trabajando > tu tarea más importante."""
+    """(punto, color, texto) de la barra: te espera (verde) > hoy toca / vence hoy (amarillo) > trabajando > tu
+    tarea más importante (roja si está vencida)."""
     w = st["waiting"]
     if w:
         head = "te espera" if len(w) == 1 else f"{len(w)} te esperan"
         return "●", "green", f"{trunc(w[0]['title'], 38)} · {head}"
+    hoy = [r for r in st["rows"] if r.get("urgency") == "today"]
+    if hoy:
+        more = f" (+{len(hoy) - 1})" if len(hoy) > 1 else ""
+        return "●", "yellow", f"{trunc(hoy[0]['title'], 34)} · {hoy[0]['when'].split(' · ')[0]}{more}"
     if st["working"]:
         k = st["working"]
         return "◌", "dim", f"{trunc(k[0]['title'], 38)} · trabajando" + (f" (+{len(k) - 1})" if len(k) > 1 else "")
     if st["rows"]:
-        return "○", "white", trunc(st["rows"][0]["title"], 44)
+        r = st["rows"][0]
+        if r.get("urgency") == "overdue":
+            return "●", "red", f"{trunc(r['title'], 34)} · {r['when'].split(' · ')[0]}"
+        return "○", "white", trunc(r["title"], 44)
     return "○", "dim", "sin tareas · clic para anotar"
 
 
@@ -791,9 +1090,12 @@ def refresh() -> dict:
 
 def panel() -> dict:
     st = refresh()
-    rows = [{k: r[k] for k in ("id", "title", "prio", "due", "state", "dot", "say", "can_go", "can_resume")}
-            | {"prompt": claude_prompt(r)} for r in st["rows"]]
-    return {"rows": rows, "background": st["background"], "herdr_ok": st["herdr_ok"]}
+    keys = ("id", "title", "prio", "due", "start", "state", "dot", "say", "when", "urgency", "can_go", "can_resume")
+
+    def out(rs: list[dict]) -> list[dict]:
+        return [{k: r.get(k) for k in keys} | {"prompt": claude_prompt(r)} for r in rs]
+    return {"rows": out(st["rows"]), "later": out(st["later"]), "background": st["background"],
+            "herdr_ok": st["herdr_ok"]}
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────────────────────────
@@ -806,6 +1108,14 @@ def main(argv: list[str]) -> None:
     p.add_argument("--raw", action="store_true")
     p.add_argument("--prio", type=int, choices=[1, 2])
     p.add_argument("--due")
+    p.add_argument("--desde")
+    p.add_argument("--parse", action="store_true")
+    p = sub.add_parser("when")
+    p.add_argument("id")
+    p.add_argument("text", nargs="*")
+    p = sub.add_parser("parse")
+    p.add_argument("--when", action="store_true")
+    p.add_argument("text", nargs="*")
     p = sub.add_parser("edit")
     p.add_argument("id")
     p.add_argument("title", nargs="+")
@@ -814,7 +1124,9 @@ def main(argv: list[str]) -> None:
     p.add_argument("--id")
     for name in ("done", "archive", "restore", "go", "link"):
         sub.add_parser(name).add_argument("id", nargs="?" if name == "done" else None)
-    sub.add_parser("ls").add_argument("--json", action="store_true")
+    p = sub.add_parser("ls")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--todas", action="store_true")
     for name in ("jump", "import", "track", "panel", "sketchybar", "obsidian", "_sync"):
         sub.add_parser(name)
     sub.add_parser("_agents").add_argument("host")
@@ -848,6 +1160,8 @@ def main(argv: list[str]) -> None:
         return print(json.dumps(obsidian_sync(), ensure_ascii=False))
     if cmd == "panel":
         return print(json.dumps(panel(), ensure_ascii=False))
+    if cmd == "parse":
+        return print(json.dumps(preview(" ".join(a.text), a.when), ensure_ascii=False))
     if cmd == "import":
         n = import_sessions()
         refresh()
@@ -865,16 +1179,35 @@ def main(argv: list[str]) -> None:
         st = refresh()
         if a.json:
             return print(json.dumps(st, ensure_ascii=False, default=str))
-        for r in st["rows"]:
+        for r in st["rows"] + (st["later"] if a.todas else []):
             print(f"{r['dot']} {r['id']}  {r['title']}" + (f"  !{r['prio']}" if r["prio"] else "") + f"  — {r['say']}")
+        if st["later"] and not a.todas:
+            n = len(st["later"])
+            print(f"({n} programada{'s' * (n != 1)}: myturn ls --todas)")
         return print(f"({st['background']} sesiones sin tarea)")
 
+    extra = ""
     if cmd == "add":
         text, tid = " ".join(a.text).strip(), new_id()
-        emit("add", tid, title=text[:120], raw=text if a.raw else None, prio=a.prio, due=a.due, source="capture")
+        title, start, due = text, as_when(a.desde) if a.desde else None, as_when(a.due) if a.due else None
+        if a.parse:
+            rest, s, d = parse_when(text)
+            title, start, due = rest or text, start or s, due or d
+        emit("add", tid, title=title[:120], raw=text if a.raw else None, prio=a.prio, due=due, start=start,
+             source="capture")
         if a.raw:
             spawn("enrich", tid)
-        msg, t = "nueva", {"id": tid, "title": text}
+        msg, t, extra = "nueva", {"id": tid, "title": title}, when_text(start, due, now())
+    elif cmd == "when":
+        t = find(fold(), a.id)
+        v = when_value(" ".join(a.text))
+        if "error" in v:
+            sys.exit(f"myturn: {v['error']}")
+        new = v["set"]
+        if new.get("due") and "start" not in new and t.get("start") and day(new["due"]) <= day(t["start"]):
+            new["start"] = None  # un plazo antes de que aparezca la trae de vuelta
+        emit("update", t["id"], set=new)
+        msg, extra = "fecha", v["label"]
     elif cmd == "edit":
         t = find(fold(), a.id)
         emit("update", t["id"], set={"title": " ".join(a.title).strip()})
@@ -893,7 +1226,7 @@ def main(argv: list[str]) -> None:
         msg = cmd
     sync_bg()
     refresh()
-    print(f"{msg}: {t['id']}  {t['title']}")
+    print(f"{msg}: {t['id']}  {t['title']}" + (f"  — {extra}" if extra else ""))
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ import importlib.util
 import io
 import json
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -261,3 +261,154 @@ def test_remote_agents_never_wait_for_ssh(mt, monkeypatch):
     os.utime(cache, (old, old))
     assert mt.herdr_agents(remote) is None  # muy viejo: la otra caja no responde
     assert mt.herdr_agents(remote, fresh=True) and len(calls) == 2  # go lee en el acto
+
+
+# ── tiempo: programadas, HOY, avisos ──────────────────────────────────────────────────────────────
+@pytest.fixture
+def clock(mt, monkeypatch):
+    """Reloj fijo (viernes 16-oct-2026, 10:00) que el test adelanta con clock(hours=…)."""
+    t = {"now": datetime(2026, 10, 16, 10, 0).astimezone()}
+    monkeypatch.setattr(mt, "now", lambda: t["now"])
+
+    def advance(**delta):
+        t["now"] += timedelta(**delta)
+    return advance
+
+
+@pytest.fixture
+def quiet(mt, monkeypatch):
+    """Sin herdr, sin barra y sin notificaciones de verdad; devuelve los avisos que habrían sonado."""
+    rings = []
+    monkeypatch.setattr(mt, "notify", lambda msg, sound=False: rings.append(msg))
+    monkeypatch.setattr(mt, "herdr_agents", lambda host, fresh=False: [])
+    monkeypatch.setattr(mt, "herdr_frontmost", lambda: None)
+    monkeypatch.setattr(mt, "sketchybar", lambda st: None)
+    return rings
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Revisar TikTok el 30", ("Revisar TikTok", "2026-10-30", None)),
+    ("llamar a Juan mañana a las 9", ("llamar a Juan", "2026-10-17T09:00", None)),
+    ("llamar a Juan a las 3", ("llamar a Juan", "2026-10-17T15:00", None)),  # «a las 3» = 15:00, hoy ya pasó
+    ("pagar luz antes del vie", ("pagar luz", None, "2026-10-23")),
+    ("pagar luz hoy", ("pagar luz", None, "2026-10-16")),
+    ("follow-up en 2 h", ("follow-up", "2026-10-16T20:40", None)),
+    ("contrato desde el lunes antes del 30", ("contrato", "2026-10-19", "2026-10-30")),
+    ("mockup de Sonda, para el 16-oct", ("mockup de Sonda", None, "2026-10-16")),
+    ("Pago 5 de enero", ("Pago", "2027-01-05", None)),
+    ("lun 9:00 standup", ("standup", "2026-10-19T09:00", None)),
+    ("deck la próxima semana", ("deck", "2026-10-19", None)),
+    # no son fechas: se quedan en el título
+    ("prepararse reu macro mar presencial", None),
+    ("revisar el 30% de margen", None),
+    ("Lescano: invitación demo mié 14-oct 11:00", None),  # ya pasó: es una referencia, no un plazo
+    ("reunión del lunes: deck", None),
+    ("planificar la mañana", None),
+    ("ver el 1 de los PRs", None),
+    ("Reu 1:1 con Juan", None),
+])
+def test_parse_when_spanish_phrases(mt, text, expected):
+    ref = datetime(2026, 10, 16, 18, 40).astimezone()  # viernes
+    assert mt.parse_when(text, ref) == (expected or (text, None, None))
+
+
+def test_when_value_for_the_row_editor(mt, clock):
+    assert mt.when_value("vie")["set"] == {"start": "2026-10-23"}  # sola, una abreviatura sí es fecha
+    assert mt.when_value("30")["label"] == "aparece el vie 30/10"
+    assert mt.when_value("ya")["set"] == {"start": None}
+    assert mt.when_value("sin fecha")["set"] == {"start": None, "due": None}
+    assert mt.when_value("mañana 9")["error"] == "no entiendo «9»"
+
+
+def test_scheduled_task_hides_until_its_time_then_tops_the_list_and_rings_once(mt, clock, quiet, capsys):
+    mt.emit("add", "p1", title="urgente", prio=1)
+    mt.main(["add", "--parse", "--", "Revisar TikTok a las 15:00"])
+    assert "aparece hoy 15:00" in capsys.readouterr().out
+    st = mt.compute(notify_new=True)
+    assert ids(st["rows"]) == ["p1"] and [r["title"] for r in st["later"]] == ["Revisar TikTok"]
+    assert mt.panel()["later"][0]["say"] == "aparece hoy 15:00" and quiet == []
+    clock(hours=5, minutes=1)
+    st = mt.compute(notify_new=True)
+    assert [r["title"] for r in st["rows"]] == ["Revisar TikTok", "urgente"]  # HOY va sobre la prioridad
+    assert mt.bar_label(st) == ("●", "yellow", "Revisar TikTok · toca hoy 15:00")
+    assert quiet == ["Toca ahora: Revisar TikTok"]
+    mt.compute(notify_new=True)
+    assert len(quiet) == 1  # una sola vez
+    clock(days=1)  # al día siguiente es una tarea más
+    assert mt.compute(notify_new=True)["rows"][0]["title"] == "urgente" and len(quiet) == 1
+
+
+def test_ls_hides_scheduled_tasks_until_todas(mt, clock, quiet, capsys):
+    mt.main(["add", "prueba diferida", "--desde", "mañana"])
+    capsys.readouterr()
+    mt.main(["ls"])
+    out = capsys.readouterr().out
+    assert "prueba diferida" not in out and "(1 programada: myturn ls --todas)" in out
+    mt.main(["ls", "--todas"])
+    assert "prueba diferida  — aparece mañana" in capsys.readouterr().out
+
+
+def test_due_today_rings_once_unless_you_set_it_today(mt, clock, quiet):
+    mt.emit("add", "a", title="pagar luz", due="2026-10-17")
+    mt.emit("add", "b", title="otra")
+    clock(days=1)
+    mt.emit("update", "b", set={"due": "2026-10-17"})  # se la pusiste hoy: ya lo sabes
+    st = mt.compute(notify_new=True)
+    assert [r["id"] for r in st["rows"] if r["urgency"] == "today"] == ["a", "b"]
+    assert st["rows"][0]["say"] == "vence hoy · sin agente · cópiala a un Claude"
+    assert quiet == ["Vence hoy: pagar luz"]
+    clock(days=1)
+    st = mt.compute(notify_new=True)
+    assert st["rows"][0]["urgency"] == "overdue" and mt.bar_label(st)[1:] == ("red", "pagar luz · vencida hace 1 d")
+
+
+def test_when_snoozes_sets_due_and_brings_back(mt, clock, quiet, capsys):
+    mt.emit("add", "a", title="Esperar a Meta")
+    mt.main(["when", "a", "--", "el 30"])
+    assert mt.fold()["a"]["start"] == "2026-10-30" and ids(mt.compute()["later"]) == ["a"]
+    mt.main(["when", "a", "antes del vie"])  # un plazo antes de que aparezca la trae de vuelta
+    assert (mt.fold()["a"]["start"], mt.fold()["a"]["due"]) == (None, "2026-10-23")
+    mt.main(["when", "a", "lun"])
+    mt.main(["when", "a", "ya"])
+    assert (mt.fold()["a"]["start"], mt.fold()["a"]["due"]) == (None, "2026-10-23")
+    mt.main(["when", "a", "sin fecha"])
+    assert (mt.fold()["a"]["start"], mt.fold()["a"]["due"]) == (None, None)
+    with pytest.raises(SystemExit):
+        mt.main(["when", "a", "xyz"])
+
+
+def test_garden_never_archives_a_scheduled_task_before_it_appears(mt, clock, monkeypatch):
+    monkeypatch.setattr(mt, "herdr_agents", lambda host: [])
+    mt.emit("add", "far", title="revisar aprobación TikTok", start="2026-11-20")
+    clock(days=20)
+    assert mt.garden(use_ai=False) == []  # 20 d sin tocar, pero todavía no aparece
+    clock(days=15)
+    assert mt.garden(use_ai=False) == []  # apareció ayer: la inactividad cuenta desde ahí
+
+
+def test_obsidian_start_date_roundtrip_keeps_the_hour(mt, vault, clock):
+    mt.emit("add", "t000001", title="Revisar TikTok", start="2026-10-30T09:00")
+    mt.emit("add", "t000002", title="Hoy")
+    mt.obsidian_sync()
+    text = mt.TAREAS.read_text()
+    assert "- [ ] Hoy ^t000002\n\n## Programadas\n\n- [ ] Revisar TikTok 🛫 2026-10-30 ^t000001\n" in text
+    text = text.replace("- [ ] Hoy ^t000002", "- [ ] Hoy 🛫 2026-10-20 ^t000002")
+    mt.TAREAS.write_text(text + "- [ ] llamar a Juan mañana a las 9\n")
+    mt.obsidian_sync()
+    tasks = mt.fold()
+    assert tasks["t000001"]["start"] == "2026-10-30T09:00"  # misma fecha: Obsidian no ve la hora, no la pisa
+    assert tasks["t000002"]["start"] == "2026-10-20"
+    assert [t["start"] for t in tasks.values() if t["title"] == "llamar a Juan"] == ["2026-10-17T09:00"]
+    mt.TAREAS.write_text(mt.TAREAS.read_text().replace("TikTok 🛫 2026-10-30", "TikTok ⏳ 2026-10-31"))
+    mt.obsidian_sync()
+    assert mt.fold()["t000001"]["start"] == "2026-10-31"  # ⏳ (scheduled de Tasks) también vale
+
+
+def test_daily_line_with_a_date_is_scheduled(mt, vault, clock):
+    note = mt.daily_path(date(2026, 10, 16))
+    note.parent.mkdir(parents=True)
+    note.write_text("### To-do\n- [ ] revisar aprobación TikTok el 30\n- [ ] Indusegur 🛫 2026-10-20\n")
+    assert mt.import_daily(note) == ["revisar aprobación TikTok", "Indusegur"]
+    assert {t["title"]: t["start"] for t in mt.fold().values()} == \
+        {"revisar aprobación TikTok": "2026-10-30", "Indusegur": "2026-10-20"}
+    assert "- [>] revisar aprobación TikTok el 30 → myturn" in note.read_text()
