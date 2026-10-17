@@ -129,7 +129,8 @@ Producto personal de André (candidato a OSS). **SSOT: [docs/myturn.md](docs/myt
 - Datos: repo privado `~/tasks` (`events.jsonl` append-only, `merge=union`); **nunca se edita a mano**.
 - Obsidian: el timer `myturn-obsidian` del **Arch** es el único que escribe `BrainFlow/05. System/myturn/Tareas.md`.
 - Hook `myturn track` en `UserPromptSubmit` (settings template): debe quedar **silencioso** (su stdout entra al contexto).
-- Las teclas son de André: ⌥T panel (abre en modo lista: n nueva, f o / buscar, hjkl, gg/G, Enter/Espacio, Esc vuelve a tu ventana), ⌥G ir al agente que espera. ⌥N no (es la ñ en US International-PC).
+- Las teclas son de André: ⌥T panel (abre en modo lista: n nueva, f o / buscar, p programadas, hjkl, gg/G, Enter/Espacio, Esc vuelve a tu ventana), ⌥G ir al agente que espera. ⌥N no (es la ñ en US International-PC).
+- Tiempo: al anotar, «el 30» / «mañana 9:00» = aparece ese día (oculta hasta entonces, suena); «antes del vie» = plazo; ◷ en cada fila pospone. Obsidian: 🛫 y `starts before tomorrow`.
 
 ### Claude Pending Notification System (⚰️ muerto; myturn lo reemplaza para herdr)
 

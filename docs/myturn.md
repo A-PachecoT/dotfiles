@@ -94,6 +94,34 @@ aerospace panel donde me quedé»*.
   Solo AeroSpace no basta: no ve el panel, cree que tu ventana sigue enfocada y su `focus` no hace nada (el foco se
   quedaba en Hammerspoon). Perder el foco por un clic afuera solo cierra.
 
+### Tiempo: fechas, programadas y HOY (desde 2026-10-16)
+
+André: *«lo que quiero es time awareness for tasks… think about user flow, improve it… it should also work for
+both Obsidian and the plugin itself»*. Disparador: issue #2 — muchas tareas son esperas por terceros (aprobación de
+TikTok/Meta, respuesta de un cliente): hoy no se puede hacer nada con ellas pero ocupan la lista, y el día que toca
+myturn no avisaba. `due` solo ordenaba y decía «vence el dd/mm».
+
+- **Dos fechas por tarea.** `start` = *cuándo aparece* (programada: oculta hasta ese día u hora); `due` = *plazo*
+  (sigue visible y avisa). Se guardan como `YYYY-MM-DD` o `YYYY-MM-DDTHH:MM` (hora local).
+- **Se escriben como hablas**, en el campo «Nueva tarea», en el editor ◷ de cada fila y en Obsidian: `el 30`,
+  `mañana 9:00`, `lun`, `en 2 h`, `en 3 días`, `la próxima semana`, `a las 3` (= 15:00: de 1 a 7 sin am/pm es la
+  tarde) → *aparece*. `antes del vie`, `para el 30`, `hasta el lunes`, `hoy` → *vence*. Debajo del campo se ve lo
+  que entendió (`aparece el jue 30/10 · «Revisar TikTok»`) antes de dar Enter; la fecha sale del título. Un parser
+  determinístico (`parse_when`), no IA. Una fecha con mes ya pasada (`mié 14-oct` el 16) se deja como texto: es
+  una referencia, no un plazo. Las abreviaturas sueltas (`mar`, `vie`) solo cuentan con número o tras «el/para».
+- **Programadas**: no salen en la lista, la barra ni `myturn ls`; el panel las junta abajo en «PROGRAMADAS · N ▸»
+  (clic o `p` las despliega; la búsqueda también las encuentra). `myturn ls --todas` las lista.
+- **El día que llega** sube a la sección **HOY** (junto con lo que vence hoy y lo vencido, en rojo), suena una vez
+  («Hoy toca: …» o, con hora, «Toca ahora: …») y la barra la muestra en amarillo por encima de «trabajando». Lo que
+  vence hoy y anotaste antes de hoy también avisa una vez esa mañana.
+- **◷ en cada fila** (columna entre la acción y ✓): `el 30` pospone, `antes del vie` pone plazo, `ya` la trae de
+  vuelta, `sin fecha` limpia. Es el flujo de «estoy esperando a un tercero»: posponer en vez de dejarla estorbando.
+- **Obsidian**: la fecha de aparición es el `🛫` del plugin Tasks (`⏳` también se lee como aparición); el daily
+  note filtra con `starts before tomorrow`, así las programadas no salen hasta su día. `Tareas.md` las lista abajo,
+  bajo `## Programadas`. Una línea nueva en el daily o en Tareas.md acepta las mismas frases (`- [ ] revisar TikTok
+  el 30`). Tasks no tiene horas: un recordatorio de las 15:00 aparece en el daily desde la mañana de ese día.
+- **El jardinero** no archiva una programada antes de su día, y cuenta la inactividad desde que apareció.
+
 ### Estados de una tarea
 
 ```
@@ -151,7 +179,11 @@ Todo cambio sigue este loop; cierra con los tests en verde, commit + push de dot
 
 **Dónde mirar cuando algo no cuadra:** `myturn ls` (estado real), `~/tasks/state.json` (lo último que vio la barra),
 `~/.cache/myturn/seen.json` (transiciones y «visto» por sesión), `~/.cache/myturn/panel.log` (mensajes y errores del
-panel), `~/.cache/myturn/obsidian-last.json` (lo último escrito en Tareas.md).
+panel), `~/.cache/myturn/obsidian-last.json` (lo último escrito en Tareas.md), `~/.cache/myturn/reminded.json` (avisos
+de «hoy toca» / «vence hoy» ya dados). Qué fecha entiende una frase: `myturn parse -- "revisar el 30"`.
+Para ver el panel sin abrirlo: un HTML que copia `myturn-panel.html`, simula `window.webkit.messageHandlers` y llama
+`render()` con datos de muestra, capturado con `agent-browser` (el panel real no sale en `screencapture`, y Chrome
+`--headless` se cuelga con Chrome abierto).
 
 **Invariantes que no se rompen:** el store es append-only y se deriva ordenando por `ts`; solo el Arch escribe
 `Tareas.md`; nada se borra (archivar/`[>]`); el hook no imprime; la UI no muestra las sesiones que el hook registró sin
@@ -198,6 +230,15 @@ tarea.
   muerto, y el siguiente `print` (la carga perezosa de una extensión `hs.*`) revienta el hotkey: ⌥T quedó muerto.
   `myturn.lua` ahora precarga sus extensiones; si pasa igual, `killall Hammerspoon; open -g -a Hammerspoon`.
 
+- 2026-10-16, tiempo (issue #2): 44 tests (17 nuevos: 18 frases en español incluidas las que NO son fecha —
+  «macro mar», «el 30%», «mié 14-oct» ya pasada—; programada oculta → llega → arriba + barra amarilla + 1 aviso;
+  `ls`/`ls --todas`; «vence hoy» avisa solo si no la tocaste hoy; vencida en rojo; ◷ pospone/plazo/ya/sin fecha;
+  el jardinero no la archiva; 🛫/⏳ de ida y vuelta conservando la hora; daily «el 30» → programada) + ruff. En vivo:
+  una tarea «en 2 min» salió en `ls --todas` y no en `ls`, a su hora sonó una vez, la barra pasó a `● … · toca hoy
+  19:01` en amarillo y el espejo del Arch la subió con `🛫`. Panel: vista previa y ◷ probados en el webview real con
+  `require("myturn").eval`; el diseño, con un harness y `agent-browser`. Gotcha: entre fecha y hora hace falta un
+  espacio, si no «11:00» se lee como el día 1 a la 1:00.
+
 ## Roadmap
 
 - **v1:** registro automático por hook, cola con visto, ⌥G, sonido por transición, importación única de las
@@ -207,6 +248,7 @@ tarea.
   2026-10-05 noche: André no entendía la paleta ⌥T ni los clics («no entiendo nada») — mezclaba captura,
   acciones sobre un agente invisible y la lista; con seis estados de jerga. Se redujo a un concepto, una tecla
   por acción y un clic que siempre hace lo mismo (mockup aprobado por él).
+- **Tiempo (2026-10-16):** fechas en lenguaje natural, programadas, HOY, ◷ y 🛫 en Obsidian.
 - **v2:** la IA lee al agente que te espera (`herdr agent read`) y resume en el popup qué hizo y qué te pide.
 - **v3:** captura desde el celular; contexto de calendario.
 - **OSS:** repo propio con el nombre final, instalador sin dotfiles (Homebrew/uv), sin rutas de André.

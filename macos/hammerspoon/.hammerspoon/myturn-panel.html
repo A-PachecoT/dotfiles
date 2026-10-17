@@ -88,12 +88,16 @@
   <div id="list"></div>
   <div id="toast"></div>
   <div class="foot"><kbd>n</kbd> nueva · <kbd>f</kbd>/<kbd>/</kbd> buscar · <kbd>hjkl</kbd> <kbd>gg</kbd> <kbd>G</kbd> moverse · <kbd>Enter</kbd>/<kbd>Espacio</kbd> elegir ·
-    <kbd>p</kbd> programadas · ◷ fecha · <kbd>Esc</kbd> vuelve a tu ventana · <kbd>⌥G</kbd> va al que te espera</div>
+    <kbd>p</kbd> programadas · <span id="clockfoot"></span> fecha · <kbd>Esc</kbd> vuelve a tu ventana · <kbd>⌥G</kbd> va al que te espera</div>
 </div>
 <script>
   const send = (m) => window.webkit.messageHandlers.myturn.postMessage(m);
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  // ◷ como SVG: el glifo de texto sale diminuto en la fuente del sistema
+  const CLOCK = (px) => `<svg width="${px}" height="${px}" viewBox="0 0 16 16" style="vertical-align:-2px"><circle cx="8" cy="8"
+    r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.6V8l2.4 1.6" fill="none"
+    stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
   const PRIO = { null: ["—", "p0"], 1: ["!1", "p1"], 2: ["!2", "p2"] };
   const nextPrio = (p) => (p == null ? 1 : p === 1 ? 2 : 0);
   let data = null, newPrio = null, editing = null, showLater = false;
@@ -129,12 +133,12 @@
     const [ptxt, pcls] = PRIO[r.prio ?? null];
     const [act, label] = actionFor(r);
     return `<div class="row ${r.state} ${r.urgency || ""}" data-id="${r.id}">
-      <span class="dot">${r.dot}</span>
+      <span class="dot">${r.state === "later" ? CLOCK(11) : r.dot}</span>
       <div class="main"><div class="title" title="Doble clic para editar">${esc(r.title)}</div>
         <div class="say">${esc(r.say)}</div></div>
       <button class="prio ${pcls}" data-do="prio" title="Cambiar prioridad">${ptxt}</button>
       <button class="act" data-do="${act}">${label}</button>
-      <button class="icon" data-do="when" title="Cuándo: «el 30» la pospone, «antes del vie» le pone plazo, «ya» la trae">◷</button>
+      <button class="icon" data-do="when" title="Cuándo: «el 30» la pospone, «antes del vie» le pone plazo, «ya» la trae">${CLOCK(14)}</button>
       <button class="icon" data-do="done" title="Hecha">✓</button>
       <button class="icon" data-do="archive" title="Archivar (se puede deshacer)">✕</button>
     </div>`;
@@ -304,6 +308,7 @@
     else return;
     e.preventDefault();
   });
+  $("#clockfoot").innerHTML = CLOCK(11);
   window.render(data);
 </script>
 </body>
