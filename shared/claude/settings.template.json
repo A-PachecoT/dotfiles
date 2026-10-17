@@ -76,5 +76,6 @@
     "allow": [
       "Bash(myturn:*)"
     ]
-  }
+  },
+  "cleanupPeriodDays": 365
 }
