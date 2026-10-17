@@ -1,0 +1,37 @@
+[Unit]
+# Herdr como servicio propio, NO dentro del scope de login.
+#
+# Por qué: el 2026-09-14 16:36 systemd-oomd mató session-924.scope entera —
+# el swap llegó a 100% (21.3G/21.3G) y la RAM a 90%. Ese scope tenía adentro
+# el herdr-server Y los ~20 paneles de agentes, así que el kill se llevó todo
+# junto: herdr, los 2 /cto y cada panel. oomd elige el cgroup con más swap y
+# ese scope tenía 7.8G — era inevitable que le tocara.
+#
+# Como servicio propio, herdr deja de morir con su sesión de login y systemd
+# lo revive solo.
+#
+# Sin After=default.target: con ese orden el servicio esperaba al boot entero
+# (ddev-fiorella tarda 2 min) y el 2026-10-12 `et -c herdr` desde el Mac llegó
+# antes; el cliente levantó su propio server en session-6.scope y este servicio
+# falló 189 601 veces seguidas («already running») durante 5 días.
+Description=Herdr server (multiplexor de terminales para agentes)
+
+[Service]
+Type=simple
+# Si ya corre un server fuera del servicio, se salta en vez de reintentar en
+# loop. El regex no se atrapa a sí mismo: el cmdline del sh empieza con /bin/sh.
+ExecCondition=/bin/sh -c '! pgrep -U %U -f "^%h/.local/bin/[h]erdr server" >/dev/null'
+ExecStart=/home/andre/.local/bin/herdr server
+Restart=always
+RestartSec=2
+# Si oomd/el kernel matan UN proceso de adentro (un panel), el servicio sigue
+# vivo en vez de detenerse arrastrando a los demás.
+OOMPolicy=continue
+# oomd considera este cgroup en último lugar: matar herdr cuesta todas las
+# sesiones de agente a la vez, matar un runner cuesta un job que reintenta.
+ManagedOOMPreference=avoid
+# Reclaim proactivo antes de llenar el swap. No es un kill: throttlea.
+MemoryHigh=12G
+
+[Install]
+WantedBy=default.target
