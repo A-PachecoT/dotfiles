@@ -709,7 +709,8 @@ def go(t: dict) -> str:
         show(link["host"], ag["pane_id"])
         mark_seen(link["session"])
         return f"→ {t['title']}"
-    res = herdr_json(["tab", "create", "--cwd", t.get("cwd") or str(HOME), "--label", t["title"][:24], "--focus"],
+    cwd = link.get("cwd") or t.get("cwd") or str(HOME)
+    res = herdr_json(["tab", "create", "--cwd", cwd, "--label", t["title"][:24], "--focus"],
                      link["host"], timeout=8)
     pane = ((res or {}).get("root_pane") or {}).get("pane_id")
     if not pane:
@@ -736,20 +737,47 @@ def here() -> dict | None:
     return cur if cur and session_of(cur) else None
 
 
-def link_here(tid: str) -> str:
-    """Un agente se enlaza a una tarea: desde ahora su estado es el de la tarea."""
-    tasks, cur = fold(), here()
-    if not cur:
-        sys.exit("myturn: link solo funciona dentro de un pane de herdr con Claude")
-    t, s = find(tasks, tid), session_of(cur)
-    emit("link", t["id"], link={"host": LOCAL, "session": s, "pane": cur.get("pane_id")})
+def bind(tasks: dict, t: dict, host: str, cur: dict) -> None:
+    """Desde ahora el estado de la tarea es el de ese agente. El cwd va en el enlace: `go` reabre ahí la sesión
+    cerrada (`claude --resume` solo la encuentra desde su carpeta)."""
+    s = session_of(cur)
+    emit("link", t["id"], link={"host": host, "session": s, "pane": cur.get("pane_id"), "cwd": cur.get("cwd")})
     for other in tasks.values():  # la sesión que el hook registró queda fusionada en la tarea
         if other["id"] != t["id"] and other["status"] == "open" and other.get("source") == "agent" \
                 and (other.get("link") or {}).get("session") == s:
             emit("archive", other["id"], reason=f"fusionada con {t['id']}", by="link")
     sync_bg()
     refresh()
+
+
+def link_here(tid: str) -> str:
+    """Un agente se enlaza a una tarea."""
+    tasks, cur = fold(), here()
+    if not cur:
+        sys.exit("myturn: link solo funciona dentro de un pane de herdr con Claude")
+    t = find(tasks, tid)
+    bind(tasks, t, LOCAL, cur)
     return f"Enlazado: esta sesión trabaja en «{t['title']}» ({t['id']}). André verá cuándo terminas."
+
+
+def link_pane(tid: str, pane: str, host: str) -> str:
+    """Enlazar desde afuera el Claude que ya corre en un pane (p. ej. al mapear sesiones abiertas con tareas)."""
+    agents = herdr_agents(host, fresh=True)
+    if agents is None:
+        sys.exit(f"myturn: no veo el herdr de {host}")
+    cur = next((a for a in agents if a.get("pane_id") == pane and session_of(a)), None)
+    if not cur:
+        sys.exit(f"myturn: no hay un Claude en {pane} ({host})")
+    st = cur.get("agent_status")
+    if st in WAITING:  # terminó hace rato y lo sabes: no es «te espera» hasta que vuelva a trabajar
+        seen, s = load_seen(), session_of(cur)
+        rec = seen.get(s) if (seen.get(s) or {}).get("status") == st else None
+        seen[s] = (rec or {"status": st, "since": iso(now())}) | {"seen_at": iso(now()), "notified": True}
+        save_seen(seen)
+    tasks = fold()
+    t = find(tasks, tid)
+    bind(tasks, t, host, cur)
+    return f"Enlazada: «{t['title']}» → {pane} ({host})"
 
 
 def target(ref: str | None) -> dict:
@@ -1182,8 +1210,12 @@ def main(argv: list[str]) -> None:
     p = sub.add_parser("prio")
     p.add_argument("level", type=int, choices=[0, 1, 2])
     p.add_argument("--id")
-    for name in ("done", "archive", "restore", "go", "link"):
+    for name in ("done", "archive", "restore", "go"):
         sub.add_parser(name).add_argument("id", nargs="?" if name == "done" else None)
+    p = sub.add_parser("link")
+    p.add_argument("id")
+    p.add_argument("--pane", help="desde afuera: el Claude de ese pane de herdr (si no, el de este proceso)")
+    p.add_argument("--host", default=LOCAL, choices=sorted({LOCAL, *REMOTE_SSH}))
     p = sub.add_parser("ls")
     p.add_argument("--json", action="store_true")
     p.add_argument("--todas", action="store_true")
@@ -1232,7 +1264,7 @@ def main(argv: list[str]) -> None:
         refresh()
         return
     if cmd == "link":
-        return print(link_here(a.id))
+        return print(link_pane(a.id, a.pane, a.host) if a.pane else link_here(a.id))
     if cmd == "go":
         return print(go(find(fold(), a.id)))
     if cmd == "ls":

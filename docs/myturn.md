@@ -37,6 +37,11 @@ por context switching me olvidé de volver a ellos. Además ahora tengo como 60 
 Las sesiones de Claude que abres sin tarea igual las registra el hook (`myturn track`), en silencio: no aparecen
 en el widget, solo existen para que el enlace sea instantáneo y para que el jardinero las pode.
 
+Una tarea que ya lleva un Claude abierto (lo anotaste después, o lo creó otra sesión) se enlaza desde afuera:
+`myturn link <id> --pane <pane> --host <mac|arch>`. Si ese Claude ya terminó, queda como visto, no como «te espera».
+El enlace guarda la carpeta del agente: «Reabrir agente» corre `claude --resume` ahí, la única desde donde lo
+encuentra. Lo pidió André el 2026-10-17 («ayúdame a mapear las sesiones de claude a las tareas de myturn»).
+
 ### Principios
 
 1. **Todo desde el widget.** El CLI y la skill existen para el panel y para los agentes, no para André.

@@ -21,6 +21,7 @@ SSOT: `~/dotfiles/docs/myturn.md`. André opera todo desde el widget de la barra
 | «es para el viernes» / un plazo | `myturn add "X" --due "antes del vie"` — sigue visible y avisa ese día |
 | posponer o fechar una que ya existe | `myturn when <id> "el 30"` (`"antes del vie"` plazo, `"ya"` la trae, `"sin fecha"` limpia) |
 | «qué tengo» | `myturn ls` (las programadas: `myturn ls --todas`) |
+| «mapea mis sesiones con mis tareas» / esta tarea la lleva otro Claude ya abierto | `myturn link <id> --pane <pane> --host <mac\|arch>` — enlaza desde afuera (pane de `herdr agent list`); si ese Claude ya terminó, queda visto |
 | «listo, ciérrala» (solo si André lo confirma) | `myturn done <id>` |
 
 Reglas: terminar tu turno NO cierra la tarea (André la cierra con ✓). No edites `~/tasks/events.jsonl` a mano.
