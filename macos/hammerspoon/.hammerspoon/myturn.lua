@@ -158,6 +158,7 @@ end
 -- se teclea su navegador: prefix+g, «/» + el id del pane, ↓ hasta él (lo calcula myturn) y Enter. Solo con la ventana
 -- de herdr enfocada: si no, las teclas caerían en otra app (Enter mandaría el texto a un Claude).
 function M.herdrGoto(query, downs)
+  if not query:match("^[%l%d:]+$") then return log("herdrGoto: id raro", query) end
   local tries = 0
   local function attempt()
     local w = hs.window.focusedWindow()
@@ -174,8 +175,11 @@ function M.herdrGoto(query, downs)
     end
     log("herdrGoto", query, downs)
     local k = function(mods, key) hs.eventtap.keyStroke(mods, key, 20000) end
-    k({ "ctrl" }, "b"); k({}, "g")
-    hs.eventtap.keyStrokes("/" .. query)
+    k({ "ctrl" }, "b"); k({}, "g"); k({}, "/")
+    -- tecla por tecla: keyStrokes manda texto sin keycode y Ghostty traduce por keycode (le llegaba todo como «a»)
+    for c in query:gmatch(".") do
+      if c == ":" then k({ "shift" }, ";") else k({}, c) end
+    end
     for _ = 1, downs do k({}, "down") end
     k({}, "return")
   end
