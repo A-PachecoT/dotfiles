@@ -248,7 +248,8 @@ setup_claude_hooks() {
         if command -v jq &>/dev/null; then
             local new_hooks
             new_hooks=$(echo "$hooks_config" | jq '.hooks')
-            jq --argjson hooks "$new_hooks" '.hooks = $hooks' "$settings" > "$settings.tmp"
+            jq --argjson hooks "$new_hooks" --argjson cpd "$(echo "$hooks_config" | jq '.cleanupPeriodDays // 365')" \
+                '.hooks = $hooks | .cleanupPeriodDays = $cpd' "$settings" > "$settings.tmp"
             mv "$settings.tmp" "$settings"
             success "Hooks merged"
         else
@@ -257,7 +258,9 @@ setup_claude_hooks() {
             python3 <<EOF
 import json
 with open("$settings") as f: existing = json.load(f)
-existing["hooks"] = json.loads('''$hooks_config''')["hooks"]
+tpl = json.loads('''$hooks_config''')
+existing["hooks"] = tpl["hooks"]
+existing["cleanupPeriodDays"] = tpl.get("cleanupPeriodDays", 365)
 with open("$settings", "w") as f: json.dump(existing, f, indent=2)
 EOF
             success "Hooks updated (backup: settings.json.backup)"
