@@ -8,9 +8,10 @@
 # the user has since arranged). `--force` opts back into unconditional spawn.
 #
 # Fixed windows always get their pinned slots: herdr on the Mac (`h`) -> WS2,
-# herdr on the Arch box (`ha`, over ET) -> WS3, tmux `notes` -> WS9. WS2/WS3
-# replaced the old pinned `cofoundy` tmux session; `cofoundy` stays in
-# resurrect-session-names.sh's exclusion list so it is not respawned at all.
+# tmux `notes` -> WS9. The Arch box and cofoundy-hq show up inside `h` as herdr
+# machines (`herdr machine add`), so the old `ha` window on WS3 is gone
+# (2026-10-17). WS2 replaced the old pinned `cofoundy` tmux session; `cofoundy`
+# stays in resurrect-session-names.sh's exclusion list so it is not respawned.
 # Bitwarden is launched + routed separately (see .aerospace.toml's
 # after-startup-command and on-window-detected rule for workspace 8).
 # Every other tmux session -- local (discovered from the last
@@ -109,6 +110,13 @@ ghostty_window_exists() {
 	[ -n "$id" ]
 }
 
+# A herdr window opened by hand has no pinned title: herdr writes its own
+# `ui.window_title`, which starts with "herdr · " (shared/herdr config.toml).
+herdr_window_exists() {
+	run_with_timeout 2 aerospace list-windows --all --format '%{window-title}|%{app-name}' 2>/dev/null \
+		| awk -F'|' '$2=="Ghostty" && index($1, "herdr · ")==1 {found=1} END {exit !found}'
+}
+
 move_ghostty_window() {
 	local title="$1" workspace="$2" win_id
 	win_id="$(find_ghostty_window_id "$title")"
@@ -150,8 +158,8 @@ launch_remote_session() {
 	move_ghostty_window "$session" "$workspace"
 }
 
-# Launches a Ghostty window running herdr -- locally (`h`) or on the Arch box
-# over ET (`ha`) -- and routes it to its workspace. Both go through `zsh -ic`
+# Launches a Ghostty window running herdr (`h`; the other boxes are machines
+# inside it) and routes it to its workspace. It goes through `zsh -ic`
 # so the alias stays the single source of truth (shared/zsh/mesh.zsh), which is
 # what keeps this in sync when the mesh IPs move.
 #
@@ -162,7 +170,7 @@ launch_remote_session() {
 # the lifetime of the window.
 launch_herdr_session() {
 	local title="$1" workspace="$2" alias_name="$3"
-	if [ "$FORCE" -eq 0 ] && ghostty_window_exists "$title"; then
+	if [ "$FORCE" -eq 0 ] && { ghostty_window_exists "$title" || herdr_window_exists; }; then
 		log "skip: herdr window '$title' already exists"
 		return
 	fi
@@ -177,7 +185,6 @@ launch_herdr_session() {
 # --- Fixed windows ---
 sleep 0.5
 launch_herdr_session herdr-mac 2 h
-launch_herdr_session herdr-arch 3 ha
 launch_local_session notes 9
 
 # --- Discover variable sessions ---

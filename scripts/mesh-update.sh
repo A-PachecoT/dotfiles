@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # mesh-update (alias `mu`) — fan-out del mesh: pull dotfiles + reload herdr en
-# AMBOS workers (Mac + Arch) de un solo comando. Corré desde cualquiera de los dos.
+# los workers (Mac, Arch y cofoundy-hq) de un solo comando. Corré desde cualquiera.
 # Idempotente. Deja las dos cajas a la última con los keybinds de herdr LIVE.
 #
 # Por qué existe: el auto-pull del SessionStart es per-device y lazy, y el
@@ -11,6 +11,7 @@ set -uo pipefail
 
 MESH_MAC="styreep@100.73.150.52"    # Tailscale
 MESH_ARCH="andre@100.84.249.22"     # Tailscale
+MESH_HQ="andre@100.106.190.15"      # Tailscale (cofoundy-hq; máquina de herdr en `h` desde 2026-10-17)
 # IdentityAgent=none → ignora cualquier ssh-agent y usa las keys ed25519 directo.
 # Blinda contra el cuelgue Arch→Mac por SSH_AUTH_SOCK ET-forwarded vivo-pero-mudo
 # (ver clipboard-bridge en CLAUDE.md). Las keys del mesh son passphraseless.
@@ -37,7 +38,7 @@ case "$(uname -s)" in
   *)      echo "mesh-update: OS no soportado ($(uname -s))"; exit 1 ;;
 esac
 
-echo "mesh-update · desde $SELF → actualiza Mac + Arch"
+echo "mesh-update · desde $SELF → actualiza Mac + Arch + hq"
 
 # 1. push commits locales sin pushear, así el remoto los ve (auto-OK dotfiles).
 if [ "$(git -C "$HOME/dotfiles" rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ]; then
@@ -58,6 +59,12 @@ bash <<< "$REMOTE_CMD"
 # 3. remoto (ssh one-shot; el script se alimenta por stdin → sin quoting hell)
 echo "[$REMOTE_NAME] ($REMOTE_HOST)"
 if ! ssh "${SSH_OPTS[@]}" "$REMOTE_HOST" bash <<< "$REMOTE_CMD"; then
+  echo "  x ssh falló — host caído o Tailscale dormido"
+fi
+
+# 4. cofoundy-hq: su herdr se ve desde `h` como máquina, y su server lee el mismo config.toml
+echo "[hq] ($MESH_HQ)"
+if ! ssh "${SSH_OPTS[@]}" "$MESH_HQ" bash <<< "$REMOTE_CMD"; then
   echo "  x ssh falló — host caído o Tailscale dormido"
 fi
 

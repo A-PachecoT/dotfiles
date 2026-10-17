@@ -6,7 +6,8 @@ local M = {}
 
 -- cargar aquí las extensiones: hs.* las carga perezosamente con un print, y si un `hs -c` cortado dejó print
 -- apuntando a un puerto IPC muerto, ese print revienta el hotkey (⌥T quedaba muerto)
-local _ = { hs.timer, hs.window, hs.mouse, hs.screen, hs.task, hs.json, hs.pasteboard, hs.alert, hs.webview, hs.urlevent, hs.hotkey }
+local _ = { hs.timer, hs.window, hs.mouse, hs.screen, hs.task, hs.json, hs.pasteboard, hs.alert, hs.webview, hs.urlevent, hs.hotkey,
+  hs.eventtap }
 
 local HOME = os.getenv("HOME")
 local BIN = HOME .. "/.local/bin/myturn"
@@ -151,6 +152,27 @@ function M.jump()
   run({ "jump" }, function(_, out)
     if out == "nadie te espera" then hs.alert.show("Nadie te espera", 1) end
   end)
+end
+
+-- `myturn go` a un agente de otra máquina: herdr no tiene CLI para cambiar la máquina que muestra su ventana, así que
+-- se teclea su navegador: prefix+g, «/» + el id del pane, ↓ hasta él (lo calcula myturn) y Enter. Solo con la ventana
+-- de herdr enfocada: si no, las teclas caerían en otra app (Enter mandaría el texto a un Claude).
+function M.herdrGoto(query, downs)
+  local tries = 0
+  local function attempt()
+    local w = hs.window.focusedWindow()
+    if not (w and (w:title() or ""):match("^herdr")) then
+      tries = tries + 1
+      if tries < 12 then hs.timer.doAfter(0.05, attempt) else log("herdrGoto: la ventana de herdr no quedó enfocada") end
+      return
+    end
+    local k = function(mods, key) hs.eventtap.keyStroke(mods, key, 20000) end
+    k({ "ctrl" }, "b"); k({}, "g")
+    hs.eventtap.keyStrokes("/" .. query)
+    for _ = 1, downs do k({}, "down") end
+    k({}, "return")
+  end
+  attempt()
 end
 
 -- depurar desde la terminal: hs -c 'require("myturn").eval("document.title")'

@@ -91,11 +91,6 @@ run = 'move-node-to-workspace 2'
 
 [[on-window-detected]]
 if.app-name-regex-substring = 'ghostty'
-if.window-title-regex-substring = 'herdr-arch'
-run = 'move-node-to-workspace 3'
-
-[[on-window-detected]]
-if.app-name-regex-substring = 'ghostty'
 if.window-title-regex-substring = 'notes'
 run = 'move-node-to-workspace 9'
 
@@ -106,7 +101,8 @@ if.window-title-regex-substring = 'pdf-viewer'
 run = 'layout floating'
 
 # NOTE: No fallback for Ghostty - ad-hoc windows stay in current workspace.
-# Only herdr-mac/herdr-arch/notes are statically routed by title (pinned).
+# Only herdr-mac/notes are statically routed by title (pinned). The Arch box
+# and cofoundy-hq live inside herdr-mac as herdr machines.
 # Every other tmux session (bilio, personal, and anything else) is routed dynamically
 # by scripts/dev-startup.sh via `aerospace move-node-to-workspace` right
 # after launch — see docs/superpowers/specs/2026-07-04-dynamic-tmux-session-restore-design.md

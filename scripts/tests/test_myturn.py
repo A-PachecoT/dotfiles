@@ -412,3 +412,31 @@ def test_daily_line_with_a_date_is_scheduled(mt, vault, clock):
     assert {t["title"]: t["start"] for t in mt.fold().values()} == \
         {"revisar aprobación TikTok": "2026-10-30", "Indusegur": "2026-10-20"}
     assert "- [>] revisar aprobación TikTok el 30 → myturn" in note.read_text()
+
+
+def test_navigator_downs_mirrors_herdrs_cross_machine_filter(mt):
+    panes = [("mac", "w1:p4"), ("mac", "w1:p40"), ("mac", "w2:p1"),
+             ("arch", "wC:p25"), ("arch", "w1:p4"), ("arch", "w1:p41"), ("hq", "w1:p4")]
+    # «w1:p4» calza en 6 panes: mac (fila máquina, ws w1, p4, p40), arch (máquina, ws w1, p4, p41), hq (…)
+    assert mt.navigator_downs(panes, "mac", "w1:p4", federated=True) == 0
+    assert mt.navigator_downs(panes, "arch", "w1:p4", federated=True) == 4  # p40, máquina arch, ws w1, p4
+    assert mt.navigator_downs(panes, "hq", "w1:p4", federated=True) == 8
+    assert mt.navigator_downs(panes, "arch", "wC:p25", federated=True) == 0  # único: Enter directo
+    assert mt.navigator_downs(panes, "arch", "wZ:p1", federated=True) is None
+    assert mt.navigator_downs([("mac", "wW2:p4"), ("mac", "w2:p4")], "mac", "w2:p4", federated=False) == 2
+
+
+def test_frontmost_is_the_machine_the_herdr_window_shows(mt, monkeypatch):
+    if mt.LOCAL != "mac":
+        pytest.skip("la ventana de herdr con máquinas vive en la Mac")
+    title = {"t": "herdr · archlinux · redesign-ui"}
+    machines = [{"label": "arch", "enabled": True, "selected": True}, {"label": "hq", "enabled": True}]
+    monkeypatch.setattr(mt.shutil, "which", lambda _: "/opt/homebrew/bin/aerospace")
+    monkeypatch.setattr(mt, "herdr_machines", lambda: machines)
+    monkeypatch.setattr(mt, "run", lambda cmd, *a, **k: type("P", (), {"stdout": title["t"], "returncode": 0}))
+    assert mt.herdr_frontmost() == "arch"
+    machines[0]["selected"] = False
+    title["t"] = "herdr-mac"  # la que abre dev-startup.sh tiene el título fijo
+    assert mt.herdr_frontmost() == "mac"
+    title["t"] = "notes"
+    assert mt.herdr_frontmost() is None

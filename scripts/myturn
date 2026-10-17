@@ -49,7 +49,9 @@ STATE = DATA / "state.json"
 CACHE = Path(os.environ.get("MYTURN_CACHE", HOME / ".cache/myturn"))
 LOCAL = "mac" if platform.system() == "Darwin" else "arch"
 REMOTE_SSH = {"arch": "andre-arch", "mac": "styreep@100.73.150.52"}
-HERDR_WINDOW = {"mac": "herdr-mac", "arch": "herdr-arch"}
+# la ventana de `h` (workspace 2): Local y las otras cajas como máquinas de herdr (`herdr machine add`). Su título es
+# «herdr-mac» si la abrió dev-startup.sh (fijo) o el de `ui.window_title` («herdr · {hostname} · …») si no
+HERDR_WINDOW = re.compile(r"^herdr\b")
 NO_SYNC = os.environ.get("MYTURN_NO_SYNC") == "1"
 SELF = str(Path(__file__).resolve())
 WAITING = {"idle", "blocked", "done"}
@@ -246,24 +248,82 @@ def clean_title(s: str | None) -> str:
     return "" if t.lower() in {"claude", "claude code", HOME.name} else t
 
 
+def herdr_machines() -> list[dict]:
+    """Las máquinas habilitadas del herdr de la Mac, en el orden de su sidebar (Local va antes). `selected` es la
+    que muestra la ventana: herdr la guarda cada vez que cambias de máquina."""
+    p = run(["herdr", "machine", "list", "--json"], timeout=3)
+    try:
+        return [m for m in json.loads(p.stdout) if m.get("enabled")] if p and p.returncode == 0 else []
+    except ValueError:
+        return []
+
+
+def showing(machines: list[dict]) -> str:
+    return next((m["label"] for m in machines if m.get("selected")), LOCAL)
+
+
 def herdr_frontmost() -> str | None:
-    """'mac'/'arch' si la ventana enfocada es la de herdr de esa caja."""
+    """La caja que ves si la ventana enfocada es la de herdr: Local o la máquina elegida en su sidebar."""
     if LOCAL != "mac" or not shutil.which("aerospace"):
         return None
     p = run(["aerospace", "list-windows", "--focused", "--format", "%{window-title}"], timeout=2)
-    title = (p.stdout.strip() if p else "")
-    return next((h for h, w in HERDR_WINDOW.items() if title == w), None)
+    return showing(herdr_machines()) if HERDR_WINDOW.match(p.stdout.strip() if p else "") else None
 
 
-def focus_window(host: str) -> None:
+def focus_window() -> bool:
     if LOCAL != "mac" or not shutil.which("aerospace"):
-        return
+        return False
     p = run(["aerospace", "list-windows", "--all", "--format", "%{window-id}|%{window-title}"])
     for line in (p.stdout if p else "").splitlines():
         wid, _, title = line.partition("|")
-        if title.strip() == HERDR_WINDOW[host]:
+        if HERDR_WINDOW.match(title.strip()):
             run(["aerospace", "focus", "--window-id", wid.strip()])
+            return True
+    return False
+
+
+def navigator_downs(panes: list[tuple[str, str]], host: str, pane: str, federated: bool) -> int | None:
+    """Cuántas filas bajar en el navegador de herdr tras buscar el id de `pane`, o None si no está.
+
+    Calca su filtro: substring en todas las máquinas, en el orden del sidebar; cada máquina con aciertos pone su
+    fila (si hay más de una) y cada workspace la suya, y queda elegido el primer pane que calce. `panes` va en ese
+    orden: [(caja, pane_id)], y el workspace de un pane es el prefijo de su id («wC:p25» → «wC»)."""
+    q, rows, last = pane.lower(), [], None
+    for h, p in panes:
+        if q not in p.lower():
+            continue
+        ws = p.split(":")[0]
+        if federated and (last is None or last[0] != h):
+            rows.append(("machine", h))
+        if last != (h, ws):
+            rows.append(("ws", h, ws))
+        rows.append(("pane", h, p))
+        last = (h, ws)
+    if ("pane", host, pane) not in rows:
+        return None
+    return rows.index(("pane", host, pane)) - next(i for i, r in enumerate(rows) if r[0] == "pane")
+
+
+def show(host: str, pane: str) -> None:
+    """Pone el pane en pantalla. `agent focus` ya lo enfocó en su caja; si la ventana muestra otra máquina, herdr no
+    tiene CLI para cambiarla: Hammerspoon teclea su navegador (prefix+g, /id, ↓…, Enter)."""
+    if not focus_window():
+        return
+    machines = herdr_machines()
+    if showing(machines) == host:
+        return
+    order = [LOCAL] + [m["label"] for m in machines]
+    if host not in order:
+        return
+    panes = []
+    for h in order[: order.index(host) + 1]:
+        res = herdr_json(["pane", "list"] if h == LOCAL else ["--machine", h, "pane", "list"], timeout=6)
+        if res is None:  # una máquina caída que el sidebar todavía lista descuadraría las filas
             return
+        panes += [(h, p["pane_id"]) for p in res.get("panes", [])]
+    downs = navigator_downs(panes, host, pane, federated=len(order) > 1)
+    if downs is not None:
+        run(["hs", "-c", f"require('myturn').herdrGoto({json.dumps(pane.lower())}, {downs})"], timeout=5)
 
 
 def notify(msg: str, sound: bool = False) -> None:
@@ -645,8 +705,8 @@ def go(t: dict) -> str:
     agents = herdr_agents(link["host"], fresh=True) or []
     ag = next((a for a in agents if session_of(a) == link["session"]), None)
     if ag:
-        focus_window(link["host"])
         run(["herdr", "agent", "focus", ag["pane_id"]], link["host"])
+        show(link["host"], ag["pane_id"])
         mark_seen(link["session"])
         return f"→ {t['title']}"
     res = herdr_json(["tab", "create", "--cwd", t.get("cwd") or str(HOME), "--label", t["title"][:24], "--focus"],
@@ -655,7 +715,7 @@ def go(t: dict) -> str:
     if not pane:
         return f"No pude abrir una pestaña en herdr ({link['host']})"
     run(["herdr", "pane", "run", pane, f"claude --resume {link['session']}"], link["host"], timeout=8)
-    focus_window(link["host"])
+    show(link["host"], pane)
     return f"↻ Reabriendo el agente de {t['title']}"
 
 

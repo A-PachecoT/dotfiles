@@ -70,6 +70,9 @@ command = "yazi"
 [ui]
 mouse_capture = true
 agent_panel_sort = "priority"
+# Empieza con «herdr»: así myturn y Hammerspoon reconocen la ventana de `h` aunque no la haya abierto dev-startup.sh
+# (que le fija «herdr-mac»). {hostname} es el de la máquina que estás viendo (default: "{hostname}: {workspace}").
+window_title = "herdr · {hostname} · {workspace}"
 
 # Filas del agent panel. El default (state_icon, machine, workspace, tab / agent) no trae
 # el token `pane`, así que el nombre que pone /handoff al panel (p. ej. handoff-coresponde-dominio)
