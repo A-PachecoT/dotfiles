@@ -38,6 +38,10 @@ Misma memoria muscular en las 4:
 
 Local → binario directo; remoto → `et <worker> -c herdr`.
 
+En la Mac, `h` ya trae el Arch y cofoundy-hq como máquinas de herdr (`herdr machine list`; se cambia en el sidebar o
+con el navegador `prefix+g`). Por eso desde 2026-10-17 no se abre la ventana `ha` en el workspace 3. `ha`/`hq` siguen
+sirviendo desde el celular o para entrar directo a una caja.
+
 ## Transporte: ET, no mosh (decisión clave)
 
 - **mosh NO pasa el mouse/touch** — reinterpreta la pantalla en un virtual

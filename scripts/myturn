@@ -322,8 +322,8 @@ def show(host: str, pane: str) -> None:
             return
         panes += [(h, p["pane_id"]) for p in res.get("panes", [])]
     downs = navigator_downs(panes, host, pane, federated=len(order) > 1)
-    if downs is not None:
-        run(["hs", "-c", f"require('myturn').herdrGoto({json.dumps(pane.lower())}, {downs})"], timeout=5)
+    if downs is not None:  # por URL y no `hs -c`: un `hs -c` cortado deja a Hammerspoon sin hotkeys
+        run(["open", "-g", f"hammerspoon://myturn-goto?q={pane.lower().replace(':', '%3A')}&downs={downs}"])
 
 
 def notify(msg: str, sound: bool = False) -> None:

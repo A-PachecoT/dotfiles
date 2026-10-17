@@ -122,6 +122,23 @@ myturn no avisaba. `due` solo ordenaba y decía «vence el dd/mm».
   el 30`). Tasks no tiene horas: un recordatorio de las 15:00 aparece en el daily desde la mañana de ese día.
 - **El jardinero** no archiva una programada antes de su día, y cuenta la inactividad desde que apareció.
 
+### Una sola ventana de herdr con máquinas (desde 2026-10-17)
+
+André: «ahora todo lo estamos manejando en el ghostty del space 2 de aerospace xq herdr permite agregar machines y ya
+está la de arch. quiero que pase que ahora h tmb tenga hq machine y q ya no se abra el ha en space 3». Y: «le di a ir
+a claude y no me mandó, creo que era algo que me enviaba a arch pero no estaba open el space 3 ghostty con ha».
+
+- `go` enfocaba la ventana `herdr-arch`, que ya no existe. Ahora hace `agent focus` en la caja del agente y enfoca la
+  ventana de `h`. Si esa ventana ya muestra esa máquina, con eso basta (probado en vivo con el agente de Jorge).
+- Si muestra otra máquina, herdr no tiene CLI para cambiar la máquina del cliente (`--machine` solo enruta comandos).
+  Hammerspoon teclea su navegador: `prefix+g`, `/` + id del pane, ↓ y Enter. El navegador filtra por substring en
+  todas las máquinas y deja elegido el primer pane que calce. `navigator_downs` calcula las ↓ con las listas de panes
+  de cada máquina, en el orden del sidebar.
+- «Visto» usa `selected` de `herdr machine list --json`: herdr lo guarda cada vez que cambias de máquina. El título
+  de la ventana no sirve, porque lo escribe el server que mandó el último mensaje y no siempre la máquina que ves.
+- Riesgo conocido: las teclas solo se envían si la ventana enfocada se llama `herdr…`. Si la ventana muestra otra
+  máquina y tú tecleas en herdr al mismo tiempo, tus letras se mezclan con la búsqueda.
+
 ### Estados de una tarea
 
 ```
@@ -158,8 +175,9 @@ myturn no avisaba. `due` solo ordenaba y decía «vence el dd/mm».
 
 | Con qué | Cómo |
 |---|---|
-| herdr | `agent list` (estado, `focused`, `terminal_title`), `agent focus`, `tab create`, `pane run`, `pane current` |
-| AeroSpace | `list-windows` / `focus --window-id` sobre las ventanas `herdr-mac` y `herdr-arch` |
+| herdr | `agent list` (estado, `focused`, `terminal_title`), `agent focus`, `tab create`, `pane run`, `pane current`; `machine list --json` (la máquina `selected` es la que muestra `h`) y `--machine <label> pane list` |
+| AeroSpace | `list-windows` / `focus --window-id` sobre la ventana de `h` (título `herdr-mac` o `herdr · …`) |
+| Hammerspoon | `hammerspoon://myturn-goto?q=<pane>&downs=N`: teclea el navegador de herdr para cambiar de máquina |
 | Claude Code | hook `UserPromptSubmit` (session_id + `HERDR_PANE_ID`); `claude -p --json-schema` para la IA |
 | Obsidian (BrainFlow) | `Tareas.md` espejo + consulta ```tasks``` en el daily note + importación de `- [ ]` del To-do; `daily_prep.py` y morning-brief (Hermes) parcheados |
 | Vikunja, calendario, celular | fuera de alcance por ahora |
@@ -238,6 +256,10 @@ tarea.
   19:01` en amarillo y el espejo del Arch la subió con `🛫`. Panel: vista previa y ◷ probados en el webview real con
   `require("myturn").eval`; el diseño, con un harness y `agent-browser`. Gotcha: entre fecha y hora hace falta un
   espacio, si no «11:00» se lee como el día 1 a la 1:00.
+
+- 2026-10-17, una ventana con máquinas: 46 tests + ruff. En vivo, con `h` mostrando el Arch, `go` dejó en pantalla
+  el pane del agente (captura). El salto con teclas entre máquinas no quedó confirmado: en la prueba cayó en un pane
+  vecino mientras André usaba herdr. Pendiente: prueba suya desde el panel.
 
 ## Roadmap
 

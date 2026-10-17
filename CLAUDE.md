@@ -61,8 +61,8 @@ Open laptop → everything restored → `tw .` → coding in 5 seconds.
 ```
 Startup (via dev-startup.sh):
 ├── Workspace 1: Comet (browser)
-├── Workspace 2: Ghostty → herdr (Mac)        [pinned, `h`]
-├── Workspace 3: Ghostty → herdr (Arch box)   [pinned, `ha` over ET]
+├── Workspace 2: Ghostty → herdr (Mac)        [pinned, `h`; Arch y cofoundy-hq
+│                                               adentro como máquinas de herdr]
 ├── Workspace 9: Obsidian + Ghostty → tmux session "notes"  [pinned]
 └── Workspaces 4/5/6/7/10: pool for the remaining tmux sessions,
     assigned dynamically + stickily (workspace-sticky-map.sh)
@@ -523,8 +523,7 @@ Primary workflow for Claude Code development. Ghostty intercepts Cmd keys and se
 **Architecture:**
 ```
 AeroSpace Workspaces (Alt+2/3/4/9 to switch companies)
-├── Workspace 2: Ghostty → herdr (Mac)       ← not tmux
-├── Workspace 3: Ghostty → herdr (Arch box)  ← not tmux
+├── Workspace 2: Ghostty → herdr (Mac + máquinas arch y hq)  ← not tmux
 ├── Workspace 9: Obsidian + Ghostty → tmux session "notes"
 └── Workspaces 4/5/6/7/10: remaining tmux sessions (bilio, personal, ...)
 
@@ -843,13 +842,14 @@ after-startup-command = [
     'exec-and-forget sketchybar',
     'exec-and-forget open -a "Obsidian"',                           # → workspace 9
     'exec-and-forget open -a "Comet"',                              # → workspace 1
-    'exec-and-forget $HOME/dotfiles/scripts/dev-startup.sh' # → workspaces 2,3,9 + pool
+    'exec-and-forget $HOME/dotfiles/scripts/dev-startup.sh' # → workspaces 2,9 + pool
 ]
 ```
 
 **dev-startup.sh** launches the pinned Ghostty windows:
-- herdr on the Mac (`h`) → workspace 2
-- herdr on the Arch box (`ha`, over ET) → workspace 3
+- herdr on the Mac (`h`) → workspace 2. The Arch box and cofoundy-hq are herdr
+  machines inside it (`herdr machine list`); the old `ha` window on workspace 3
+  is gone since 2026-10-17
 - tmux `notes` → workspace 9 (alongside Obsidian)
 
 Then it discovers the remaining tmux sessions — local ones from the last
@@ -859,7 +859,7 @@ workspace it got last boot). `cofoundy` is deliberately excluded: workspace 2
 runs herdr now, so a stale snapshot must not respawn that tmux session.
 
 AeroSpace statically routes the pinned windows by title (`herdr-mac`,
-`herdr-arch`, `notes`); pooled sessions are moved by the script right after
+`notes`); pooled sessions are moved by the script right after
 launch. Run `./scripts/dev-startup.sh --dry-run --force` to see the plan without
 opening anything.
 

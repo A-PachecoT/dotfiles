@@ -70,6 +70,7 @@ Siguiente foco: cerrar el trial de Herdr, mantener fixes cross-platform en `shar
 - **Un `invalidTabIds` en un close masivo de tabs no es necesariamente error — el estado pudo cambiar entre el snapshot y la ejecución; re-verificar con un nuevo snapshot antes de asumir fallo.** - source: [Chrome MCP escopeado a proyecto](bitacora/2026-08-04-chrome-mcp-project-scope.md)
 - **En un regex de fecha + hora, exigir separador entre ambas: con `\s*` opcional «11:00» se lee como día 1 a la 1:00.** - source: [myturn tiempo](bitacora/2026-10-16-myturn-tiempo.md)
 - **Para capturar un webview de Hammerspoon sin interrumpir, harness HTML con stub de `webkit.messageHandlers` + `agent-browser`; `screencapture` no lo mostró y Chrome `--headless` se cuelga con Chrome abierto.** - source: [myturn tiempo](bitacora/2026-10-16-myturn-tiempo.md)
+- **herdr no tiene CLI para cambiar la máquina del cliente; la elegida está en `herdr machine list --json` → `selected` (el título de la ventana no es confiable).** - source: [herdr máquinas](bitacora/2026-10-17-herdr-maquinas.md)
 
 ---
 
@@ -94,3 +95,4 @@ Siguiente foco: cerrar el trial de Herdr, mantener fixes cross-platform en `shar
 | 2026-10-09 | [myturn: panel por teclado](bitacora/2026-10-09-myturn-panel-teclado.md) | ⌥T abre el panel en modo lista: `n` nueva, `f` buscar, `hjkl` + `Enter`/`Espacio` sobre cualquier botón de la fila, `Esc` cierra y devuelve el foco a la ventana previa vía AeroSpace. |
 | 2026-10-09 | [myturn: panel lento y sin scroll](bitacora/2026-10-09-myturn-panel-lento-sin-scroll.md) | El panel medía 1210 px en una pantalla de 1080 sin scroll; cada clic podía esperar el ssh al Arch, y `win:focus()` (accesibilidad) congelaba Hammerspoon 1,6 s. Ship: lista scrolleable, caché remoto en segundo plano, foco sin AX, UI optimista, skeleton + barra de carga. |
 | 2026-10-16 | [myturn: tiempo — programadas y HOY](bitacora/2026-10-16-myturn-tiempo.md) | Issue #2 + «time awareness»: fecha de aparición (oculta hasta su día u hora, suena 1×) y plazo, escritas como hablas («el 30», «mañana 9:00», «antes del vie») con un parser determinístico; panel con vista previa, ◷ por fila y secciones HOY/PROGRAMADAS; barra amarilla/roja; 🛫 de ida y vuelta en Obsidian + `starts before tomorrow`. |
+| 2026-10-17 | [herdr: una ventana con máquinas](bitacora/2026-10-17-herdr-maquinas.md) | hq actualizado (handoff) y agregado como máquina de `h`; fuera la ventana `ha` del WS3; myturn `go` llega al agente en cualquier máquina (foco + navegador de herdr por teclas); «visto» por `machine list` → `selected`. |

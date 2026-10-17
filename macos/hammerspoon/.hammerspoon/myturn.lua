@@ -7,7 +7,7 @@ local M = {}
 -- cargar aquí las extensiones: hs.* las carga perezosamente con un print, y si un `hs -c` cortado dejó print
 -- apuntando a un puerto IPC muerto, ese print revienta el hotkey (⌥T quedaba muerto)
 local _ = { hs.timer, hs.window, hs.mouse, hs.screen, hs.task, hs.json, hs.pasteboard, hs.alert, hs.webview, hs.urlevent, hs.hotkey,
-  hs.eventtap }
+  hs.eventtap, hs.application }
 
 local HOME = os.getenv("HOME")
 local BIN = HOME .. "/.local/bin/myturn"
@@ -94,7 +94,7 @@ local function onMessage(msg)
   elseif a == "copy" then
     hs.pasteboard.setContents(b.text)
   elseif a == "go" then
-    M.hide()
+    M.hide(true) -- soltar Hammerspoon: si no, el teclado de herdrGoto no llega a la ventana de herdr
     run({ "go", b.id }, function(_, out) if out ~= "" then hs.alert.show(out, 1) end end)
   end
 end
@@ -163,9 +163,16 @@ function M.herdrGoto(query, downs)
     local w = hs.window.focusedWindow()
     if not (w and (w:title() or ""):match("^herdr")) then
       tries = tries + 1
+      if tries == 4 then -- AeroSpace cree que herdr ya estaba enfocada y su `focus` no hizo nada: activarla aquí
+        local g = hs.application.get("Ghostty")
+        for _, x in ipairs(g and g:allWindows() or {}) do
+          if (x:title() or ""):match("^herdr") then g:activate(); x:raise(); break end
+        end
+      end
       if tries < 12 then hs.timer.doAfter(0.05, attempt) else log("herdrGoto: la ventana de herdr no quedó enfocada") end
       return
     end
+    log("herdrGoto", query, downs)
     local k = function(mods, key) hs.eventtap.keyStroke(mods, key, 20000) end
     k({ "ctrl" }, "b"); k({}, "g")
     hs.eventtap.keyStrokes("/" .. query)
@@ -183,6 +190,7 @@ build()
 push()
 
 hs.urlevent.bind("myturn-panel", function() M.toggle() end)
+hs.urlevent.bind("myturn-goto", function(_, p) M.herdrGoto(p.q or "", tonumber(p.downs) or 0) end)
 hs.hotkey.bind({ "alt" }, "t", M.toggle)
 hs.hotkey.bind({ "alt" }, "g", M.jump)
 
