@@ -1,7 +1,7 @@
 # André's Artificial General Intelligence
 
 > SSOT: `~/dotfiles/shared/claude/CLAUDE.md`, symlink en `~/.claude/CLAUDE.md` en todas las cajas; editá cualquiera de los dos. El hook `ssot-sync` pullea al inicio y avisa si dejaste ediciones sin commitear; tras editar, commit+push dotfiles (auto-OK). [macOS]/[Arch] marcan lo que aplica solo a esa caja.
-> Este archivo se auto-carga en CADA sesión: regla en una línea, el porqué va en `~/dotfiles/shared/claude/CLAUDE-porques.md` (mismo título). Presupuesto: ≤9k chars (medido 2026-10-03: 8,8k; antes 9,4k).
+> Este archivo se auto-carga en CADA sesión: regla en una línea, el porqué va en `~/dotfiles/shared/claude/CLAUDE-porques.md` (mismo título). Presupuesto: ≤9k chars.
 
 ## User data
 André Joaquín Pacheco Taboada — AI, LLMs y agentes.
@@ -51,7 +51,7 @@ Un gate (`pytest`, `make check`, `gh pr checks`, build) se corre solo y se lee s
 ## Comms & content
 - Cal.com: Cofoundy (DEFAULT) → https://cal.cofoundy.dev/team/cofoundy/consulta · André 25 min → https://cal.cofoundy.dev/andre/meet · 50 min → https://cal.cofoundy.dev/andre/long-meet
 - Emails: NUNCA bloque de firma al final (Gmail ya la pone); terminar en la última oración con contenido.
-- WhatsApp: texto plano, sin markdown.
+- WhatsApp: texto plano, sin markdown, con mi voz (corto, natural, como escribo yo); nunca adjuntes lo que ya está en el chat. → core/docs/decision-log.md#2026-10-20-adjunto-no-bajo
 - Video social: transcript-only → `yt-dlp --write-auto-subs --skip-download <url>` + leer el `.vtt`; con visual → `/watch <url>`.
 - Shadergradient: params literales de un URL de shadergradient.co/customize elegido por el cliente; NO inventar. Skill `cofoundy-toolkit:hero-shader`. → CLAUDE-porques.md §Comms & content
 
