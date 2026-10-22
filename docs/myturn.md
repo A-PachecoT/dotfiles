@@ -56,6 +56,10 @@ encuentra. Lo pidió André el 2026-10-17 («ayúdame a mapear las sesiones de c
    de Claude Code para sesiones sin tarea). La IA (`claude -p`) queda para la poda y (v2) resumir qué hizo el
    agente que te espera.
 6. **Nada se borra.** Podar = archivar con razón; `myturn restore`.
+6b. **El agente que cumple la tarea la cierra.** Cumplida y verificada por su efecto → `myturn done` lo corre
+   el agente y lo avisa en una línea; André no cierra lo que ya está hecho. Queda abierta si espera a un tercero
+   o es una decisión suya. André, 2026-10-22, tras un «ciérralas tú cuando quieras» de 4 tareas ya en prod:
+   *«debiste haberlas cerrado tú, cumplirlas tú»*.
 7. **Local-first, sin servidor.** Un repo git privado con un log append-only (`merge=union`) sincroniza el Mac y
    el Arch; herdr de la otra caja se lee por ssh.
 
