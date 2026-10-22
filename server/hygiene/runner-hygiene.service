@@ -1,0 +1,8 @@
+[Unit]
+Description=Higiene de disco de los runners de GitHub Actions (_work, _diag, cachés, runners caídos)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/runner-hygiene.sh
+Nice=10
+IOSchedulingClass=idle
