@@ -391,7 +391,7 @@ WHEN = re.compile(
     rf"(?:(?:\s*,\s*|\s+)(?:{_time_re('a')}))?"
     rf"|{_time_re('b')})"
     r")(?![\w%/:])", re.I)
-ISO_WHEN = re.compile(r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2})?")
+ISO_WHEN = re.compile(r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2})?")  # «2026-10-26 16:30» también (issue #3)
 
 
 def _fold(s: str) -> str:
@@ -540,7 +540,7 @@ def when_value(text: str, t0: datetime | None = None) -> dict:
         return {"set": {"start": None}, "label": "aparece ya"}
     if _fold(s) in {"sin fecha", "nunca"}:
         return {"set": {"start": None, "due": None}, "label": "sin fecha"}
-    rest, start, due = ("", s, None) if ISO_WHEN.fullmatch(s) else parse_when(s, t0)
+    rest, start, due = ("", s.replace(" ", "T"), None) if ISO_WHEN.fullmatch(s) else parse_when(s, t0)
     if not (start or due) and not ISO_WHEN.fullmatch(s):  # aquí todo el texto es la fecha: «vie», «30» = «el vie»
         rest, start, due = parse_when(f"el {s}", t0)
     if not (start or due) or rest:
@@ -551,7 +551,7 @@ def when_value(text: str, t0: datetime | None = None) -> dict:
 def as_when(s: str) -> str:
     """El valor de --desde / --due: ISO o una frase («el 30», «mañana 9:00»)."""
     if ISO_WHEN.fullmatch(s.strip()):
-        return s.strip()
+        return s.strip().replace(" ", "T")
     rest, start, due = parse_when(s)
     if not (start or due) or rest:
         sys.exit(f"myturn: no entiendo la fecha «{s}»")

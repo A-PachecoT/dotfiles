@@ -329,6 +329,13 @@ def test_parse_when_spanish_phrases(mt, text, expected):
     assert mt.parse_when(text, ref) == (expected or (text, None, None))
 
 
+def test_iso_with_space_is_a_date(mt, clock):
+    # issue #3: un agente escribe «2026-10-26 16:30» y myturn respondía «no entiendo la fecha»
+    assert mt.as_when("2026-10-26 16:30") == "2026-10-26T16:30"
+    assert mt.as_when("2026-10-26T16:30") == "2026-10-26T16:30"
+    assert mt.when_value("2026-10-26 16:30")["set"] == {"start": "2026-10-26T16:30"}
+
+
 def test_when_value_for_the_row_editor(mt, clock):
     assert mt.when_value("vie")["set"] == {"start": "2026-10-23"}  # sola, una abreviatura sí es fecha
     assert mt.when_value("30")["label"] == "aparece el vie 30/10"
