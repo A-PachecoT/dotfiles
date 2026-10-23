@@ -60,7 +60,7 @@ Open laptop → everything restored → `tw .` → coding in 5 seconds.
 **Architecture (Implemented):**
 ```
 Startup (via dev-startup.sh):
-├── Workspace 1: Comet (browser)
+├── Workspace 1: Zen (browser)
 ├── Workspace 2: Ghostty → tmux session "cofoundy"
 ├── Workspace 3: Ghostty → tmux session "bilio"
 ├── Workspace 4: Ghostty → tmux session "personal"
@@ -780,7 +780,7 @@ These apps launch automatically via `after-startup-command` and move to assigned
 after-startup-command = [
     'exec-and-forget sketchybar',
     'exec-and-forget open -a "Obsidian"',                           # → workspace 9
-    'exec-and-forget open -a "Comet"',                              # → workspace 1
+    'exec-and-forget open -a "Zen"',                                # → workspace 1
     'exec-and-forget $HOME/dotfiles/scripts/dev-startup.sh' # → workspaces 2,3,4,9
 ]
 ```
@@ -794,8 +794,8 @@ after-startup-command = [
 AeroSpace routes each Ghostty window by matching the tmux session name in the window title.
 
 **Browser Configuration:**
-- **Comet browser** is configured as the primary browser (workspace 1, `alt-q` hotkey)
-- Icon mapping: `["Comet"] = ":comet:"` in `app_icons.lua`
+- **Zen browser** (Firefox-based) is the primary and default browser (workspace 1, `alt-q` hotkey); replaced Comet 2026-10-23. herdr-style keys via `macos/hammerspoon/.hammerspoon/zen-keys.lua`
+- Icon mapping: `["Zen"] = ":zen_browser:"` in `app_icons.lua`
 
 ### macOS Login Items (System Settings)
 

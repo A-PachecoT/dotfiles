@@ -8,7 +8,7 @@ start-at-login = true
 after-startup-command = [
     'exec-and-forget sketchybar',
     'exec-and-forget open -a "Obsidian"',
-    'exec-and-forget open -a "Comet"',
+    'exec-and-forget open -a "Zen"',
     'exec-and-forget open -a "Bitwarden"',
     'exec-and-forget $HOME/dotfiles/scripts/dev-startup.sh'
 ]
@@ -68,7 +68,7 @@ run = 'layout floating'
 if.app-name-regex-substring = 'bitwarden'
 run = 'move-node-to-workspace 8'
 
-# Bitwarden browser-extension popup (Comet/Chrome opens a window titled "Bitwarden")
+# Bitwarden browser-extension popup (Zen/Chrome opens a window titled "Bitwarden")
 [[on-window-detected]]
 if.window-title-regex-substring = 'Bitwarden'
 run = 'layout floating'
@@ -78,7 +78,7 @@ if.app-name-regex-substring = 'obsidian'
 run = 'move-node-to-workspace 9'
 
 [[on-window-detected]]
-if.app-name-regex-substring = 'comet'
+if.app-id = 'app.zen-browser.zen'
 run = 'move-node-to-workspace 1'
 
 # Ghostty routing by window title. The herdr windows carry a title pinned with
@@ -200,7 +200,7 @@ run = 'layout floating'
 
     # Quick app launches
     alt-a = 'exec-and-forget open -a "Obsidian"'
-    alt-q = 'exec-and-forget open -a "Comet"'
+    alt-q = 'exec-and-forget open -a "Zen"'
     alt-w = 'exec-and-forget open -a "WhatsApp"'
     alt-shift-t = 'exec-and-forget open -a "Telegram"'
     alt-f = 'exec-and-forget open -a "Finder"'
