@@ -13,6 +13,7 @@ local micMute = require("mic-mute")
 local windowManager = require("window-manager")
 local screenshot = require("screenshot")
 local pdfVim = require("pdf-vim")
+local zenKeys = require("zen-keys") -- Zen como ventana de herdr: ⌘hjkl, ⌘d split
 local sleepWake = require("sleep-wake")
 local myturn = require("myturn") -- ⌥T marcar prioridad · ⌥G ir al que te espera (docs/myturn.md)
 
@@ -25,6 +26,7 @@ micMute.init()
 windowManager.init()
 screenshot.init()
 pdfVim.init()
+zenKeys.init()
 sleepWake.init()
 
 -- ============================================================
