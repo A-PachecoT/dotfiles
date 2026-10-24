@@ -20,3 +20,11 @@ André buscaba un browser con atajos para todo, UI configurable y buen manejo de
 - `~/.hammerspoon` está stoweado archivo por archivo: un módulo nuevo necesita su symlink (o `./install.sh restow`) o el `require` rompe TODO el init.lua (audio, myturn incluidos).
 - `hs -c 'hs.reload()'` cuelga el CLI: usar `hs -c 'hs.timer.doAfter(0.5, hs.reload)'`.
 - Zen lee `zen-keyboard-shortcuts.json` al arrancar: los cambios aplican tras reiniciar Zen.
+
+## Addendum: spaces y containers (mismo día)
+- Comet → Zen como browser principal (AeroSpace WS1 por `app-id`, `alt-q`, arranque).
+- Dos spaces, cada uno con su container: **Personal** (ex-Home, container Personal, Essential: Gmail) y **Cofoundy** (container Work, Essentials: Calendario, Coresponde, Gmail, WorkAdventure `office.cofoundy.dev`). Bilio ya no es space (no sigue activo).
+- Ruteo de space: todo URL con `cofoundy.dev` abre en Cofoundy (`zen-space-routing.jsonlz4`). `user.js`: `zen.workspaces.force-container-workspace=true`.
+- Pin de tab ⌘⇧d → ⌘⇧e (⌘⇧d es split horizontal en `zen-keys.lua`).
+- Learning: los Essentials son por container (`zen.workspaces.separate-essentials` = true por defecto); un space con container solo muestra los Essentials de ese container. Pineado ≠ Essential.
+- Learning: la sesión de Zen (`zen-sessions.jsonlz4`, mozlz4 = `mozLz40\0` + lz4 block con tamaño) se puede editar con Zen cerrado; backup en `<perfil>/claude-backup-2026-10-23/`.
