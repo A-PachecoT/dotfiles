@@ -18,6 +18,7 @@
 --   focusURLBar               ⌘l → ⌘e   (⌘l is taken here)
 --   key_findSelection         ⌘e → none
 --   zen-split-view-horizontal ⌘⌥h → ⌘⌃⌥h (⌘⌥h is macOS "Hide Others")
+--   zen-toggle-pin-tab        ⌘⇧d → ⌘⇧e (⌘⇧d is split horizontal here)
 
 local M = {}
 
