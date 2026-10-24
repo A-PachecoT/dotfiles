@@ -885,7 +885,7 @@ Apps that auto-start via macOS (not controlled by AeroSpace):
 - **Wispr Flow** - Dictado (reemplazó a superwhisper, 2026-09-03)
 
 **Disabled/Removed:**
-- **Gather/GatherV2** - Removed from Login Items (use `alt-g` to launch manually)
+- **Gather/GatherV2** - Removed from Login Items; ya no se usa (⌥G es de myturn). La oficina virtual es WorkAdventure como web app de Safari «Oficina» (`alt-v`), fuera de Zen para que no la descargue
 - **skhd** - LaunchAgent disabled (see Deprecated Packages)
 - **yabai** - LaunchAgent disabled (see Deprecated Packages)
 - **superwhisper** - App borrada 2026-09-03 (a Trash, junto con Application Support/Caches y su extensión de Raycast). Sus grabaciones siguen en `~/Documents/superwhisper` (3.3 GB en iCloud).
