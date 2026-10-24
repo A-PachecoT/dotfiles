@@ -769,6 +769,8 @@ python -m ipykernel install --user --name=project-name
 3. **Reload** applications to see changes
 4. **Commit** changes for version control
 
+- **Archivo NUEVO en un paquete stoweado** (p. ej. un módulo de `~/.hammerspoon/`): stow linkea archivo por archivo, así que necesita su symlink (`./install.sh restow` o `ln -s`) o el `require` rompe TODO el init.lua. Recargar Hammerspoon: `hs -c 'hs.timer.doAfter(0.5, hs.reload)'` (`hs.reload()` directo cuelga el CLI). → `bitacora/2026-10-23-zen-herdr-keys.md`
+
 ## Package Structure Requirements
 
 Each package directory lives under its platform group (`shared/`,
