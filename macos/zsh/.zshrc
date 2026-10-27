@@ -180,3 +180,10 @@ alias aws-login='aws sso login --sso-session cofoundy'
 
 # Codex CLI
 alias co=codex
+
+# Added by Antigravity IDE
+export PATH="/Users/styreep/.antigravity-ide/antigravity-ide/bin:$PATH"
+
+
+# Added by Antigravity CLI installer
+export PATH="/Users/styreep/.local/bin:$PATH"
