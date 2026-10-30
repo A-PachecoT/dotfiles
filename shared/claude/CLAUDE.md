@@ -15,6 +15,7 @@ André Joaquín Pacheco Taboada — AI, LLMs y agentes.
 - Investigación: internet y los MCP/skills disponibles. Pedí ayuda si la necesitás; André es un par y un experto.
 - **"auto mode" / "igtg" / "/cto auto" = contrato de autonomía** (en `products/basalt` es el default, ver su CLAUDE.md): decidí vos (incluido «¿por dónde empiezo?»), shippeá lo verificable, gate humano solo para lo que toca prod. Parar ante riesgo DESCUBIERTO es obligatorio; parar ante una pregunta desperdicia la ventana. Cerrá con resume limpio: rama commiteada, issues, handoff.
 - **Intención → deliberación → producto, nunca intent-a-pila-de-tareas**: consolidá la intención en un SSOT durable (con sus palabras) ANTES de cualquier tarea; loops de consejo en paralelo y gate humano al final. Un pivot de scope o visión se explicita, nunca se absorbe en silencio.
+- **Sistemas por defecto**: todo pedido es un caso de un proceso (modelo → regla → sensor con ejecutor → métrica → aprendizaje); sistema o proceso → `/system-design` al primer turno. **Error hallado = arreglado en su causa ahora, o con dueño y fecha; listarlo no es arreglarlo.**
 - No asumas información de negocio o de investigación: preguntá.
 - **Reunión con tareas para André** (`/debrief` o cierre de call): cada tarea suya → `myturn add`, y la sesión que sigue trabajando → `myturn link`.
 → CLAUDE-porques.md §General instructions
@@ -52,15 +53,14 @@ Un gate (`pytest`, `make check`, `gh pr checks`, build) se corre solo y se lee s
 - Cal.com: Cofoundy (DEFAULT) → https://cal.cofoundy.dev/team/cofoundy/consulta · André 25 min → https://cal.cofoundy.dev/andre/meet · 50 min → https://cal.cofoundy.dev/andre/long-meet
 - Emails: NUNCA bloque de firma al final (Gmail ya la pone); terminar en la última oración con contenido.
 - WhatsApp: texto plano, sin markdown, con mi voz (corto, natural, como escribo yo); nunca adjuntes lo que ya está en el chat. → core/docs/decision-log.md#2026-10-20-adjunto-no-bajo
-- Video social: transcript-only → `yt-dlp --write-auto-subs --skip-download <url>` + leer el `.vtt`; con visual → `/watch <url>`.
-- Shadergradient: params literales de un URL de shadergradient.co/customize elegido por el cliente; NO inventar. Skill `cofoundy-toolkit:hero-shader`. → CLAUDE-porques.md §Comms & content
+- Shadergradient: params literales del URL que eligió el cliente, nunca inventados → `cofoundy-toolkit:hero-shader`. → CLAUDE-porques.md §Comms & content
 
 ## Web Interaction
 - Preferí MCP/skills sobre WebFetch/WebSearch; el ruteo lo declaran ellos, no lo hardcodees acá.
-- Un MCP en `~/.mcp.json` se paga POR INSTANCIA de agente (≈250 MB cada uno; 19 paneles = 64 procesos y 6,2 GB el 2026-09-14, y oomd mató herdr). Antes de agregar uno, multiplicá su RSS por los paneles; para ráfagas preferí un CLI (`agent-browser`, `agent-reach`). Verificá: `cat ~/.mcp.json`. → `dotfiles/bitacora/2026-09-14-oomd-mato-herdr.md`
+- Un MCP en `~/.mcp.json` se paga POR INSTANCIA de agente (~250 MB c/u): antes de agregar uno, RSS × paneles; para ráfagas un CLI (`agent-browser`, `agent-reach`). → `dotfiles/bitacora/2026-09-14-oomd-mato-herdr.md`
 
 ## PDF Handling
-- PDFs con `pdftotext`. Al inicio de un chat, `ls` para ver los archivos.
+- PDFs con `pdftotext`. Al inicio, `ls`.
 
 ## UI
 - `@cofoundy/ui` en package.json → leé `node_modules/@cofoundy/ui/AI.md` antes de tocar UI. Update: `npm install github:cofoundy/ui`.
@@ -82,9 +82,9 @@ CLIP_REMOTE="styreep@100.73.150.52" /home/andre/dotfiles/scripts/mac-clipboard c
 ```
 - «No image data found» → hay texto (usá paste-text). Secretos con Touch ID no se escriben desde Arch: dale a André un one-liner para su Mac.
 - «mi clip», «mi último clip», «mi image clip» = lo que está en el clipboard del Mac (`paste-image`), no un video de Cap.
-- Si el ssh Arch→Mac cuelga en auth: `SSH_AUTH_SOCK= ssh -F /dev/null -i ~/.ssh/id_ed25519 styreep@100.73.150.52 …` (socket ET muerto; la IP es Tailscale). → CLAUDE-porques.md §Clipboard [Arch]
+- ssh Arch→Mac cuelga en auth → `SSH_AUTH_SOCK= ssh -F /dev/null -i ~/.ssh/id_ed25519 styreep@100.73.150.52 …`. → CLAUDE-porques.md §Clipboard [Arch]
 
 ## Cofoundy Identity
 - Name: André Joaquín Pacheco Taboada · GitHub: A-PachecoT · Partner · CEO · Functions: [strategy, lead-closer, pmgineer, agentic-coder]
 - Cofoundy email: andre@cofoundy.dev · Personal: apachecotaboada@gmail.com · WhatsApp: +51947633203
-- Discord ID: 233699499938152448 · Vikunja user ID: 2 · Cal.com username: andre · Last synced from team.md: 2026-05-03
+- Vikunja user ID: 2 · Cal.com username: andre
