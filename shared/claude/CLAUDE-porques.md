@@ -47,6 +47,8 @@ COMMITS y PUSH a branches feature/working son auto-OK sin preguntar. `gh pr crea
 
 **Un MCP en `~/.mcp.json` (o cualquier `.mcp.json` bajo `~`) se paga POR INSTANCIA de agente, no una vez** — lo hereda todo proyecto bajo `~` y `enableAllProjectMcpServers: true` lo auto-aprueba sin preguntar. Medido 2026-09-14 en la caja Arch: 19 paneles de claude = 4.5G; sus MCP = 64 procesos y 6.2G (≈250 MB cada uno entre el `npm exec` y el node hijo), y eso fue parte de lo que llenó el swap y le hizo matar a oomd la sesión de herdr con 2 `/cto` adentro. Antes de agregar un server ahí, multiplicá su RSS por los paneles que vas a correr; para capacidades de ráfaga preferí un CLI (`agent-browser` para browser, WebSearch/WebFetch + `agent-reach` para fetch/search), que cuesta 0 hasta que lo invocás. Verificá: `cat ~/.mcp.json` y `ps -eo args | grep -oE "<server>" | wc -l`. → `dotfiles/bitacora/2026-09-14-oomd-mato-herdr.md`
 
+**Solo los stdio** (2026-11-02, corrección de André): el costo medido es del proceso local (`npm exec` + node). Un MCP HTTP remoto (`claude mcp add --transport http …`, p. ej. Logfire) no levanta proceso por panel; su costo es solo el contexto de sus tools. Un agente le negó a André el MCP de Logfire «por la RAM» con esta regla mal leída.
+
 ## Clipboard [Arch]
 
 **[Arch]** El worker corre en la caja Arch headless; André está en macOS, conectado vía ET (Eternal Terminal). El clipboard vive en el **Mac**, nunca en Arch. NEVER use `wl-paste`/`xclip`/`pbpaste` localmente — leen el clipboard equivocado (Arch) o fallan. Always use the bridge:

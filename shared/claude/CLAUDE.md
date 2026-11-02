@@ -57,7 +57,7 @@ Un gate (`pytest`, `make check`, `gh pr checks`, build) se corre solo y se lee s
 
 ## Web Interaction
 - Preferí MCP/skills sobre WebFetch/WebSearch; el ruteo lo declaran ellos, no lo hardcodees acá.
-- Un MCP en `~/.mcp.json` se paga POR INSTANCIA de agente (~250 MB c/u): antes de agregar uno, RSS × paneles; para ráfagas un CLI (`agent-browser`, `agent-reach`). → `dotfiles/bitacora/2026-09-14-oomd-mato-herdr.md`
+- Un MCP **stdio** en `~/.mcp.json` se paga POR INSTANCIA de agente (~250 MB c/u; uno HTTP remoto no levanta proceso): antes de agregar uno, RSS × paneles; para ráfagas un CLI (`agent-browser`, `agent-reach`). → `dotfiles/bitacora/2026-09-14-oomd-mato-herdr.md`
 
 ## PDF Handling
 - PDFs con `pdftotext`. Al inicio, `ls`.
