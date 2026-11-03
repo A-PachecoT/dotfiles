@@ -270,6 +270,12 @@ tarea.
   el pane del agente (captura). El salto con teclas entre máquinas no quedó confirmado: en la prueba cayó en un pane
   vecino mientras André usaba herdr. Pendiente: prueba suya desde el panel.
 
+- 2026-11-03, panel en skeleton todo el día: `myturn panel` pasó de 64 KB (108 filas, 70 KB) y `hs.task` no lee el
+  stdout hasta que el proceso sale, así que el CLI quedaba bloqueado escribiendo en el pipe lleno (`sample` lo mostró
+  en `_io_BufferedWriter_write`; 13 procesos colgados desde las 10:35). `run()` ahora drena en streaming. En vivo:
+  panel recargado con 108 filas y cero procesos colgados. Gotcha: cualquier `hs.task` cuya salida pueda pasar de
+  64 KB necesita `streamingCallback`.
+
 ## Roadmap
 
 - **v1:** registro automático por hook, cola con visto, ⌥G, sonido por transición, importación única de las

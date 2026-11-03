@@ -25,10 +25,18 @@ local function log(...)
   if f then f:write(os.date("%H:%M:%S "), table.concat({ ... }, " "), "\n"); f:close() end
 end
 
+-- hs.task no lee el stdout hasta que el proceso sale: con >64 KB (el pipe) el CLI se bloquea escribiendo y el
+-- panel queda en skeleton para siempre (2026-11-03, `panel` = 70 KB). Se drena en streaming.
 local function run(args, cb)
+  local chunks = {}
   local t = hs.task.new(BIN, function(code, out, err)
+    chunks[#chunks + 1] = out or ""
+    out = table.concat(chunks)
     if code ~= 0 then log("error", table.concat(args, " "), "→", code, err or "") end
-    if cb then cb(code, (out or ""):gsub("%s+$", ""), err) end
+    if cb then cb(code, (out:gsub("%s+$", "")), err) end
+  end, function(_, out)
+    chunks[#chunks + 1] = out or ""
+    return true
   end, args)
   t:setEnvironment(ENV)
   t:start()
