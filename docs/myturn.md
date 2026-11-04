@@ -166,6 +166,17 @@ a claude y no me mandó, creo que era algo que me enviaba a arch pero no estaba 
 - **Orden**: primero las que te esperan (la que espera hace más tiempo arriba), luego por prioridad, fecha y
   antigüedad.
 
+### Caducidad y origen (desde 2026-11-03)
+
+La lista se llenó: ~21 altas por día contra ~12 cierres, porque escribir era gratis y nada vencía
+(`~/cofoundy/core/docs/research/2026-11-03_myturn-proactividad/`). Dos piezas:
+
+- **`--expira CUÁNDO`**: lo que pierde sentido a una hora («confirmar a Álvaro 14:00», «si no respondió el jue…»)
+  nace con caducidad y `garden` lo archiva al pasar («caducó», reversible). Un agente vivo enlazado la sostiene.
+- **Origen**: cada alta guarda quién la escribió (`by` agente/tú desde `CLAUDECODE`, el pane, la carpeta y
+  `--origen`); cada cierre guarda quién la cerró. `myturn stats` muestra por origen cuántas entran, cuántas cierras
+  y cuántas caducan: el sensor para corregir la skill que mete ruido.
+
 ### Piezas
 
 | Pieza | Archivo |

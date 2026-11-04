@@ -464,3 +464,29 @@ def test_frontmost_is_the_machine_the_herdr_window_shows(mt, monkeypatch):
     assert mt.herdr_frontmost() == "mac"
     title["t"] = "notes"
     assert mt.herdr_frontmost() is None
+
+
+def test_garden_expires_what_lost_its_moment_unless_a_live_agent_holds_it(mt, clock, monkeypatch):
+    monkeypatch.setattr(mt, "herdr_agents", lambda host: [agent("s1", "working")])
+    mt.emit("add", "conf", title="Confirmar a Álvaro 14:00", expires=mt.iso(mt.now() + timedelta(hours=2)))
+    mt.emit("add", "held", title="propuesta", expires=mt.iso(mt.now() + timedelta(hours=1)), link=link(mt, "s1"))
+    assert mt.garden(use_ai=False) == []
+    clock(days=1)
+    assert {a["id"]: a["archive"] for a in mt.garden(use_ai=False)} == {"conf": "caducó"}
+
+
+def test_add_records_origin_and_stats_counts_by_it(mt, monkeypatch, capsys):
+    monkeypatch.setenv("CLAUDECODE", "1")
+    monkeypatch.setenv("HERDR_PANE_ID", "w:p9")
+    mt.main(["add", "Llamar a Yuri", "--expira", "mañana", "--origen", "debrief"])
+    tid = next(iter(mt.fold()))
+    t = mt.fold()[tid]
+    assert t["origin"]["by"] == "agent" and t["origin"]["tag"] == "debrief" and t["origin"]["pane"] == "w:p9"
+    assert t["expires"]
+    monkeypatch.delenv("CLAUDECODE")
+    mt.main(["add", "Pagar al contador"])
+    mt.main(["done", tid])
+    assert mt.fold()[tid]["closed_by"] == "user"
+    capsys.readouterr()
+    out = mt.stats(7)
+    assert "debrief: 1 · 1 · 0 · 0" in out and "tú: 1 · 0 · 0 · 1" in out

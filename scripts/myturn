@@ -10,7 +10,9 @@ La UI es el panel del widget (clic en la barra o ⌥T). Este CLI es lo que el pa
   myturn add "título" [--prio 1|2] [--desde CUÁNDO] [--due CUÁNDO] [--parse] [--raw]
                                   nueva tarea. CUÁNDO: «el 30», «mañana 9:00», «en 2 h», «antes del vie» o ISO;
                                   --desde la oculta hasta entonces (y ese día avisa); --parse saca las fechas del
-                                  título (lo que usa el panel); --raw: la IA saca fecha y prioridad
+                                  título (lo que usa el panel); --raw: la IA saca fecha y prioridad;
+                                  --expira CUÁNDO: pasado ese momento el jardinero la archiva («caducó»);
+                                  --origen NOMBRE: quién la crea (agente o tú salen solos del env)
   myturn when ID "cuándo"         posponer («el 30»), plazo («antes del vie»), «ya» la trae, «sin fecha» limpia
   myturn parse [--when] "texto"   JSON: qué fechas entiende (la vista previa del panel)
   myturn edit ID "nuevo título"   renombrar
@@ -21,6 +23,7 @@ La UI es el panel del widget (clic en la barra o ⌥T). Este CLI es lo que el pa
   myturn ls [--todas] [--json]    tus tareas, las que te esperan primero (--todas: también las programadas)
   myturn panel                    JSON para el panel de Hammerspoon
   myturn obsidian                 (timer del Arch) espejo Tareas.md + importar lo anotado en el daily note
+  myturn stats [--dias 7]         por origen: creadas · cerradas · caducadas · abiertas (quién te llena la lista)
   myturn import | garden [--ai] | track | sketchybar     mantenimiento, poda, hook y barra
 
 Store: $MYTURN_HOME (default ~/tasks): events.jsonl append-only (merge=union), sincronizado por git.
@@ -90,6 +93,13 @@ def emit(op: str, id: str, **data) -> dict:
     return ev
 
 
+def origin(tag: str | None = None) -> dict:
+    """Quién escribe: un agente (Claude Code pone CLAUDECODE=1) o André (widget/terminal). Sin flags: del env."""
+    o = {"by": "agent" if os.environ.get("CLAUDECODE") == "1" else "user", "pane": os.environ.get("HERDR_PANE_ID"),
+         "cwd": os.getcwd() if os.environ.get("CLAUDECODE") == "1" else None, "tag": tag}
+    return {k: v for k, v in o.items() if v}
+
+
 def fold() -> dict[str, dict]:
     tasks: dict[str, dict] = {}
     if not EVENTS.exists():
@@ -101,7 +111,8 @@ def fold() -> dict[str, dict]:
             tasks[tid] = {"id": tid, "title": ev.get("title", ""), "raw": ev.get("raw"), "prio": ev.get("prio"),
                           "due": ev.get("due"), "start": ev.get("start"), "cwd": ev.get("cwd"), "status": "open",
                           "created": ts, "touched": ts, "link": ev.get("link"), "source": ev.get("source", "capture"),
-                          "reason": None, "by": ev.get("by"), "title_fixed": False}
+                          "reason": None, "by": ev.get("by"), "title_fixed": False,
+                          "expires": ev.get("expires"), "origin": ev.get("origin")}
             continue
         t = tasks.get(tid)
         if not t:
@@ -112,9 +123,10 @@ def fold() -> dict[str, dict]:
             if "title" in ev.get("set", {}):
                 t["title_fixed"] = True
         elif op == "done":
-            t.update(status="done", done_at=ts)
+            t.update(status="done", done_at=ts, closed_by=ev.get("by"))
         elif op == "archive":
-            t.update(status="archived", archived_at=ts, reason=ev.get("reason"), by=ev.get("by"))
+            t.update(status="archived", archived_at=ts, reason=ev.get("reason"), by=ev.get("by"),
+                     closed_by=ev.get("by"))
         elif op == "restore":
             t.update(status="open", reason=None)
         elif op == "link":
@@ -874,6 +886,29 @@ def enrich(tid: str) -> None:
     refresh()
 
 
+def stats(days: int) -> str:
+    """Por origen, en los últimos N días: creadas · cerradas a mano · caducadas/podadas · siguen abiertas.
+    El sensor de «quién me llena la lista»: lo lee el morning-brief y alimenta /improve-skills."""
+    since, rows = now() - timedelta(days=days), {}
+    for t in fold().values():
+        if t.get("source") == "agent" or parse(t["created"]) < since:
+            continue
+        o = t.get("origin") or {}
+        key = o.get("tag") or ("agente" if o.get("by") == "agent" else "tú" if o else "sin origen")
+        r = rows.setdefault(key, [0, 0, 0, 0])
+        r[0] += 1
+        if t["status"] == "done" or (t["status"] == "archived" and t.get("closed_by") in ("user", "agent")):
+            r[1] += 1
+        elif t["status"] == "archived":
+            r[2] += 1
+        else:
+            r[3] += 1
+    out = [f"últimos {days} d · origen: creadas · cerradas · caducadas · abiertas"]
+    for k, (c, d, g, o) in sorted(rows.items(), key=lambda kv: -kv[1][0]):
+        out.append(f"  {k}: {c} · {d} · {g} · {o}")
+    return "\n".join(out)
+
+
 def garden(use_ai: bool) -> list[dict]:
     tasks, t0, acts = fold(), now(), []
     agents = herdr_agents(LOCAL)
@@ -888,6 +923,10 @@ def garden(use_ai: bool) -> list[dict]:
         if t["status"] != "open":
             continue
         link = t.get("link")
+        alive = bool(link and link.get("host") == LOCAL and live.get(link.get("session")))
+        if t.get("expires") and at(t["expires"]) <= t0 and not alive:  # caduca; un agente vivo la sostiene
+            archive(t, "caducó")
+            continue
         if link and t.get("source") == "agent" and not mine(t) and link["host"] == LOCAL and agents is not None:
             a = live.get(link["session"])
             since = parse(seen.get(link["session"], {}).get("since"))
@@ -1197,6 +1236,8 @@ def main(argv: list[str]) -> None:
     p.add_argument("--prio", type=int, choices=[1, 2])
     p.add_argument("--due")
     p.add_argument("--desde")
+    p.add_argument("--expira", help="CUÁNDO deja de tener sentido: ese momento el jardinero la archiva sola")
+    p.add_argument("--origen", help="quién la crea (p. ej. el nombre de la skill); el resto sale del env")
     p.add_argument("--parse", action="store_true")
     p = sub.add_parser("when")
     p.add_argument("id")
@@ -1223,6 +1264,7 @@ def main(argv: list[str]) -> None:
         sub.add_parser(name)
     sub.add_parser("_agents").add_argument("host")
     sub.add_parser("garden").add_argument("--ai", action="store_true")
+    sub.add_parser("stats").add_argument("--dias", type=int, default=7)
     sub.add_parser("enrich").add_argument("id")
     a = ap.parse_args(argv)
     cmd = a.cmd or "jump"
@@ -1258,6 +1300,8 @@ def main(argv: list[str]) -> None:
         n = import_sessions()
         refresh()
         return print(f"importadas: {n}")
+    if cmd == "stats":
+        return print(stats(a.dias))
     if cmd == "garden":
         for act in garden(a.ai):
             print(json.dumps(act, ensure_ascii=False))
@@ -1286,7 +1330,7 @@ def main(argv: list[str]) -> None:
             rest, s, d = parse_when(text)
             title, start, due = rest or text, start or s, due or d
         emit("add", tid, title=title[:120], raw=text if a.raw else None, prio=a.prio, due=due, start=start,
-             source="capture")
+             expires=as_when(a.expira) if a.expira else None, origin=origin(a.origen), source="capture")
         if a.raw:
             spawn("enrich", tid)
         msg, t, extra = "nueva", {"id": tid, "title": title}, when_text(start, due, now())
@@ -1310,11 +1354,11 @@ def main(argv: list[str]) -> None:
         msg = f"!{a.level}" if a.level else "sin prioridad"
     elif cmd == "done":
         t = target(a.id)
-        emit("done", t["id"])
+        emit("done", t["id"], by=origin()["by"])
         msg = "hecha"
     else:  # archive | restore
         t = find(fold(), a.id)
-        emit(cmd, t["id"], **({"reason": "a mano", "by": "user"} if cmd == "archive" else {}))
+        emit(cmd, t["id"], **({"reason": "a mano", "by": origin()["by"]} if cmd == "archive" else {}))
         msg = cmd
     sync_bg()
     refresh()
