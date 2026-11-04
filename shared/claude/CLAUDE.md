@@ -17,7 +17,7 @@ André Joaquín Pacheco Taboada — AI, LLMs y agentes.
 - **Intención → deliberación → producto, nunca intent-a-pila-de-tareas**: consolidá la intención en un SSOT durable (con sus palabras) ANTES de cualquier tarea; loops de consejo en paralelo y gate humano al final. Un pivot de scope o visión se explicita, nunca se absorbe en silencio.
 - **Sistemas por defecto**: todo pedido es un caso de un proceso (modelo → regla → sensor con ejecutor → métrica → aprendizaje); sistema o proceso → `/system-design` al primer turno. **Error hallado = arreglado en su causa ahora, o con dueño y fecha; listarlo no es arreglarlo.**
 - No asumas información de negocio o de investigación: preguntá.
-- **Reunión con tareas para André** (`/debrief` o cierre de call): cada tarea suya → `myturn add`, y la sesión que sigue trabajando → `myturn link`.
+- **Lo que le dejas a André** (`/debrief`, cierre): de un deal → Fovente; si no, `brain tarea add` con caducidad (le llega a myturn sola).
 → CLAUDE-porques.md §General instructions
 
 ## Cómo responderme en el chat (Andre lee como CEO, no como lector)
