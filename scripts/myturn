@@ -64,6 +64,7 @@ SOUND = "/System/Library/Sounds/Glass.aiff"
 VAULT = Path(os.environ.get("MYTURN_VAULT", HOME / "BrainFlow"))
 TAREAS = VAULT / "05. System" / "myturn" / "Tareas.md"
 GATE = Path(os.environ.get("MYTURN_GATE", HOME / ".local/bin/vault-write-gate.py"))
+SOURCES = Path(os.environ.get("MYTURN_SOURCES", HOME / ".config/myturn/sources"))
 
 # sketchybar, Hammerspoon y los hooks arrancan con PATH mínimo
 os.environ["PATH"] = os.pathsep.join(
@@ -112,7 +113,7 @@ def fold() -> dict[str, dict]:
                           "due": ev.get("due"), "start": ev.get("start"), "cwd": ev.get("cwd"), "status": "open",
                           "created": ts, "touched": ts, "link": ev.get("link"), "source": ev.get("source", "capture"),
                           "reason": None, "by": ev.get("by"), "title_fixed": False,
-                          "expires": ev.get("expires"), "origin": ev.get("origin")}
+                          "expires": ev.get("expires"), "origin": ev.get("origin"), "ext": ev.get("ext")}
             continue
         t = tasks.get(tid)
         if not t:
@@ -909,6 +910,67 @@ def stats(days: int) -> str:
     return "\n".join(out)
 
 
+# ── Fuentes: listas de otros sistemas que traen tareas tuyas (p. ej. las que te deja tu equipo) ───────
+# Cada ejecutable de ~/.config/myturn/sources responde `list` (JSON [{id, title, due, expires, agent}]) y `done ID`.
+# myturn las importa con `ext = "<fuente>:<id>"`; cerrarlas aquí las cierra allá. Solo el Mac importa (un escritor).
+def source_run(name: str, *args: str, timeout: int = 90) -> str | None:
+    exe = SOURCES / name
+    try:
+        p = subprocess.run([str(exe), *args], capture_output=True, text=True, timeout=timeout)
+        return p.stdout if p.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def sources_sync() -> list[str]:
+    if not SOURCES.is_dir():
+        return []
+    acts, tasks = [], fold()
+    by_ext = {t["ext"]: t for t in tasks.values() if t.get("ext")}
+    for exe in sorted(SOURCES.iterdir()):
+        if not (exe.is_file() and os.access(exe, os.X_OK)):
+            continue
+        name, raw = exe.name, source_run(exe.name, "list")
+        try:
+            items = json.loads(raw) if raw is not None else None
+        except ValueError:
+            items = None
+        if items is None:
+            continue  # la fuente falló: no se toca nada (ausente ≠ cerrada)
+        seen = set()
+        for it in items:
+            ext = f"{name}:{it['id']}"
+            seen.add(ext)
+            ag = it.get("agent")
+            lk = {"host": ag["host"], "session": ag["session"]} if ag else None
+            t = by_ext.get(ext)
+            if not t:
+                emit("add", new_id(), title=it["title"][:120], due=it.get("due"), expires=it.get("expires"),
+                     link=lk, ext=ext, origin={"by": "source", "tag": name}, source="capture")
+                acts.append(f"+ {ext}")
+            elif t["status"] != "open":
+                spawn("_ext_done", ext)  # la cerraste aquí y allá sigue abierta: reintenta
+            else:
+                diff = {k: it.get(f) for k, f in (("title", "title"), ("due", "due"), ("expires", "expires"))
+                        if it.get(f) and it.get(f) != t.get(k)}
+                if diff:
+                    emit("update", t["id"], set=diff)
+                if lk and not t.get("link"):
+                    emit("link", t["id"], link=lk)
+        for ext, t in by_ext.items():
+            if ext.startswith(name + ":") and ext not in seen and t["status"] == "open":
+                emit("archive", t["id"], reason=f"cerrada en {name}", by="source")
+                acts.append(f"- {ext}")
+    if acts:
+        sync_bg()
+    return acts
+
+
+def ext_done(ext: str) -> None:
+    name, _, rid = ext.partition(":")
+    source_run(name, "done", rid)
+
+
 def garden(use_ai: bool) -> list[dict]:
     tasks, t0, acts = fold(), now(), []
     agents = herdr_agents(LOCAL)
@@ -1265,6 +1327,8 @@ def main(argv: list[str]) -> None:
     sub.add_parser("_agents").add_argument("host")
     sub.add_parser("garden").add_argument("--ai", action="store_true")
     sub.add_parser("stats").add_argument("--dias", type=int, default=7)
+    sub.add_parser("_sources")
+    sub.add_parser("_ext_done").add_argument("ext")
     sub.add_parser("enrich").add_argument("id")
     a = ap.parse_args(argv)
     cmd = a.cmd or "jump"
@@ -1285,6 +1349,8 @@ def main(argv: list[str]) -> None:
             sync_bg()
         if every("garden", 6 * 3600):
             spawn("garden")
+        if LOCAL == "mac" and every("sources", 300):
+            spawn("_sources")
         return sketchybar(compute(notify_new=True))
     if cmd == "enrich":
         return enrich(a.id)
@@ -1302,6 +1368,10 @@ def main(argv: list[str]) -> None:
         return print(f"importadas: {n}")
     if cmd == "stats":
         return print(stats(a.dias))
+    if cmd == "_sources":
+        return print("\n".join(sources_sync()))
+    if cmd == "_ext_done":
+        return ext_done(a.ext)
     if cmd == "garden":
         for act in garden(a.ai):
             print(json.dumps(act, ensure_ascii=False))
@@ -1355,10 +1425,14 @@ def main(argv: list[str]) -> None:
     elif cmd == "done":
         t = target(a.id)
         emit("done", t["id"], by=origin()["by"])
+        if t.get("ext"):
+            spawn("_ext_done", t["ext"])
         msg = "hecha"
     else:  # archive | restore
         t = find(fold(), a.id)
         emit(cmd, t["id"], **({"reason": "a mano", "by": origin()["by"]} if cmd == "archive" else {}))
+        if cmd == "archive" and t.get("ext"):
+            spawn("_ext_done", t["ext"])
         msg = cmd
     sync_bg()
     refresh()

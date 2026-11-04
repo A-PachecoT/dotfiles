@@ -1,0 +1,68 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# dependencies = ["httpx"]
+# ///
+"""Fuente de myturn: las tareas de Vikunja que Cofoundy le deja a André (las que nacen con caducidad, `end_date`).
+
+Contrato de una fuente de myturn (ver ~/dotfiles/docs/myturn.md §Fuentes):
+  vikunja list        → JSON [{id, title, due, expires, agent: {host, session} | null}]
+  vikunja done ID     → la cierra en Vikunja (lo llama myturn cuando la cierras en la barra)
+El cliente HTTP y el token son los del CLI de Cofoundy (~/cofoundy/plugins/cofoundy-toolkit/skills/vikunja).
+Solo las que traen `end_date`: lo viejo sin caducidad se queda en Vikunja (no inunda la barra).
+"""
+import json
+import re
+import sys
+from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path.home() / "cofoundy/plugins/cofoundy-toolkit/skills/vikunja/scripts"))
+import vikunja_cli as v  # noqa: E402
+
+ME = "andrep"
+AGENT = re.compile(r"agente:\s*([\w.-]+):([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})", re.I)
+
+
+def iso(s: str | None) -> str | None:
+    """Vikunja da UTC («…Z»); myturn usa hora local sin zona: «YYYY-MM-DD» o «YYYY-MM-DDTHH:MM»."""
+    if not s or s.startswith("0001"):
+        return None
+    t = datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone()
+    return t.date().isoformat() if (t.hour, t.minute) == (0, 0) else t.strftime("%Y-%m-%dT%H:%M")
+
+
+def listing(tok: str) -> list[dict]:
+    out, page = [], 1
+    flt = f"done = false && assignees in {ME} && end_date > 2000-01-01"
+    while True:
+        chunk = v.api_get("tasks", tok, {"filter": flt, "per_page": 50, "page": page}) or []
+        for t in chunk:
+            if ME not in [a.get("username") for a in t.get("assignees") or []] or not iso(t.get("end_date")):
+                continue
+            m = AGENT.search(re.sub(r"<[^>]+>", " ", t.get("description") or ""))
+            out.append({"id": str(t["id"]), "title": t["title"], "due": iso(t.get("due_date")),
+                        "expires": iso(t.get("end_date")),
+                        "agent": {"host": m.group(1), "session": m.group(2)} if m else None})
+        if len(chunk) < 50:
+            return out
+        page += 1
+
+
+def main(argv: list[str]) -> None:
+    tok = v.get_token()
+    if argv[:1] == ["list"]:
+        print(json.dumps(listing(tok), ensure_ascii=False))
+    elif argv[:1] == ["done"] and len(argv) == 2:
+        cur = v.api_get(f"tasks/{argv[1]}", tok)
+        v.api_post(f"tasks/{argv[1]}", tok, {k: cur[k] for k in ("title", "description", "due_date", "end_date",
+                                                                  "priority", "start_date") if cur.get(k) is not None}
+                   | {"done": True})
+        for a in cur.get("assignees") or []:  # el POST de Vikunja suelta los assignees
+            v.api_put(f"tasks/{argv[1]}/assignees", tok, {"user_id": a["id"]})
+        print("ok")
+    else:
+        sys.exit("uso: vikunja list | vikunja done ID")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

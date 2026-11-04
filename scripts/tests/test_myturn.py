@@ -490,3 +490,44 @@ def test_add_records_origin_and_stats_counts_by_it(mt, monkeypatch, capsys):
     capsys.readouterr()
     out = mt.stats(7)
     assert "debrief: 1 · 1 · 0 · 0" in out and "tú: 1 · 0 · 0 · 1" in out
+
+
+def fake_source(tmp_path, monkeypatch, mt, items):
+    d = tmp_path / "sources"
+    d.mkdir(exist_ok=True)
+    data, log = tmp_path / "items.json", tmp_path / "closed.log"
+    data.write_text(json.dumps(items))
+    exe = d / "equipo"
+    exe.write_text(f'#!/bin/sh\nif [ "$1" = list ]; then cat {data}; else echo "$2" >> {log}; fi\n')
+    exe.chmod(0o755)
+    monkeypatch.setattr(mt, "SOURCES", d)
+    return data, log
+
+
+def test_sources_import_update_link_and_close_both_ways(mt, tmp_path, monkeypatch):
+    spawned = []
+    monkeypatch.setattr(mt, "spawn", lambda *a: spawned.append(a))
+    data, log = fake_source(tmp_path, monkeypatch, mt, [
+        {"id": "41", "title": "Pagar al contador", "due": "2026-11-05", "expires": "2026-11-08", "agent": None},
+        {"id": "42", "title": "Revisar demo", "due": None, "expires": "2026-11-09",
+         "agent": {"host": "mac", "session": "abc12345-0000"}}])
+    assert sorted(mt.sources_sync()) == ["+ equipo:41", "+ equipo:42"]
+    by = {t["ext"]: t for t in mt.fold().values()}
+    assert by["equipo:42"]["link"]["session"] == "abc12345-0000" and by["equipo:41"]["expires"] == "2026-11-08"
+    assert mt.sources_sync() == []  # idempotente
+    data.write_text(json.dumps([{"id": "42", "title": "Revisar demo v2", "due": None, "expires": "2026-11-09"}]))
+    assert mt.sources_sync() == ["- equipo:41"]  # se cerró allá → se archiva aquí
+    t42 = by["equipo:42"]["id"]
+    assert mt.fold()[t42]["title"] == "Revisar demo v2"
+    mt.main(["done", t42])  # cerrarla aquí la cierra allá
+    assert ("_ext_done", "equipo:42") in spawned
+    mt.ext_done("equipo:42")
+    assert log.read_text().strip() == "42"
+
+
+def test_sources_failure_closes_nothing(mt, tmp_path, monkeypatch):
+    monkeypatch.setattr(mt, "spawn", lambda *a: None)
+    data, _ = fake_source(tmp_path, monkeypatch, mt, [{"id": "1", "title": "x", "expires": "2026-11-08"}])
+    mt.sources_sync()
+    data.write_text("no es json")
+    assert mt.sources_sync() == [] and next(iter(mt.fold().values()))["status"] == "open"

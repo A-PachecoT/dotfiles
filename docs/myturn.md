@@ -177,6 +177,20 @@ La lista se llenó: ~21 altas por día contra ~12 cierres, porque escribir era g
   `--origen`); cada cierre guarda quién la cerró. `myturn stats` muestra por origen cuántas entran, cuántas cierras
   y cuántas caducan: el sensor para corregir la skill que mete ruido.
 
+### Fuentes: lo que tu equipo te deja (desde 2026-11-03)
+
+myturn es personal: Cofoundy no lo nombra. Lo que un agente de Cofoundy le deja a una persona va a Vikunja (con
+dueño y `end_date` = caducidad; `brain tarea add`), y myturn lo trae como una fuente.
+
+- Una **fuente** es un ejecutable en `~/.config/myturn/sources/` (paquete stow `shared/myturn`): `list` devuelve
+  JSON `[{id, title, due, expires, agent}]` y `done ID` la cierra allá. Genérico: sirve para cualquier sistema.
+- `sources/vikunja` trae las abiertas asignadas a André **que tienen `end_date`** (lo viejo sin caducidad no
+  inunda la barra) y la línea `agente: <host>:<session>` de la descripción se vuelve el enlace: «te espera» funciona solo.
+- Cada 5 min, solo en el Mac (un único escritor), `_sources` importa, actualiza y archiva lo que se cerró allá;
+  cerrar o archivar aquí la cierra allá (`_ext_done`, con reintento si falló). Si la fuente falla, no se toca nada.
+- Probado de punta a punta el 2026-11-03 con la tarea Vikunja 1140: importada, cerrada en myturn, cerrada en Vikunja
+  con su assignee intacto.
+
 ### Piezas
 
 | Pieza | Archivo |
