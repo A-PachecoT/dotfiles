@@ -185,7 +185,7 @@ dueño y `end_date` = caducidad; `brain tarea add`), y myturn lo trae como una f
 - Una **fuente** es un ejecutable en `~/.config/myturn/sources/` (paquete stow `shared/myturn`): `list` devuelve
   JSON `[{id, title, due, expires, agent}]` y `done ID` la cierra allá. Genérico: sirve para cualquier sistema.
 - `sources/vikunja` trae las abiertas asignadas a André **que tienen `end_date`** (lo viejo sin caducidad no
-  inunda la barra) y la línea `agente: <host>:<session>` de la descripción se vuelve el enlace: «te espera» funciona solo.
+  inunda la barra) y la línea `agente: <host>:<session>` de la descripción se vuelve el enlace: «te espera» funciona solo. El `<host>` es el hostname corto que escribe brain.py («Andres-MacBook-Pro», «archlinux»); myturn lo traduce a `mac`/`arch` con `HOSTNAMES`, y una caja que no conoce se lee «no veo su caja», no como un crash (antes: `KeyError` y el panel caído, 2026-11-04).
 - Cada 5 min, solo en el Mac (un único escritor), `_sources` importa, actualiza y archiva lo que se cerró allá;
   cerrar o archivar aquí la cierra allá (`_ext_done`, con reintento si falló). Si la fuente falla, no se toca nada.
 - Probado de punta a punta el 2026-11-03 con la tarea Vikunja 1140: importada, cerrada en myturn, cerrada en Vikunja

@@ -531,3 +531,17 @@ def test_sources_failure_closes_nothing(mt, tmp_path, monkeypatch):
     mt.sources_sync()
     data.write_text("no es json")
     assert mt.sources_sync() == [] and next(iter(mt.fold().values()))["status"] == "open"
+
+
+def test_hostname_de_brain_se_lee_como_la_caja(mt):
+    # brain.py `tarea --agente` guarda «Andres-MacBook-Pro:<sesión>»; myturn nombra esa caja «mac»
+    mt.emit("add", "b", title="x", link={"host": "Andres-MacBook-Pro", "session": "s1"})
+    mt.emit("add", "c", title="y", link={"host": "archlinux", "session": "s2"})
+    tasks = mt.fold()
+    assert tasks["b"]["link"]["host"] == "mac"
+    assert tasks["c"]["link"]["host"] == "arch"
+
+
+def test_caja_desconocida_no_tumba_run(mt):
+    # antes: KeyError en REMOTE_SSH[host] y `myturn ls` (y el panel) caían enteros
+    assert mt.run(["true"], "caja-que-no-existe") is None

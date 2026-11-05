@@ -38,6 +38,7 @@ import platform
 import re
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -52,6 +53,8 @@ STATE = DATA / "state.json"
 CACHE = Path(os.environ.get("MYTURN_CACHE", HOME / ".cache/myturn"))
 LOCAL = "mac" if platform.system() == "Darwin" else "arch"
 REMOTE_SSH = {"arch": "andre-arch", "mac": "styreep@100.73.150.52"}
+# brain.py (`tarea --agente`) nombra la caja por su hostname corto; myturn la nombra con sus claves
+HOSTNAMES = {"Andres-MacBook-Pro": "mac", "archlinux": "arch", socket.gethostname().split(".")[0]: LOCAL}
 # la ventana de `h` (workspace 2): Local y las otras cajas como máquinas de herdr (`herdr machine add`). Su título es
 # «herdr-mac» si la abrió dev-startup.sh (fijo) o el de `ui.window_title` («herdr · {hostname} · …») si no
 HERDR_WINDOW = re.compile(r"^herdr\b")
@@ -101,6 +104,15 @@ def origin(tag: str | None = None) -> dict:
     return {k: v for k, v in o.items() if v}
 
 
+def host_key(h: str | None) -> str | None:
+    """La clave de myturn («mac»/«arch») de una caja que otra herramienta nombró por su hostname."""
+    return HOSTNAMES.get(h, h) if h else h
+
+
+def norm_link(link: dict | None) -> dict | None:
+    return {**link, "host": host_key(link.get("host"))} if link else link
+
+
 def fold() -> dict[str, dict]:
     tasks: dict[str, dict] = {}
     if not EVENTS.exists():
@@ -111,8 +123,9 @@ def fold() -> dict[str, dict]:
         if op == "add":
             tasks[tid] = {"id": tid, "title": ev.get("title", ""), "raw": ev.get("raw"), "prio": ev.get("prio"),
                           "due": ev.get("due"), "start": ev.get("start"), "cwd": ev.get("cwd"), "status": "open",
-                          "created": ts, "touched": ts, "link": ev.get("link"), "source": ev.get("source", "capture"),
-                          "reason": None, "by": ev.get("by"), "title_fixed": False,
+                          "created": ts, "touched": ts, "link": norm_link(ev.get("link")),
+                          "source": ev.get("source", "capture"), "reason": None, "by": ev.get("by"),
+                          "title_fixed": False,
                           "expires": ev.get("expires"), "origin": ev.get("origin"), "ext": ev.get("ext")}
             continue
         t = tasks.get(tid)
@@ -131,7 +144,7 @@ def fold() -> dict[str, dict]:
         elif op == "restore":
             t.update(status="open", reason=None)
         elif op == "link":
-            t["link"] = ev.get("link")
+            t["link"] = norm_link(ev.get("link"))
     return tasks
 
 
@@ -206,6 +219,8 @@ def sh_quote(s: str) -> str:
 
 def run(cmd: list[str], host: str = LOCAL, timeout: float = 4) -> subprocess.CompletedProcess | None:
     if host != LOCAL:
+        if host not in REMOTE_SSH:
+            return None  # una caja que myturn no sabe alcanzar se lee como «no veo su caja», no como un crash
         cmd = ["ssh", "-o", "ConnectTimeout=3", "-o", "BatchMode=yes", REMOTE_SSH[host], " ".join(map(sh_quote, cmd))]
     try:
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
@@ -942,7 +957,7 @@ def sources_sync() -> list[str]:
             ext = f"{name}:{it['id']}"
             seen.add(ext)
             ag = it.get("agent")
-            lk = {"host": ag["host"], "session": ag["session"]} if ag else None
+            lk = {"host": host_key(ag["host"]), "session": ag["session"]} if ag else None
             t = by_ext.get(ext)
             if not t:
                 emit("add", new_id(), title=it["title"][:120], due=it.get("due"), expires=it.get("expires"),
