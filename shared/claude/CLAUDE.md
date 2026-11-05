@@ -46,7 +46,7 @@ Un gate (`pytest`, `make check`, `gh pr checks`, build) se corre solo y se lee s
 
 ## Memoria = SSOT versionado, nunca auto-memoria
 - Una lección entra por `/retro` a su SSOT (repo CLAUDE.md/brain + decision-log, skill, handbook); escribir en la auto-memoria lo bloquea un hook. → `core/docs/decision-log.md#2026-09-28-sin-auto-memoria`
-- Regla en 1 línea; el porqué va a `→ decision-log#anchor`, no en prosa. → `handbook/governance/PRD-context-economy-v1.md`
+- Regla en 1 línea; el porqué va en el commit que la agrega (decision-log solo si ningún commit lo carga), no en prosa. → `handbook/governance/PRD-context-economy-v1.md`
 - **Memoria y docs = punteros e invariantes, NUNCA estado de sistemas mutables** (PR abierto, versión N, flag, «pendiente»). Si el estado importa: fecha absoluta + receta (`verificá: <cmd>`). → `cantera/memory-doctor/rubric.md` · `core/docs/decision-log.md#2026-09-04-estado-mutable-en-docs`
 
 ## Comms & content
