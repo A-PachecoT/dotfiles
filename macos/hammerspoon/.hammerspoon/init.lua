@@ -15,6 +15,7 @@ local screenshot = require("screenshot")
 local pdfVim = require("pdf-vim")
 local zenKeys = require("zen-keys") -- Zen como ventana de herdr: ⌘hjkl, ⌘d split
 local sleepWake = require("sleep-wake")
+local keyremap = require("keyremap") -- Caps↔Esc + ⌘↔⌥ del 2.4G vía hidutil (reemplaza Karabiner)
 local myturn = require("myturn") -- ⌥T marcar prioridad · ⌥G ir al que te espera (docs/myturn.md)
 
 -- ============================================================
