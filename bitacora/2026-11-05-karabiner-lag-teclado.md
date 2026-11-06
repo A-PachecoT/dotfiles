@@ -12,3 +12,9 @@
 Karabiner queda instalado pero apagado: `launchctl disable gui/501/org.pqrs.service.agent.{Karabiner-Core-Service-rev2,Karabiner-Console-User-Server,Karabiner-Menu}`. Para revertir: `launchctl enable` de los mismos labels, abrir Karabiner-Elements y borrar el `require("keyremap")`.
 
 **Verificá:** `hidutil property --matching '{"ProductID":591,"VendorID":1452}' --get UserKeyMapping` debe mostrar 4 mapeos.
+
+## Parte 2: RAM que hacía thrashing
+
+`memory_pressure` decía «normal», pero el swap estaba en 8,6/9 GB y el compresor movía unas 14k páginas/s. El `top` por footprint (con lo comprimido) mostró ~6 GB en `python3.13`/`uv`: era `google-ads-mcp`, un MCP stdio en scope **usuario** de `~/.claude.json`, con una copia por cada una de las 38 sesiones (76 procesos). Se movió a scope local de `~/cofoundy/products/portafolios`, el único repo con trabajo de Google Ads (`claude mcp add-json -s local` + `remove -s user`), y se mataron las copias vivas: el swap bajó a 5,3 GB.
+
+**Sensor:** `system-audit` ahora agrupa los descendientes de `claude` por servidor MCP y avisa cuando uno tiene más de 6 copias. Probado con umbral 0: detectó `mcp-server-stdio.js` ×4. Ojo, `ps` RSS subestima a Claude (~9 GB); el footprint real, con lo comprimido, se ve en `top -o mem` (~16 GB).

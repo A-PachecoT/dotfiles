@@ -132,6 +132,33 @@ else
   ok "Claude instance count is fine"
 fi
 
+# MCP stdio de scope usuario: cada sesión de Claude levanta su copia (uvx+python ≈ 150 MB c/u).
+# 2026-11-05: google-ads-mcp ×38 sesiones = 76 procs, ~6 GB, swap a 8.6/9 GB.
+# Agrupa los descendientes de claude por su servidor y alerta los que se repiten.
+MCP_DUPES=$(ps -Ao pid=,ppid=,rss=,comm=,command= | awk '
+  { pid=$1; pp[pid]=$2; rss[pid]=$3; comm[pid]=$4;
+    $1=$2=$3=$4=""; cmd[pid]=$0 }
+  END {
+    for (p in pp) {
+      if (comm[p] ~ /(^|\/)claude$/ || comm[p] ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) continue
+      a=pp[p]; d=0; isc=0
+      while (a>1 && d<6) { if (comm[a] ~ /(^|\/)claude$/ || comm[a] ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) { isc=1; break } a=pp[a]; d++ }
+      if (!isc) continue
+      key=""; n=split(cmd[p], w, " ")
+      for (i=1;i<=n;i++) if (w[i] ~ /mcp/) { key=w[i]; break }
+      if (key=="") continue
+      sub(/.*\//, "", key); cnt[key]++; mem[key]+=rss[p]
+    }
+    for (k in cnt) if (cnt[k] > 6) printf "%d %.0f %s\n", cnt[k], mem[k]/1024, k
+  }' | sort -rn)
+if [ -n "$MCP_DUPES" ]; then
+  while read -r c m k; do
+    warn "MCP ${k}: ${c} procs, ${m} MB — stdio en scope usuario, una copia por sesión (muévelo a scope local: claude mcp add-json -s local)"
+  done <<< "$MCP_DUPES"
+else
+  ok "No hay MCP stdio duplicado por sesión"
+fi
+
 # ─── Quick Checks ─────────────────────────────────────────
 header "Quick Checks"
 
