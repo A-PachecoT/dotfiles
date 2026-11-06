@@ -145,7 +145,7 @@ MCP_DUPES=$(ps -Ao pid=,ppid=,rss=,comm=,command= | awk '
       while (a>1 && d<6) { if (comm[a] ~ /(^|\/)claude$/ || comm[a] ~ /^[0-9]+\.[0-9]+\.[0-9]+$/) { isc=1; break } a=pp[a]; d++ }
       if (!isc) continue
       key=""; n=split(cmd[p], w, " ")
-      for (i=1;i<=n;i++) if (w[i] ~ /mcp/) { key=w[i]; break }
+      for (i=1;i<=n;i++) if (w[i] ~ /mcp|modelcontextprotocol/) { key=w[i]; break }
       if (key=="") continue
       sub(/.*\//, "", key); cnt[key]++; mem[key]+=rss[p]
     }
