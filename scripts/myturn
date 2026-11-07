@@ -1329,6 +1329,8 @@ DEBOUNCE_S = 90          # desde el PRIMER mensaje: una ráfaga = un despertar, 
 ABRIR_S = 180            # lo que puede tardar `claude --resume` en quedar idle antes de avisar que no despertó
 REINTENTO_CIERRE_S = 300  # si closeout no deja cerrar, no se vuelve a probar en cada tick
 LATIDO_S = 120           # despertador vivo = latido más nuevo que esto
+RECIENTE_S = 300         # lo que el despertador recuerda de cada chat, por si la espera se registra después
+ANTES_S = 180            # una espera nueva despierta con lo que llegó hasta 3 min antes de `dormir` (el envío)
 TICK_S = 15
 EQUIPO_S = 3600
 DESP_LABEL = "dev.andre.myturn-despertador"
@@ -1476,6 +1478,13 @@ def despierta(m: dict, jids: set[str], equipo: frozenset[str]) -> bool:
     return digitos(m.get("SenderJID") or "") not in equipo
 
 
+def _ts(ts: str) -> datetime:
+    try:
+        return datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone()
+    except ValueError:
+        return now()
+
+
 def hhmm(ts: str | None) -> str:
     try:
         return datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone().strftime("%H:%M")
@@ -1558,21 +1567,44 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
     """Un tick: lee eventos, despierta lo que toca, entrega punteros y lleva la cuenta regresiva. Devuelve el log."""
     t0, log = now(), []
     st["latido"] = iso(t0)
-    pend, abriendo, idle = (st.setdefault(k, {}) for k in ("pend", "abriendo", "idle"))
+    pend, abriendo, idle, recientes = (st.setdefault(k, {}) for k in ("pend", "abriendo", "idle", "recientes"))
     tasks = fold()
     vivas = {t["id"]: t for t in esperas(tasks) if (t.get("link") or {}).get("host") == LOCAL}
     por_jid = {t["wake"]["wsp"]: t for t in sorted(vivas.values(), key=lambda t: t["created"])}
+    nuevos: dict[str, int] = {}
+
+    def anotar(tid: str, ts: str | None) -> None:
+        p = pend.setdefault(tid, {"first": iso(t0), "n": 0})
+        p.update(n=p["n"] + 1, hora=hhmm(ts))
+        nuevos[tid] = nuevos.get(tid, 0) + 1
+
+    for chat in list(recientes):
+        recientes[chat] = [ts for ts in recientes[chat] if ts and (t0 - _ts(ts)).total_seconds() < RECIENTE_S]
+        if not recientes[chat]:
+            recientes.pop(chat)
+    vistas = st.setdefault("vistas", [])
+    for t in vivas.values():  # espera nueva o renovada: lo que llegó desde el envío también la despierta
+        key = f"{t['id']}:{t.get('expires')}"
+        if key in vistas:
+            continue
+        vistas.append(key)
+        desde = parse(t["touched"]) - timedelta(seconds=ANTES_S)
+        for ts in recientes.get(t["wake"]["wsp"], []):
+            if _ts(ts) >= desde:
+                anotar(t["id"], ts)
+    st["vistas"] = [k for k in vistas if k.split(":")[0] in vivas]
     eventos = leer_eventos(st)
-    if por_jid and eventos:
-        eq, nuevos = equipo_wsp(st), {}
+    if eventos:
+        eq = equipo_wsp(st)
         for m in eventos:
-            if despierta(m, set(por_jid), eq):
-                t = por_jid[m["Chat"]]
-                p = pend.setdefault(t["id"], {"first": iso(t0), "n": 0})
-                p.update(n=p["n"] + 1, hora=hhmm(m.get("Timestamp")))
-                nuevos[t["id"]] = nuevos.get(t["id"], 0) + 1
-        log += [f"{tid}: {n} mensaje{'s' * (n != 1)} del cliente (pendientes: {pend[tid]['n']})"
-                for tid, n in nuevos.items()]
+            if not despierta(m, {m.get("Chat")}, eq):
+                continue
+            # cada chat recuerda sus últimos 5 min: el cliente puede contestar antes de que el agente corra `dormir`
+            recientes.setdefault(m["Chat"], []).append(m.get("Timestamp"))
+            if m["Chat"] in por_jid:
+                anotar(por_jid[m["Chat"]]["id"], m.get("Timestamp"))
+    log += [f"{tid}: {n} mensaje{'s' * (n != 1)} del cliente (pendientes: {pend[tid]['n']})"
+            for tid, n in nuevos.items()]
     for k in [k for k in list(pend) + list(abriendo) if k not in vivas]:  # espera cerrada o archivada
         pend.pop(k, None)
         abriendo.pop(k, None)
@@ -1603,8 +1635,8 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
                 entregados.add(tid)
                 log.append(f"{tid}: puntero a {a['pane_id']}")
             continue  # working/blocked: espera a que quede idle
-        if (t0 - parse(p["first"])).total_seconds() < DEBOUNCE_S or resumiendo(s):
-            continue
+        if p.get("fallo") or (t0 - parse(p["first"])).total_seconds() < DEBOUNCE_S or resumiendo(s):
+            continue  # fallo: ya se abrió una vez y no quedó idle; el puntero espera a que aparezca viva
         pane = abrir(h, t)
         if not pane:
             log.append(f"{tid}: no pude abrir una pestaña")
@@ -1627,8 +1659,11 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
         elif (t0 - parse(ab["at"])).total_seconds() > ABRIR_S:
             h.act("notification", "show", f"⚠️ no despertó: {t['title'][:50]}", "--body",
                   f"myturn go {tid} para abrirla a mano", "--sound", "request")
+            more = pend.get(tid) or {}
+            pend[tid] = {"first": ab["at"], "n": ab["n"] + more.get("n", 0), "hora": more.get("hora", ab["hora"]),
+                         "fallo": True}
             abriendo.pop(tid)
-            log.append(f"{tid}: no quedó idle en {ABRIR_S} s")
+            log.append(f"{tid}: no quedó idle en {ABRIR_S} s; el puntero espera a que aparezca")
 
     ocupados = set(pend) | set(abriendo) | entregados
     vistos = set()
@@ -1654,6 +1689,11 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
             if label != rec.get("title"):
                 h.act("pane", "report-metadata", pane, "--source", FUENTE, "--title", label)
                 rec["title"] = label
+            continue
+        if a.get("focused") and front:  # André tiene el panel delante (quizá escribiendo): espera a que salga
+            if rec.get("title") != "💤 se duerme cuando salgas":
+                h.act("pane", "report-metadata", pane, "--source", FUENTE, "--title", "💤 se duerme cuando salgas")
+                rec["title"] = "💤 se duerme cuando salgas"
             continue
         if rec.get("fallo_at") and (t0 - parse(rec["fallo_at"])).total_seconds() < REINTENTO_CIERRE_S:
             continue

@@ -381,3 +381,68 @@ def test_cli_despertador_once_dry_run(tmp_path):
                        timeout=60)
     assert p.returncode == 0, p.stderr
     assert json.loads((tmp_path / "c" / "despertador.dry.json").read_text())["pos"]["offset"] == 0
+
+
+# ── hallazgos del auditor (2026-11-07) ───────────────────────────────────────────────────────────────────────
+def test_respuesta_antes_de_dormir_igual_despierta(mt, world, clock):
+    """El agente envía, el cliente contesta en 30 s y el agente corre `dormir` al minuto: no se pierde."""
+    tick(mt)
+    write(mt, msg(Timestamp=mt.iso(mt.now())))
+    tick(mt)  # todavía no hay espera: el despertador lo recuerda
+    clock(seconds=60)
+    espera(mt)
+    world.agents = [claude("s-tsc", "idle", "wT:p3")]
+    tick(mt)
+    prompts = [c for c in world.herdr if c[:2] == ["agent", "prompt"]]
+    assert len(prompts) == 1 and "1 mensaje nuevo" in prompts[0][3]
+
+
+def test_espera_nueva_no_cuenta_dos_veces_el_mensaje_del_mismo_tick(mt, world, clock):
+    tick(mt)
+    espera(mt)
+    write(mt, msg(Timestamp=mt.iso(mt.now())))
+    tick(mt)
+    assert mt.desp_load()["pend"]["e1"]["n"] == 1
+
+
+def test_mensaje_viejo_de_antes_del_envio_no_despierta_la_espera_nueva(mt, world, clock):
+    tick(mt)
+    write(mt, msg(Timestamp=mt.iso(mt.now())))
+    tick(mt)
+    clock(minutes=4)  # dentro de lo que se recuerda (5 min) pero antes del envío (3 min antes de dormir)
+    espera(mt)
+    tick(mt)
+    assert mt.desp_load()["pend"] == {}
+
+
+def test_resume_lento_no_pierde_el_puntero(mt, world, clock):
+    espera(mt)
+    tick(mt)
+    write(mt, msg())
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    clock(seconds=200)
+    tick(mt)  # no quedó idle en 180 s: aviso, pero el puntero queda
+    assert world.verbs().count("tab create") == 1
+    clock(seconds=200)
+    tick(mt)
+    assert world.verbs().count("tab create") == 1  # no reabre en bucle
+    world.agents = [claude("s-tsc", "idle", "wT:n1")]
+    tick(mt)
+    assert any(c[:2] == ["agent", "prompt"] for c in world.herdr)
+
+
+def test_no_cierra_el_panel_que_andre_tiene_delante(mt, world, clock, monkeypatch):
+    espera(mt)
+    world.agents = [claude("s-tsc", "idle", "wT:p3", focused=True)]
+    monkeypatch.setattr(mt, "herdr_frontmost", lambda: mt.LOCAL)
+    tick(mt)
+    clock(minutes=11)
+    tick(mt)
+    assert ["pane", "close", "wT:p3"] not in world.herdr
+    assert world.herdr[-1][-1] == "💤 se duerme cuando salgas"
+    monkeypatch.setattr(mt, "herdr_frontmost", lambda: None)
+    clock(seconds=15)
+    tick(mt)
+    assert world.herdr[-1] == ["pane", "close", "wT:p3"]
