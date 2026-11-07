@@ -446,3 +446,50 @@ def test_no_cierra_el_panel_que_andre_tiene_delante(mt, world, clock, monkeypatc
     clock(seconds=15)
     tick(mt)
     assert world.herdr[-1] == ["pane", "close", "wT:p3"]
+
+
+# ── auditor, vuelta 2 ────────────────────────────────────────────────────────────────────────────────────────
+def test_tras_un_fallo_el_mensaje_siguiente_vuelve_a_abrir(mt, world, clock):
+    espera(mt)
+    tick(mt)
+    write(mt, msg())
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    clock(seconds=200)
+    tick(mt)  # no despertó: aviso + puntero con fallo
+    clock(hours=20)
+    write(mt, msg(Timestamp=mt.iso(mt.now())))
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    assert world.verbs().count("tab create") == 2
+
+
+def test_renovar_la_espera_no_entrega_dos_veces(mt, world, clock):
+    espera(mt)
+    world.agents = [claude("s-tsc", "idle", "wT:p3")]
+    tick(mt)
+    write(mt, msg(Timestamp=mt.iso(mt.now())))
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    assert sum(c[:2] == ["agent", "prompt"] for c in world.herdr) == 1
+    clock(seconds=60)
+    mt.emit("update", "e1", set={"expires": mt.iso(mt.now() + timedelta(days=21))})  # contesta y vuelve a dormir
+    clock(seconds=15)
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    assert sum(c[:2] == ["agent", "prompt"] for c in world.herdr) == 1
+
+
+def test_el_mensaje_ya_contestado_no_despierta_la_espera_nueva(mt, world, clock):
+    tick(mt)
+    write(mt, msg(Timestamp=mt.iso(mt.now())))  # el cliente escribe
+    tick(mt)
+    clock(seconds=60)
+    write(mt, msg(FromMe=True, Timestamp=mt.iso(mt.now())))  # el agente contesta y duerme en el mismo tick
+    espera(mt)
+    tick(mt)
+    assert mt.desp_load()["pend"] == {}
