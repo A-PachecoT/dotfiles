@@ -111,12 +111,14 @@ def test_link_here_binds_session_and_merges_hook_task(mt, monkeypatch):
 def test_link_pane_binds_a_claude_from_outside_with_its_host_and_cwd(mt, monkeypatch):
     mt.emit("add", "task", title="Piloto Sonda")
     mt.emit("add", "hook", title="sesión", source="agent", link=link(mt, "s7"))
-    arch = [agent("s7", "idle", pane="w8E:p1") | {"cwd": "/home/andre/cofoundy/leads"}, agent("s8", "idle", pane="w8E:p2")]
+    arch = [agent("s7", "idle", pane="w8E:p1") | {"cwd": "/home/andre/cofoundy/leads"},
+            agent("s8", "idle", pane="w8E:p2")]
     monkeypatch.setattr(mt, "herdr_agents", lambda host, fresh=False: arch if host == "arch" else [])
     monkeypatch.setattr(mt, "refresh", lambda: {})
     assert "w8E:p1 (arch)" in mt.link_pane("#task", "w8E:p1", "arch")
     tasks = mt.fold()
-    assert tasks["task"]["link"] == {"host": "arch", "session": "s7", "pane": "w8E:p1", "cwd": "/home/andre/cofoundy/leads"}
+    assert tasks["task"]["link"] == {"host": "arch", "session": "s7", "pane": "w8E:p1",
+                                     "cwd": "/home/andre/cofoundy/leads"}
     assert tasks["hook"]["status"] == "archived"
     lists = {"arch": arch}  # ya había terminado: enlazarlo no lo vuelve «te espera»
     st = mt.classify(mt.fold(), mt.observe(lists, None, mt.now()), lists)

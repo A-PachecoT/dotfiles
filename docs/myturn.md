@@ -203,18 +203,40 @@ dueño y `end_date` = caducidad; `brain tarea add`), y myturn lo trae como una f
 | Espejo en Obsidian | `myturn obsidian` + `linux/myturn/.config/systemd/user/myturn-obsidian.{service,timer}` (Arch, cada minuto) |
 | Datos | repo privado `A-PachecoT/tasks` en `~/tasks` (`events.jsonl`; `state.json` derivado) |
 | Caché | `~/.cache/myturn/` (estados vistos, avisos dados, última poda) |
-| Tests | `scripts/tests/test_myturn.py` |
+| Tests | `scripts/tests/test_myturn.py`, `scripts/tests/test_despertador.py` (dormir/despertador, los 4 casos de la corrida) |
 
 ### Integraciones
 
 | Con qué | Cómo |
 |---|---|
-| herdr | `agent list` (estado, `focused`, `terminal_title`), `agent focus`, `tab create`, `pane run`, `pane current`; `machine list --json` (la máquina `selected` es la que muestra `h`) y `--machine <label> pane list` |
+| herdr | `agent list` (estado, `focused`, `terminal_title`, `state_change_seq`), `agent focus`, `tab create` (`--no-focus --env` en el despertador), `pane run`, `pane current`, `agent prompt`, `pane report-metadata`, `pane close`, `notification show`; `machine list --json` (la máquina `selected` es la que muestra `h`) y `--machine <label> pane list` |
 | AeroSpace | `list-windows` / `focus --window-id` sobre la ventana de `h` (título `herdr-mac` o `herdr · …`) |
 | Hammerspoon | `hammerspoon://myturn-goto?q=<pane>&downs=N`: teclea el navegador de herdr para cambiar de máquina |
 | Claude Code | hook `UserPromptSubmit` (session_id + `HERDR_PANE_ID`); `claude -p --json-schema` para la IA |
 | Obsidian (BrainFlow) | `Tareas.md` espejo + consulta ```tasks``` en el daily note + importación de `- [ ]` del To-do; `daily_prep.py` y morning-brief (Hermes) parcheados |
 | Vikunja, calendario, celular | fuera de alcance por ahora |
+
+### Dormir: una sesión que espera a un cliente no ocupa nada
+
+André, 2026-11-06: «quiero q no consuma recursos o lo minimo, PERO que aun asi puedan despertar cuando el evento en
+cuestion suceda» · «tiene q ser el herdr xq si no como interactuo???». Diseño, críticas y corrida:
+`~/cofoundy/core/docs/research/2026-11-06_sesiones-dormidas/`. **v0: André, Mac, solo WhatsApp, sin despertar por fecha.**
+
+| Paso | Qué pasa |
+|---|---|
+| Registrar | el agente manda su pregunta con `comms_send` `promise: {espera: true}` → el resultado le da `myturn dormir --wsp <jid> --titulo '…'`. Eso crea una tarea `source: espera` (`wake.wsp`, caduca a los 21 d, enlazada a la sesión con su pane y cwd). Una espera por chat: la nueva reemplaza a la de otra sesión |
+| Dormirse | `myturn despertador` ve la sesión `idle`/`done` y pone `💤 se duerme en m:ss` en el título del panel (`herdr pane report-metadata --source despertador`). Si cambia el `state_change_seq` (André escribió, el agente trabajó) vuelve a 10:00. A los 10 min corre `closeout.py check` (el gate de `guard-pane-close`): verde → `herdr pane close`; rojo → `💤 no se duerme: <motivo>` en el título y reintenta cada 5 min |
+| Dormida | cero procesos; la espera es una línea en `~/tasks/events.jsonl` y sale en `myturn ls` como «dormidas» |
+| Despertar | sigue `~/.wacli/events.jsonl` desde `(inode, offset)` (lee el resto de `events.jsonl.1` si rotó). Mensaje entrante con contenido, de alguien que no es del equipo (`wsp equipo`: teléfonos de `team.md` + sus LID), en un chat con espera → 90 s desde el primero (una ráfaga = un despertar) → `tab create --workspace <el suyo> --env COFOUNDY_DESPERTADA=1 --no-focus` + `pane run "claude --resume <sesión>"`; cuando herdr la ve `idle`, `agent prompt` con un puntero (`jid` + `hh:mm`, nunca el texto ni el nombre del cliente) + `notification show`. Viva e `idle` → solo el puntero; `working`/`blocked` → espera a `idle`; a la vista de André → solo el aviso |
+| Atender | `COFOUNDY_DESPERTADA=1`: solo borradores. `comms_send` siempre con diálogo (sin autorizaciones automáticas), `/mail` cae a `low` y rechaza `send --production`/`schedule` |
+| Volver a dormir | sigue esperando → `myturn dormir` otra vez (renueva); ya no → `myturn done <id>` |
+
+**Prenderlo (André; nada lo carga solo):**
+`myturn despertador plist > ~/Library/LaunchAgents/dev.andre.myturn-despertador.plist && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.andre.myturn-despertador.plist`.
+Apagar: `launchctl bootout gui/$(id -u)/dev.andre.myturn-despertador`. Estado: `myturn despertador estado` (latido,
+offset, pendientes, cuentas regresivas). Log: `~/Library/Logs/myturn-despertador.log`. Probar en seco sin tocar nada:
+`MYTURN_CACHE=$(mktemp -d) myturn despertador --once --dry-run` (imprime los comandos herdr que correría).
+Lo transitorio (offset, pendientes, contadores) vive en `~/.cache/myturn/despertador.json`, nunca en el log de git.
 
 ## Mantener myturn
 
@@ -237,7 +259,7 @@ Para ver el panel sin abrirlo: un HTML que copia `myturn-panel.html`, simula `wi
 `render()` con datos de muestra, capturado con `agent-browser` (el panel real no sale en `screencapture`, y Chrome
 `--headless` se cuelga con Chrome abierto).
 
-**Invariantes que no se rompen:** el store es append-only y se deriva ordenando por `ts`; solo el Arch escribe
+**Invariantes que no se rompen:** una espera (`source: espera`) no la poda `garden` por «sesión cerrada», no la fusiona `bind()` y no la elige `by_session()`; el despertador nunca enfoca ni teclea; el store es append-only y se deriva ordenando por `ts`; solo el Arch escribe
 `Tareas.md`; nada se borra (archivar/`[>]`); el hook no imprime; la UI no muestra las sesiones que el hook registró sin
 tarea.
 
