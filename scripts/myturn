@@ -82,6 +82,8 @@ os.environ.setdefault("USER", HOME.name)
 
 # ── store ─────────────────────────────────────────────────────────────────────────────────────────
 def now() -> datetime:
+    if os.environ.get("MYTURN_NOW"):  # reloj fijo para corridas en seco del CLI (despertador --once --dry-run)
+        return datetime.fromisoformat(os.environ["MYTURN_NOW"]).astimezone()
     return datetime.now().astimezone()
 
 
