@@ -1583,7 +1583,9 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
     eventos = leer_eventos(st)
     yo = st.setdefault("yo", {})
     for m in eventos:  # lo último que el equipo mandó en cada chat: lo anterior ya está contestado
-        if m.get("FromMe") and m.get("Chat") and m.get("Timestamp"):
+        contenido = (m.get("Text") or "").strip() or m.get("Media") or m.get("MediaType")
+        if m.get("FromMe") and m.get("Chat") and m.get("Timestamp") and contenido and not (
+                m.get("Revoked") or m.get("ReactionEmoji")):  # una reacción o un borrado no es contestar
             prev = yo.get(m["Chat"])
             if not prev or _ts(m["Timestamp"]) > _ts(prev):
                 yo[m["Chat"]] = m["Timestamp"]

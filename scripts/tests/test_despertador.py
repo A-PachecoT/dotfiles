@@ -493,3 +493,17 @@ def test_el_mensaje_ya_contestado_no_despierta_la_espera_nueva(mt, world, clock)
     espera(mt)
     tick(mt)
     assert mt.desp_load()["pend"] == {}
+
+
+def test_una_reaccion_de_andre_no_tapa_la_respuesta_del_cliente(mt, world, clock):
+    """Auditor, vuelta 3: solo un mensaje con contenido cuenta como «el equipo ya contestó»."""
+    tick(mt)
+    write(mt, msg(Timestamp=mt.iso(mt.now())))
+    tick(mt)
+    clock(seconds=20)
+    write(mt, msg(FromMe=True, text="", ReactionEmoji="👍", Timestamp=mt.iso(mt.now())))
+    tick(mt)
+    clock(seconds=40)
+    espera(mt)
+    tick(mt)
+    assert mt.desp_load()["pend"]["e1"]["n"] == 1
