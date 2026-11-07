@@ -9,9 +9,9 @@
 
 **Fix.** Karabiner solo hacía Caps↔Esc (global) y ⌘↔⌥ izquierdos en el teclado 2.4G, que se presenta como `0x5ac/0x24f`. Ahora lo hace `macos/hammerspoon/.hammerspoon/keyremap.lua` con `hidutil`, que remapea en el driver: sin daemon ni event tap. El módulo reaplica el mapeo con `hs.usb.watcher` y al despertar, porque un mapeo por dispositivo se pierde si el receptor se reconecta. El `--set` global va antes que el `--matching`, porque si no lo pisa.
 
-Karabiner queda instalado pero apagado: `launchctl disable gui/501/org.pqrs.service.agent.{Karabiner-Core-Service-rev2,Karabiner-Console-User-Server,Karabiner-Menu}`. Para revertir: `launchctl enable` de los mismos labels, abrir Karabiner-Elements y borrar el `require("keyremap")`.
+Karabiner quedó **desinstalado** (2026-11-07). El `launchctl disable` de los agentes de usuario no bastó: sus daemons de root (SMAppService) volvieron a arrancar al reiniciar, tomaron los teclados y hidutil dejó de surtir efecto. Se desinstala con `sudo "/Library/Application Support/org.pqrs/Karabiner-Elements/uninstall.sh"` (desde un agente, vía `osascript … with administrator privileges`, porque `!` no tiene tty para sudo).
 
-**Verificá:** `hidutil property --matching '{"ProductID":591,"VendorID":1452}' --get UserKeyMapping` debe mostrar 4 mapeos.
+**Verificá:** `pgrep -lf Karabiner-Core-Service` vacío, y `hidutil property --matching '{"ProductID":591,"VendorID":1452}' --get UserKeyMapping` debe mostrar 4 mapeos.
 
 ## Parte 2: RAM que hacía thrashing
 
