@@ -1,9 +1,9 @@
 [Unit]
-Description=Higiene de los runners de CI cada 6 h
+Description=Higiene de los runners de CI cada 30 min
 
 [Timer]
 OnBootSec=20min
-OnUnitActiveSec=6h
+OnUnitActiveSec=30min
 Persistent=true
 
 [Install]

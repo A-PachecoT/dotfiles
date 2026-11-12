@@ -1,9 +1,9 @@
 [Unit]
-Description=Higiene de disco Docker cada 6 h
+Description=Higiene de disco Docker cada 30 min
 
 [Timer]
 OnBootSec=15min
-OnUnitActiveSec=6h
+OnUnitActiveSec=30min
 Persistent=true
 
 [Install]

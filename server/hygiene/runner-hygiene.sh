@@ -15,6 +15,9 @@
 #   3. Cachés de `gh-runner` (npm, pnpm, uv, playwright) si el disco está ≥ UMBRAL_PCT y no hay
 #      ningún job corriendo: todo se vuelve a bajar en el próximo job.
 #   4. Runners habilitados en estado `failed` (OOM, disco lleno): reset-failed + start.
+# 2026-11-11 (tercer disco lleno): el chequeo de «job en curso» buscaba `bin/Runner.Worker` y el
+# binario vive en `bin.<versión>/`, así que nunca veía un job; cada 6 h no alcanzaba (79 % → 100 % en
+# 5 h). Ahora: patrón arreglado, timer cada 30 min y checkouts rancios fuera (paso 0).
 # Log → journald (`journalctl -u runner-hygiene`). Exit 0 salvo error inesperado.
 set -euo pipefail
 RAIZ="${RAIZ:-/opt/actions-runner}"
@@ -22,16 +25,28 @@ UMBRAL_PCT="${UMBRAL_PCT:-80}"
 WORK_MAX_MB="${WORK_MAX_MB:-1500}"
 DIAG_DIAS="${DIAG_DIAS:-7}"
 USUARIO="${USUARIO:-gh-runner}"
+STALE_HORAS="${STALE_HORAS:-24}"
 
 uso() { df --output=pcent / | tail -1 | tr -dc '0-9'; }
 servicio() { systemctl list-units --all --plain --no-legend "actions.runner.*.$1.service" | awk '{print $1}' | head -1; }
 antes=$(uso)
 
+# 0. Checkouts de repos que el runner ya no usa (un repo renombrado deja el viejo para siempre:
+#    2026-11-11, fovente → tracta duplicó el checkout en 6 runners y llenó el disco). Se borra
+#    todo `_work/<repo>` sin tocar en STALE_HORAS, sin importar el umbral; los `_*` del runner no.
+for d in "$RAIZ"/*/_work/*/; do
+  case "$(basename "$d")" in _*) continue ;; esac
+  [ -n "$(find "$d" -maxdepth 0 -mmin -$((STALE_HORAS * 60)))" ] && continue
+  [ -n "$(find "$d" -maxdepth 2 -newermt "-${STALE_HORAS} hours" -print -quit)" ] && continue
+  echo "$(basename "$(dirname "$(dirname "$d")")"): checkout rancio $(basename "$d") ($(du -sm "$d" | cut -f1) MB, > ${STALE_HORAS} h sin uso)"
+  rm -rf "$d"
+done
+
 for dir in "$RAIZ"/*/; do
   nombre=$(basename "$dir")
   [ -d "$dir/_work" ] || continue
   [ -n "$(ls -A "$dir/_work")" ] || continue
-  if pgrep -f "$RAIZ/$nombre/bin/Runner.Worker" >/dev/null; then
+  if pgrep -f "$RAIZ/$nombre/bin[^/]*/Runner.Worker" >/dev/null; then
     echo "$nombre: job en curso, no se toca"
     continue
   fi
@@ -52,7 +67,7 @@ done
 find "$RAIZ"/*/_diag -type f -mtime +"$DIAG_DIAS" -delete 2>/dev/null || true
 
 # Las cachés las comparten todos los runners: sólo se borran sin ningún job en curso.
-if [ "$(uso)" -ge "$UMBRAL_PCT" ] && id "$USUARIO" >/dev/null 2>&1 && ! pgrep -f "$RAIZ/.*/bin/Runner.Worker" >/dev/null; then
+if [ "$(uso)" -ge "$UMBRAL_PCT" ] && id "$USUARIO" >/dev/null 2>&1 && ! pgrep -f "$RAIZ/.*/bin[^/]*/Runner.Worker" >/dev/null; then
   casa=$(getent passwd "$USUARIO" | cut -d: -f6)
   echo "AVISO: disco en $(uso)% (≥ ${UMBRAL_PCT}%); borro cachés de $USUARIO" >&2
   rm -rf "$casa/.npm/_cacache" "$casa/.cache/pnpm-store" "$casa/.cache/ms-playwright" "$casa/.cache/uv" "$casa/.cache/pip"
