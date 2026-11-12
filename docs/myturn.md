@@ -224,10 +224,11 @@ cuestion suceda» · «tiene q ser el herdr xq si no como interactuo???». Dise�
 
 | Paso | Qué pasa |
 |---|---|
-| Registrar | el agente manda su pregunta con `comms_send` `promise: {espera: true}` → el resultado le da `myturn dormir --wsp <jid> --titulo '…'`. Eso crea una tarea `source: espera` (`wake.wsp`, caduca a los 21 d, enlazada a la sesión con su pane y cwd). Una espera por chat: la nueva reemplaza a la de otra sesión |
+| Registrar | el agente manda su pregunta con `comms_send` `promise: {espera: true}` → el resultado le da `myturn dormir --wsp <jid> --titulo '…'`. Eso crea una tarea `source: espera` (`wake.wsp` + `wake.horario`, caduca a los 21 d, enlazada a la sesión con su pane y cwd). Una espera por chat: la nueva reemplaza a la de otra sesión |
 | Dormirse | `myturn despertador` ve la sesión `idle`/`done` y pone `💤 se duerme en m:ss` en el título del panel (`herdr pane report-metadata --source despertador`). Si cambia el `state_change_seq` (André escribió, el agente trabajó) vuelve a 10:00. Con André enfocado en el panel no cierra (`💤 se duerme cuando salgas`). A los 10 min corre `closeout.py check` (el gate de `guard-pane-close`): verde → `herdr pane close`; rojo → `💤 no se duerme: <motivo>` en el título y reintenta cada 5 min |
 | Dormida | cero procesos; la espera es una línea en `~/tasks/events.jsonl` y sale en `myturn ls` como «dormidas» |
 | Despertar | sigue `~/.wacli/events.jsonl` desde `(inode, offset)` (lee el resto de `events.jsonl.1` si rotó). Mensaje entrante con contenido, de alguien que no es del equipo (`wsp equipo`: teléfonos de `team.md` + sus LID), en un chat con espera → 90 s desde el primero (una ráfaga = un despertar) → `tab create --workspace <el suyo> --env COFOUNDY_DESPERTADA=1 --no-focus` + `pane run "claude --resume <sesión>"`; cuando herdr la ve `idle`, `agent prompt` con un puntero (`jid` + `hh:mm`, nunca el texto ni el nombre del cliente) + `notification show`. Viva e `idle` → solo el puntero; `working`/`blocked` → espera a `idle`; a la vista de André → solo el aviso. Cada chat se recuerda 5 min: si el cliente contestó entre el envío y `dormir` (hasta 3 min antes y después del último mensaje del equipo en ese chat), la espera nueva despierta igual; renovarla no relee. Tras un fallo de reapertura, el mensaje siguiente vuelve a intentar. Si `claude --resume` no queda idle en 3 min: aviso, y el puntero espera a que aparezca (no reabre en bucle) |
+| Horario de atención | André, 2026-11-11 20:32: «escuchar todo, sí; reaccionar a todo, no; ante urgencias sí». `wake.horario` lo pone `dormir`: `--horario "<texto de habiles>"`, si no el `comms.horario_atencion` del brief que tiene vinculado el chat (`wsp horario <jid>`), si no `HORARIO_DEFAULT` de `habiles.py` (L-V 09:00-18:00 America/Lima, el que hereda todo cliente sin brief; una espera vieja sin `wake.horario` también). Cada mensaje se juzga por su hora de llegada: **en horario** despierta como arriba. **Fuera**, triage con Haiku (`claude_json`, una vez por mensaje, cacheado por `ID` 3 d en `triage` del caché) contra una lista cerrada (`URGENCIAS`: web o servicio caído · pago o cobro · reunión de hoy o mañana cambiada o cancelada · pide que lo llamen ya · salud o seguridad). Urgente → despierta ya, sin los 90 s de ráfaga, con aviso de macOS (`🚨 <espera>: <categoría>`) y el puntero dice la categoría. No urgente → se difiere: el pendiente guarda `abre` (la próxima apertura, `habiles.vence(t, 0)`) y `desde`; la sesión se duerme igual, y al abrir despierta **una sola vez** con todo lo juntado (el puntero dice cuántos, desde qué día y hora, y que llegaron fuera de horario). Triage fallido (sin `claude`, timeout, JSON roto) o `habiles.py` ausente → despierta (fail-open). `wsp watch` sigue la misma regla: fuera de horario imprime una línea y sale |
 | Atender | `COFOUNDY_DESPERTADA=1`: solo borradores. `comms_send` siempre con diálogo (sin autorizaciones automáticas), `/mail` cae a `low` y rechaza `send --production`/`schedule`, y el hook `guard-despertada.sh` del toolkit bloquea el resto (Gmail send/reply/forward, Fovente/coresponde `messages_send`/`templates_send`, wacli, buzz, Resend, eventos de calendario, `unset COFOUNDY_DESPERTADA`) |
 | Volver a dormir | sigue esperando → `myturn dormir` otra vez (renueva); ya no → `myturn done <id>` |
 
@@ -236,7 +237,7 @@ cuestion suceda» · «tiene q ser el herdr xq si no como interactuo???». Dise�
 Apagar: `launchctl bootout gui/$(id -u)/dev.andre.myturn-despertador`. Estado: `myturn despertador estado` (latido,
 offset, pendientes, cuentas regresivas). Log: `~/Library/Logs/myturn-despertador.log`. Probar en seco sin tocar nada:
 `MYTURN_CACHE=$(mktemp -d) myturn despertador --once --dry-run` (imprime los comandos herdr que correría).
-Lo transitorio (offset, pendientes, contadores) vive en `~/.cache/myturn/despertador.json`, nunca en el log de git.
+Lo transitorio (offset, pendientes, contadores, el triage por mensaje y el texto de lo recibido en los últimos 5 min) vive en `~/.cache/myturn/despertador.json`, nunca en el log de git. Ver lo diferido: `myturn despertador estado` (`pend.<id>.abre`).
 
 ## Mantener myturn
 
@@ -322,6 +323,13 @@ tarea.
   en `_io_BufferedWriter_write`; 13 procesos colgados desde las 10:35). `run()` ahora drena en streaming. En vivo:
   panel recargado con 108 filas y cero procesos colgados. Gotcha: cualquier `hs.task` cuya salida pueda pasar de
   64 KB necesita `streamingCallback`.
+
+- 2026-11-11, horario de atención del despertador: 6 tests nuevos en `scripts/tests/test_despertador.py` (en horario
+  despierta sin triage; fuera y no urgente difiere, la sesión se duerme igual y despierta una vez al abrir con n y
+  `desde`; urgente despierta ya con aviso de macOS; triage fallido despierta; espera sin horario hereda el default;
+  `dormir` toma el horario del brief y valida `--horario`). En vivo: triage real con Haiku sobre 3 mensajes (web caída
+  → urgente «web o servicio caído», 6 s; «gracias, mañana te mando las fotos» → no; un intento de inyección → no);
+  `horario_del_chat` del grupo de VeronicaHinojosa → «L-V 09:00-20:00 America/Lima», de un chat sin brief → el default.
 
 ## Roadmap
 

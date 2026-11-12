@@ -8,7 +8,7 @@ import importlib.util
 import json
 import os
 import subprocess
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -507,3 +507,149 @@ def test_una_reaccion_de_andre_no_tapa_la_respuesta_del_cliente(mt, world, clock
     espera(mt)
     tick(mt)
     assert mt.desp_load()["pend"]["e1"]["n"] == 1
+
+
+# ── horario de atención (André 2026-11-11, 20:32: «escuchar todo, sí; reaccionar a todo, no; ante urgencias sí») ──
+HABILES = Path.home() / "cofoundy/plugins/cofoundy-toolkit/skills/whatsapp/scripts/habiles.py"
+HORARIO_VH = "L-V 09:00-20:00 America/Lima"
+
+
+@pytest.fixture
+def horario(mt, monkeypatch):
+    """habiles.py real (la primitiva del toolkit), Haiku falso y avisos de macOS anotados. Reloj: miércoles
+    11-nov-2026 21:30 en Lima (fuera de L-V 09:00-20:00). Devuelve (clock, mundo) con .triage y .mac."""
+    if not HABILES.is_file():
+        pytest.skip("sin el checkout de cofoundy-toolkit (habiles.py)")
+    from zoneinfo import ZoneInfo
+    monkeypatch.setenv("MYTURN_HABILES", str(HABILES))
+    t = {"now": datetime(2026, 11, 11, 21, 30, tzinfo=ZoneInfo("America/Lima"))}
+    monkeypatch.setattr(mt, "now", lambda: t["now"])
+    ns = type("H", (), {})()
+    ns.triage, ns.mac, ns.respuesta = [], [], {"urgente": False, "motivo": "ninguna"}
+
+    def fake_claude(prompt, schema, model="haiku", timeout=120):
+        ns.triage.append((model, prompt))
+        return ns.respuesta
+    monkeypatch.setattr(mt, "claude_json", fake_claude)
+    monkeypatch.setattr(mt, "notify", lambda msg, sound=False: ns.mac.append(msg))
+
+    def advance(**delta):
+        t["now"] += timedelta(**delta)
+    ns.clock, ns.at = advance, (lambda: t["now"])
+    return ns
+
+
+def espera_h(mt, horario_txt=HORARIO_VH):
+    mt.emit("add", "e1", title="espera: VH · revisión", source=mt.ESPERA, wake={"wsp": GRUPO, "horario": horario_txt},
+            expires=mt.iso(mt.now() + timedelta(days=21)),
+            link={"host": mt.LOCAL, "session": "s-vh", "pane": "wT:p3", "cwd": "/tmp/vh"})
+
+
+def msg_ahora(h, i, **kw):
+    return msg(ID=f"M{i}", Timestamp=h.at().astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), **kw)
+
+
+def test_en_horario_despierta_como_siempre_sin_triage(mt, world, horario):
+    horario.clock(hours=-10)  # miércoles 11:30, dentro del horario
+    espera_h(mt)
+    tick(mt)
+    write(mt, msg_ahora(horario, 1))
+    tick(mt)
+    horario.clock(seconds=91)
+    tick(mt)
+    assert world.verbs().count("tab create") == 1
+    assert horario.triage == [] and horario.mac == []
+
+
+def test_fuera_de_horario_no_urgente_difiere_duerme_y_despierta_una_vez_al_abrir(mt, world, horario):
+    espera_h(mt)
+    world.agents = [claude("s-vh", "idle", "wT:p3")]  # viva y ociosa: no se le escribe, se duerme igual
+    tick(mt)
+    write(mt, msg_ahora(horario, 1, text="gracias, mañana lo reviso"))
+    tick(mt)
+    horario.clock(hours=1)
+    write(mt, msg_ahora(horario, 2, text="y te mando las fotos"))
+    tick(mt)
+    assert len(horario.triage) == 2 and all(m == "haiku" for m, _ in horario.triage)  # una vez por mensaje
+    assert "gracias, mañana lo reviso" in horario.triage[0][1]
+    assert not any(c[:2] in (["agent", "prompt"], ["tab", "create"]) for c in world.herdr)
+    p = mt.desp_load()["pend"]["e1"]
+    assert p["n"] == 2 and p["abre"].startswith("2026-11-12T09:00")
+    # la cuenta regresiva (10 min idle desde las 21:30) no la frena el pendiente diferido: se durmió
+    assert ["pane", "close", "wT:p3"] in world.herdr
+    world.agents = []
+    horario.clock(hours=10, minutes=11)  # jueves 08:41: todavía cerrado
+    tick(mt)
+    assert world.verbs().count("tab create") == 0
+    horario.clock(minutes=20)  # jueves 09:01: abre
+    tick(mt)
+    tick(mt)
+    assert world.verbs().count("tab create") == 1
+    world.agents = [claude("s-vh", "idle", "wT:n1")]
+    horario.clock(seconds=15)
+    tick(mt)
+    prompts = [c for c in world.herdr if c[:2] == ["agent", "prompt"]]
+    assert len(prompts) == 1
+    txt = prompts[0][3]
+    assert "2 mensajes" in txt and "desde el mié 11-11 21:30" in txt and "hasta las 22:30" in txt
+    assert f"fuera del horario de atención ({HORARIO_VH})" in txt and "ninguno era urgente" in txt
+    assert "gracias" not in txt and "fotos" not in txt  # nada del cliente en el puntero
+    assert horario.mac == []
+    horario.clock(minutes=5)
+    tick(mt)
+    assert world.verbs().count("tab create") == 1  # ese día, una sola vez
+
+
+def test_fuera_de_horario_urgente_despierta_ya_y_avisa_en_macos(mt, world, horario):
+    horario.respuesta = {"urgente": True, "motivo": "web o servicio caído"}
+    espera_h(mt)
+    tick(mt)
+    write(mt, msg_ahora(horario, 1, text="la web no carga, se cayó todo"))
+    tick(mt)  # sin esperar el debounce de la ráfaga
+    assert world.verbs().count("tab create") == 1
+    assert horario.mac and "web o servicio caído" in horario.mac[0] and "se cayó" not in horario.mac[0]
+    world.agents = [claude("s-vh", "idle", "wT:n1")]
+    horario.clock(seconds=15)
+    tick(mt)
+    txt = next(c for c in world.herdr if c[:2] == ["agent", "prompt"])[3]
+    assert "urgente (web o servicio caído)" in txt and "no carga" not in txt
+    assert len(horario.mac) == 1
+
+
+def test_fuera_de_horario_triage_fallido_despierta(mt, world, horario):
+    horario.respuesta = None  # claude no está, timeout o JSON roto
+    espera_h(mt)
+    tick(mt)
+    write(mt, msg_ahora(horario, 1))
+    tick(mt)
+    assert world.verbs().count("tab create") == 1
+    assert "el triage falló" in mt.desp_load()["abriendo"]["e1"]["urgente"]
+
+
+def test_espera_sin_horario_hereda_el_default(mt, world, horario):
+    """El default es el que hereda todo cliente sin brief: 20:30 de un miércoles está fuera de L-V 09:00-18:00."""
+    mt.emit("add", "e1", title="espera: X", source=mt.ESPERA, wake={"wsp": GRUPO},
+            expires=mt.iso(mt.now() + timedelta(days=21)),
+            link={"host": mt.LOCAL, "session": "s-x", "pane": "wT:p3", "cwd": "/tmp"})
+    horario.clock(hours=-1)
+    tick(mt)
+    write(mt, msg_ahora(horario, 1))
+    tick(mt)
+    assert len(horario.triage) == 1 and mt.desp_load()["pend"]["e1"]["abre"].startswith("2026-11-12T09:00")
+
+
+def test_dormir_toma_el_horario_del_brief_del_chat(mt, world, horario, monkeypatch):
+    def run(cmd, host=None, timeout=4):
+        if cmd[0] == "uv" and "horario" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps({"horario": HORARIO_VH}), "")
+        return world.run(cmd, host, timeout)
+    monkeypatch.setattr(mt, "run", run)
+    here_as(mt, monkeypatch, "s-vh")
+    out = mt.dormir(GRUPO, "VH · revisión")
+    assert mt.esperas(mt.fold())[0]["wake"] == {"wsp": GRUPO, "horario": HORARIO_VH}
+    mt.write_atomic(mt.desp_file(False), json.dumps({"latido": mt.iso(mt.now())}))
+    out = mt.dormir(GRUPO, None, "L-D 08:00-22:00 America/Lima")  # explícito gana y renueva
+    assert "fuera, solo por urgencia" in out
+    assert mt.esperas(mt.fold())[0]["wake"]["horario"] == "L-D 08:00-22:00 America/Lima"
+    with pytest.raises(SystemExit):
+        mt.dormir(GRUPO, None, "todo el día")
