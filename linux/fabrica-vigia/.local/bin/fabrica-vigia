@@ -57,6 +57,12 @@ AVANCE_COMMIT_MIN = 60   # un commit en cualquier rama/worktree del repo en la �
 AVANCE_TRANSCRIPT_MIN = 30  # un transcript de la fábrica o de sus subagentes escrito hace < 30 min
 DIALOGO_RE = re.compile(r"(Do you want to (?:proceed|make this edit|create|allow|run)[^\n]*\?|❯\s*1\.\s*Yes)", re.I)
 
+# Un diálogo de aprobación de una PERSONA en el panel destino (comms_send, permiso, AskUserQuestion): lo que
+# se teclee entra como su respuesta (2026-11-12 08:49, un reporte entró como «Otro» en un comms_send). Gemelo
+# de cofoundy-toolkit hooks/scripts/guard-pane-dialogo.sh, que cubre a los agentes; el vigía corre fuera.
+APROBACION_RE = re.compile(r"Enter to select|Do you want to (?:proceed|make this edit|create|allow|run)|Esc to cancel"
+                           r"|❯\s*1\.\s", re.I)
+
 KICKOFF = ("Eres /factory, relanzada por el vigía externo ({motivo}). Todo el estado está en disco: "
            "el libro de sitios (slots.py list --repo {repo}), el bus (bus.py directory --repo {repo}) y el "
            "plan del producto. Las decisiones ya tomadas no se relitigan. Arma tu /goal y tu /loop 45m y "
@@ -205,6 +211,21 @@ def panel_pm(cfg, panel):
     return None
 
 
+def entregar_pm(st, pm, msg, dry):
+    """Teclea al pm solo si su panel no tiene un diálogo abierto; si lo tiene (o no se lee), queda en cola."""
+    rc, pantalla, _ = herdr("pane", "read", pm, "--source", "visible")
+    if rc != 0 or APROBACION_RE.search(pantalla[-3000:]):
+        st["pm_cola"] = [pm, msg]
+        return "en cola"
+    if not dry:
+        rc, _, _ = herdr("pane", "run", pm, msg)
+        if rc != 0:
+            st["pm_cola"] = [pm, msg]
+            return "en cola"
+    st.pop("pm_cola", None)
+    return pm
+
+
 def buscar_workspace(label):
     rc, out, _ = herdr("workspace", "list")
     for w in jresult(out).get("workspaces", []) if rc == 0 else []:
@@ -287,6 +308,9 @@ def ronda_una(cfg, dry):
     stp = STATE / f"{nombre}.state.json"
     st = load_json(stp, {})
     panel, herdr_ok = buscar_panel(cfg["label"])
+    entregado = None
+    if herdr_ok and st.get("pm_cola"):
+        entregado = entregar_pm(st, *st["pm_cola"], dry)
     if not herdr_ok:
         r = {"accion": "sin-herdr", "motivo": "herdr no responde (¿reinicio? el servicio lo levanta)"}
     elif panel is None:
@@ -321,11 +345,9 @@ def ronda_una(cfg, dry):
             clave = f"{accion}:{cmd or ''}"
             pm = None
             if accion != "bloqueada" and st.get("pm_avisado") != clave:
-                pm = panel_pm(cfg, panel)
-                if pm and not dry:
-                    rc, _, _ = herdr("pane", "run", pm, msg)
-                    st["pm_avisado"] = clave if rc == 0 else None
-                elif pm:
+                destino = panel_pm(cfg, panel)
+                if destino:
+                    pm = entregar_pm(st, destino, msg, dry)
                     st["pm_avisado"] = clave
             if accion != "bloqueada" and st.get("bloqueo_avisado_clave") != clave:
                 st["bloqueo_avisado"] = aviso(nombre, "espera una confirmación en su panel" if cmd else "no avanza",
@@ -348,6 +370,8 @@ def ronda_una(cfg, dry):
                 r = {"accion": "empujada" if not dry else "empujaria", "quieta_min": round(mins)}
             else:
                 r = {"accion": "nada", "estado": estado, "quieta_min": round(mins)}
+    if entregado and r.get("pm") is None:
+        r["pm_cola"] = entregado
     if not dry:
         STATE.mkdir(parents=True, exist_ok=True)
         stp.write_text(json.dumps(st, ensure_ascii=False))

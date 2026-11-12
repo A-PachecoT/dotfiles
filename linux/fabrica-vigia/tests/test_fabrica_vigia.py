@@ -14,7 +14,7 @@ open(os.environ["LOG"], "a").write(json.dumps(a) + "\n")
 k = " ".join(a[:2])
 if sc.get("down"): sys.exit(1)
 if k == "pane list": print(json.dumps({"result": {"panes": sc.get("panes", [])}}))
-elif k == "pane read": print(sc.get("screen", ""))
+elif k == "pane read": print(sc.get("screens", {}).get(a[2], sc.get("screen", "")))
 elif k == "workspace list": print(json.dumps({"result": {"workspaces": sc.get("workspaces", [])}}))
 elif k == "tab create": print(json.dumps({"result": {"root_pane": {"pane_id": "wX:p9"}}}))
 sys.exit(0)
@@ -136,7 +136,8 @@ def repo_con_commits(d, fechas):
 
 def world_noche(screen, fechas, now):
     sc = {"panes": [dict(PANE, agent_status="blocked", workspace_id="w1"), PM], "screen": screen,
-          "workspaces": [{"label": "Macondo", "workspace_id": "w1"}]}
+          "workspaces": [{"label": "Macondo", "workspace_id": "w1"}],
+          "screens": {"w1:p3": "❯ \n  ? for shortcuts\n"}}
     run, calls, d = world(sc, now=now)
     r = repo_con_commits(d, fechas)
     cfg = json.loads((d / ".config/cofoundy/fabrica-vigia/deily.json").read_text())
@@ -171,5 +172,22 @@ ts = __import__("datetime").datetime.fromisoformat("2026-11-12T04:25:00-05:00").
 r = ronda(run)
 check("N-06", "sin commits pero con un subagente escribiendo hace 5 min → hay avance",
       r.get("avance") is True and r.get("accion") != "sin-avance", r)
+
+# --- 2026-11-12 08:49-09:45 (reporte de pm): un pane run al pm entró como «Otro» en el diálogo de comms_send
+# de André. Pantalla real del pm a las 09:46, guardada en el toolkit como fixture del guard gemelo.
+APROB = (Path(__file__).resolve().parent / "fixtures/pane-dialogo-comms-send.txt").read_text()
+print("vigía — no teclea sobre un diálogo de aprobación")
+run, calls, d = world_noche(DIALOGO, NOCHE[:2], "2026-11-12T04:50")
+sc = json.loads((d / "sc.json").read_text()); sc["screens"] = {"w1:p1": DIALOGO, "w1:p3": APROB}
+(d / "sc.json").write_text(json.dumps(sc))
+r = ronda(run)
+pm = [c for c in calls() if c[:3] == ["pane", "run", "w1:p3"]]
+check("N-07", "pm con un diálogo de aprobación abierto → no le teclea, deja el aviso en cola",
+      not pm and r.get("pm") == "en cola", (r, pm))
+sc["screens"]["w1:p3"] = "❯ \n  ? for shortcuts\n"; (d / "sc.json").write_text(json.dumps(sc))
+r = ronda(run, now_="2026-11-12T04:55")
+pm = [c for c in calls() if c[:3] == ["pane", "run", "w1:p3"]]
+check("N-08", "cerrado el diálogo, la ronda siguiente entrega el aviso en cola (una vez)",
+      len(pm) == 1 and "rm -rf" in pm[0][3], (r, pm))
 
 print(f"\n{OK} pass · {BAD} fail"); sys.exit(1 if BAD else 0)
