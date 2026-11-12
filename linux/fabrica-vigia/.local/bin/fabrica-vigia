@@ -7,7 +7,10 @@ un timer de systemd: cada ronda mira las fábricas que alguien registró y, por 
   - panel vivo y trabajando ............ nada
   - límite de uso del plan en pantalla . espera la hora de reinicio y la reanuda (G36)
   - quieta más de --quieta-min ......... la empuja con un prompt corto (su /loop murió)
-  - bloqueada (pide permiso/pregunta) .. avisa UNA vez a la bandeja de André
+  - panel en blocked .................. separa «permiso» (diálogo en pantalla: trae su comando) de
+                                         «sin-avance» (sin diálogo y sin commits ni subagentes en 1 h);
+                                         despierta al pm del workspace con herdr pane run (una vez por
+                                         diálogo) y deja la tarea en la bandeja de André
   - panel o agente muerto, o reinicio .. relanza con la receta de sucesión (G35, G39)
   - memoria en rojo .................... no lanza nada y lo anota (G40)
   - más de --max-relances en 6 h ....... deja de relanzar y avisa (no es un bucle)
@@ -49,6 +52,10 @@ MEM_DISP_MIN_KB = 1_500_000
 
 LIMIT_RE = re.compile(r"(usage limit|limit reached|hit your (?:usage )?limit|5-hour limit|weekly limit)", re.I)
 RESET_RE = re.compile(r"resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)", re.I)
+
+AVANCE_COMMIT_MIN = 60   # un commit en cualquier rama/worktree del repo en la última hora = avanza
+AVANCE_TRANSCRIPT_MIN = 30  # un transcript de la fábrica o de sus subagentes escrito hace < 30 min
+DIALOGO_RE = re.compile(r"(Do you want to (?:proceed|make this edit|create|allow|run)[^\n]*\?|❯\s*1\.\s*Yes)", re.I)
 
 KICKOFF = ("Eres /factory, relanzada por el vigía externo ({motivo}). Todo el estado está en disco: "
            "el libro de sitios (slots.py list --repo {repo}), el bus (bus.py directory --repo {repo}) y el "
@@ -139,6 +146,63 @@ def buscar_panel(label):
         if p.get("label") == label:
             return p, True
     return None, True
+
+
+def dialogo(texto):
+    """El diálogo de permiso de Claude Code en pantalla → el comando y su aviso, en una línea."""
+    m = DIALOGO_RE.search(texto)
+    if not m:
+        return None
+    antes = [ln.strip() for ln in texto[:m.start()].splitlines() if ln.strip()]
+    for i in range(len(antes) - 1, -1, -1):
+        if re.match(r"^(Bash command|Edit file|Write|Create file|Fetch|Tool use)\b", antes[i], re.I):
+            antes = antes[i + 1:]
+            break
+    else:
+        antes = antes[-5:]
+    return " · ".join(antes)[:300] or "(sin texto del comando)"
+
+
+def avance(cfg):
+    """¿La fábrica sigue avanzando aunque su panel esté en blocked? Commits en cualquier rama del repo
+    (los worktrees de los sitios comparten refs) o transcripts escritos (la fábrica y sus subagentes)."""
+    ahora = now().timestamp()
+    ult = {}
+    try:
+        out = subprocess.run(["git", "-C", cfg["cwd"], "log", "--all", "-1", "--format=%ct"],
+                             capture_output=True, text=True, timeout=30).stdout.strip()
+        if out:
+            ult["commit"] = int(out)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    proj = HOME / ".claude/projects"
+    repo = cfg.get("repo") or Path(cfg["cwd"]).name
+    mt = 0.0
+    if proj.is_dir():
+        for d in proj.iterdir():
+            if repo in d.name:
+                for f in list(d.glob("*.jsonl")) + list(d.glob("*/subagents/*.jsonl")):
+                    try:
+                        mt = max(mt, f.stat().st_mtime)
+                    except OSError:
+                        pass
+    if mt:
+        ult["transcript"] = mt
+    vivo = (ahora - ult.get("commit", 0) < AVANCE_COMMIT_MIN * 60
+            or ahora - ult.get("transcript", 0) < AVANCE_TRANSCRIPT_MIN * 60)
+    hora = lambda t: datetime.fromtimestamp(t, LIMA).strftime("%H:%M")
+    return vivo, {k: hora(v) for k, v in ult.items()}
+
+
+def panel_pm(cfg, panel):
+    if cfg.get("pm_pane"):
+        return cfg["pm_pane"]
+    rc, out, _ = herdr("pane", "list")
+    ws = panel.get("workspace_id") or panel.get("pane_id", "").split(":")[0]
+    for p in jresult(out).get("panes", []) if rc == 0 else []:
+        if p.get("label") == "pm" and (p.get("workspace_id") or p.get("pane_id", "").split(":")[0]) == ws:
+            return p.get("pane_id")
+    return None
 
 
 def buscar_workspace(label):
@@ -244,14 +308,35 @@ def ronda_una(cfg, dry):
             else:
                 r = {"accion": "espera-limite", "hasta": t}
         elif estado == "blocked":
-            if not st.get("bloqueo_avisado"):
-                st["bloqueo_avisado"] = aviso(nombre, "espera una confirmación en su panel",
-                                              f"panel {pid}: pide permiso o pregunta; ábrelo en herdr", dry)
-            r = {"accion": "bloqueada", "aviso": st["bloqueo_avisado"]}
+            cmd = dialogo(texto)
+            vivo, ult = avance(cfg)
+            accion = "permiso" if cmd else ("bloqueada" if vivo else "sin-avance")
+            marcas = ", ".join(f"último {k} {v}" for k, v in ult.items()) or "sin commits ni transcripts"
+            estado_txt = ("la fábrica sigue avanzando" if vivo else "la fábrica no avanza") + f" ({marcas})"
+            if accion == "permiso":
+                msg = f"[vigía] fábrica {nombre} (panel {pid}) espera un permiso; {estado_txt}. Diálogo: {cmd}. Ábrelo y decide en ese panel."
+            else:
+                msg = f"[vigía] fábrica {nombre} (panel {pid}) está en blocked sin diálogo de permiso; {estado_txt}. Revisa ese panel."
+            msg = msg.replace("`", "'").replace("\n", " ")
+            clave = f"{accion}:{cmd or ''}"
+            pm = None
+            if accion != "bloqueada" and st.get("pm_avisado") != clave:
+                pm = panel_pm(cfg, panel)
+                if pm and not dry:
+                    rc, _, _ = herdr("pane", "run", pm, msg)
+                    st["pm_avisado"] = clave if rc == 0 else None
+                elif pm:
+                    st["pm_avisado"] = clave
+            if accion != "bloqueada" and st.get("bloqueo_avisado_clave") != clave:
+                st["bloqueo_avisado"] = aviso(nombre, "espera una confirmación en su panel" if cmd else "no avanza",
+                                              msg, dry)
+                st["bloqueo_avisado_clave"] = clave
+            r = {"accion": accion, "avance": vivo, "comando": cmd, "ultimo": ult,
+                 "pm": pm or st.get("pm_avisado") and "ya avisado", "aviso": st.get("bloqueo_avisado")}
         elif estado == "working":
             st.pop("quieta_desde", None)
-            st.pop("bloqueo_avisado", None)
-            st.pop("reanudar", None)
+            for k in ("bloqueo_avisado", "bloqueo_avisado_clave", "pm_avisado", "reanudar"):
+                st.pop(k, None)
             r = {"accion": "nada", "estado": "working"}
         else:
             desde = st.setdefault("quieta_desde", now().isoformat())

@@ -13,3 +13,6 @@ Qué hace en cada ronda, y su prueba: `tests/test_fabrica_vigia.py` (herdr falso
 Relance real verificado el 2026-11-11: panel nuevo, `pane rename`, claude en la carpeta registrada, kickoff, respuesta.
 No acepta el diálogo de confianza de una carpeta: avisa a la bandeja de André.
 Instalar: `cd ~/dotfiles/linux && stow -t ~ fabrica-vigia && systemctl --user daemon-reload && systemctl --user enable --now fabrica-vigia.timer`.
+
+## Panel en blocked (2026-11-12)
+Separa **permiso** (diálogo de Claude Code en pantalla; trae el comando) de **sin-avance** (sin diálogo y sin commits en 1 h ni transcripts de la fábrica o sus subagentes en 30 min). En ambos casos despierta al panel `pm` del workspace con `herdr pane run` (una vez por diálogo; `pm_pane` en la config lo fija) y deja la tarea en la bandeja de André. blocked con avance y sin diálogo solo se anota. Origen: la noche del 2026-11-12 marcó «bloqueada» 4,5 h mientras la fábrica commiteaba y el aviso solo fue a Vikunja.
