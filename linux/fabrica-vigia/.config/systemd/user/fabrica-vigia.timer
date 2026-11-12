@@ -1,0 +1,10 @@
+[Unit]
+Description=Ronda del vigía de /factory cada 5 min (y 2 min después de arrancar)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

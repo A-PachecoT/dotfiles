@@ -1,0 +1,10 @@
+[Unit]
+Description=Vigía externo de /factory: relanza la fábrica si su sesión muere, choca el límite de uso o la máquina reinicia (cofoundy-orchestrator#202)
+After=herdr.service
+Wants=herdr.service
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/fabrica-vigia ronda
+Nice=5

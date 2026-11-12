@@ -1,0 +1,345 @@
+#!/usr/bin/env python3
+"""fabrica-vigia — el vigía externo de /factory (cofoundy-orchestrator#202, G35 · G36 · G39 · G40).
+
+/factory se sostiene con su /goal y su /loop, que mueren con su sesión. Este vigía vive afuera, en
+un timer de systemd: cada ronda mira las fábricas que alguien registró y, por cada una,
+
+  - panel vivo y trabajando ............ nada
+  - límite de uso del plan en pantalla . espera la hora de reinicio y la reanuda (G36)
+  - quieta más de --quieta-min ......... la empuja con un prompt corto (su /loop murió)
+  - bloqueada (pide permiso/pregunta) .. avisa UNA vez a la bandeja de André
+  - panel o agente muerto, o reinicio .. relanza con la receta de sucesión (G35, G39)
+  - memoria en rojo .................... no lanza nada y lo anota (G40)
+  - más de --max-relances en 6 h ....... deja de relanzar y avisa (no es un bucle)
+
+No lanza fábricas nuevas: solo cuida las que la sesión que decide registró con `vigilar`.
+
+    fabrica-vigia vigilar --nombre N --workspace-label W --cwd C --repo R [--kickoff TXT] [--worker-id ID]
+    fabrica-vigia soltar  --nombre N
+    fabrica-vigia ronda   [--dry-run] [--json]
+    fabrica-vigia estado  [--json]
+
+Overrides para pruebas: VIGIA_HOME, VIGIA_HERDR, VIGIA_MEMINFO, VIGIA_NOW, VIGIA_BRAIN.
+Stdlib only.
+"""
+
+import argparse
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+LIMA = timezone(timedelta(hours=-5))
+HOME = Path(os.environ.get("VIGIA_HOME") or Path.home())
+CONF = HOME / ".config/cofoundy/fabrica-vigia"
+STATE = HOME / ".local/state/fabrica-vigia"
+HERDR = os.environ.get("VIGIA_HERDR", "herdr")
+MEMINFO = os.environ.get("VIGIA_MEMINFO", "/proc/meminfo")
+
+QUIETA_MIN = 75          # el /loop de la fábrica es de 45 min: 75 sin moverse = su latido murió
+MAX_RELANCES = 3         # por ventana de 6 h
+VENTANA_H = 6
+SWAP_LIBRE_MIN = 0.08    # bajo 8 % de swap libre Y < 1,5 GB disponibles: no se lanza nada
+MEM_DISP_MIN_KB = 1_500_000
+
+LIMIT_RE = re.compile(r"(usage limit|limit reached|hit your (?:usage )?limit|5-hour limit|weekly limit)", re.I)
+RESET_RE = re.compile(r"resets?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)", re.I)
+
+KICKOFF = ("Eres /factory, relanzada por el vigía externo ({motivo}). Todo el estado está en disco: "
+           "el libro de sitios (slots.py list --repo {repo}), el bus (bus.py directory --repo {repo}) y el "
+           "plan del producto. Las decisiones ya tomadas no se relitigan. Arma tu /goal y tu /loop 45m y "
+           "corre /cofoundy-orchestrator:factory sobre {repo}.")
+
+
+def now():
+    v = os.environ.get("VIGIA_NOW")
+    return datetime.fromisoformat(v).replace(tzinfo=LIMA) if v else datetime.now(LIMA)
+
+
+def herdr(*args, timeout=60):
+    try:
+        p = subprocess.run([HERDR, *args], capture_output=True, text=True, timeout=timeout)
+        return p.returncode, p.stdout, p.stderr
+    except (OSError, subprocess.SubprocessError) as e:
+        return 127, "", str(e)
+
+
+def jresult(out):
+    try:
+        return json.loads(out).get("result") or {}
+    except (ValueError, AttributeError):
+        return {}
+
+
+def memoria():
+    info = {}
+    try:
+        for ln in Path(MEMINFO).read_text().splitlines():
+            k, _, v = ln.partition(":")
+            info[k.strip()] = int(v.split()[0])
+    except (OSError, ValueError, IndexError):
+        return {"roja": False, "porque": "meminfo ilegible: no frena"}
+    st, sf, ma = info.get("SwapTotal", 0), info.get("SwapFree", 0), info.get("MemAvailable", 0)
+    libre = (sf / st) if st else 1.0
+    roja = libre < SWAP_LIBRE_MIN and ma < MEM_DISP_MIN_KB
+    return {"roja": roja, "swap_libre": round(libre, 3), "mem_disponible_kb": ma}
+
+
+def reset_at(texto, ahora):
+    m = RESET_RE.search(texto)
+    if not m:
+        return None
+    h, mi, ap = int(m.group(1)) % 12, int(m.group(2) or 0), m.group(3).lower()
+    h += 12 if ap == "pm" else 0
+    t = ahora.replace(hour=h, minute=mi, second=0, microsecond=0)
+    if t <= ahora:
+        t += timedelta(days=1)
+    return t + timedelta(minutes=2)
+
+
+def load_json(p, default):
+    try:
+        return json.loads(Path(p).read_text())
+    except (OSError, ValueError):
+        return default
+
+
+def log(nombre, ev):
+    STATE.mkdir(parents=True, exist_ok=True)
+    with open(STATE / f"{nombre}.jsonl", "a") as f:
+        f.write(json.dumps({"ts": now().isoformat(timespec="seconds"), **ev}, ensure_ascii=False) + "\n")
+
+
+def aviso(nombre, que, detalle, dry):
+    """A la bandeja de André, idempotente por clave: una alerta por motivo, no una por ronda."""
+    brain = os.environ.get("VIGIA_BRAIN")
+    if brain is None:
+        hits = sorted(Path.home().glob(".claude/plugins/cache/cofoundy/cofoundy-toolkit/*/skills/brain/scripts/brain.py"),
+                      key=lambda x: x.stat().st_mtime, reverse=True)
+        brain = str(hits[0]) if hits else ""
+    if dry or not brain:
+        return "omitido" if dry else "sin brain.py"
+    p = subprocess.run([sys.executable, brain, "tarea", "add", "--para", "andre",
+                        "--cuando", now().strftime("%Y-%m-%dT%H:%M"), "--origen", "fabrica-vigia",
+                        "--clave", f"vigia:{nombre}:{que}", "--detalle", detalle, f"Fábrica {nombre}: {que}"],
+                       capture_output=True, text=True)
+    return p.stdout.strip() if p.returncode == 0 else f"falló: {p.stderr.strip()[:120]}"
+
+
+def buscar_panel(label):
+    rc, out, _ = herdr("pane", "list")
+    if rc != 0:
+        return None, False
+    for p in jresult(out).get("panes", []):
+        if p.get("label") == label:
+            return p, True
+    return None, True
+
+
+def buscar_workspace(label):
+    rc, out, _ = herdr("workspace", "list")
+    for w in jresult(out).get("workspaces", []) if rc == 0 else []:
+        if w.get("label") == label:
+            return w.get("workspace_id")
+    return None
+
+
+def relanzar(cfg, motivo, st, dry, panel=None):
+    """La receta de sucesión de /factory (references/succession.md §2-3), sin humano."""
+    ventana = [t for t in st.get("relances", [])
+               if datetime.fromisoformat(t) > now() - timedelta(hours=VENTANA_H)]
+    if len(ventana) >= cfg.get("max_relances", MAX_RELANCES):
+        if not st.get("tope_avisado"):
+            st["tope_avisado"] = aviso(cfg["nombre"], "el vigía dejó de relanzar",
+                                       f"{len(ventana)} relances en {VENTANA_H} h; último motivo: {motivo}", dry)
+        return {"accion": "tope", "motivo": motivo, "relances_6h": len(ventana)}
+    mem = memoria()
+    if mem["roja"]:
+        return {"accion": "freno-memoria", "motivo": motivo, **mem}
+    kick = (cfg.get("kickoff") or KICKOFF).format(motivo=motivo, repo=cfg["repo"])
+    plan = []
+    pane_id = panel.get("pane_id") if panel else None
+    if not pane_id:
+        ws = buscar_workspace(cfg["workspace_label"])
+        if not ws:
+            plan.append(["workspace", "create", "--cwd", cfg["cwd"], "--label", cfg["workspace_label"]])
+        plan.append(["tab", "create", "--workspace", ws or "<nuevo>", "--cwd", cfg["cwd"],
+                     "--label", cfg["label"], "--no-focus"])
+        plan.append(["pane", "rename", "<nuevo>", cfg["label"]])   # la ronda busca por la etiqueta del PANEL
+    else:
+        # el panel que sobrevive tiene SU cwd, no el registrado: claude arrancaría en otra carpeta
+        plan.append(["pane", "run", pane_id, "cd " + shlex.quote(cfg["cwd"])])
+    plan += [["agent", "start", cfg["label"], "--kind", "claude", "--pane", pane_id or "<nuevo>",
+              "--timeout", "90000", "--", "--dangerously-skip-permissions"],
+             ["pane", "run", pane_id or "<nuevo>", kick],
+             ["agent", "wait", pane_id or "<nuevo>", "--until", "working", "--timeout", "30000"]]
+    if dry:
+        return {"accion": "relanzaria", "motivo": motivo, "plan": plan}
+    hechos = []
+    for step in plan:
+        if step[:2] == ["workspace", "create"]:
+            rc, out, err = herdr(*step)
+            ws = jresult(out).get("workspace", {}).get("workspace_id")
+            hechos.append([*step[:2], rc])
+            continue
+        if step[:2] == ["tab", "create"]:
+            step[3] = ws
+            rc, out, err = herdr(*step)
+            pane_id = jresult(out).get("root_pane", {}).get("pane_id")
+            hechos.append([*step[:2], rc])
+            if not pane_id:
+                return {"accion": "fallo", "motivo": motivo, "paso": "tab create", "err": err[-200:]}
+            continue
+        step = [pane_id if s == "<nuevo>" else s for s in step]
+        rc, out, err = herdr(*step, timeout=120)
+        intentos = 0
+        while rc != 0 and step[:2] == ["agent", "start"] and "agent_pane_busy" in err and intentos < 10:
+            # un tab recién creado todavía está cargando su shell (medido 2026-11-11: zsh tarda unos s)
+            time.sleep(3)
+            intentos += 1
+            rc, out, err = herdr(*step, timeout=120)
+        hechos.append([*step[:2], rc])
+        if rc != 0 and step[:2] != ["agent", "wait"]:
+            return {"accion": "fallo", "motivo": motivo, "paso": " ".join(step[:2]), "err": err[-200:]}
+    st.setdefault("relances", []).append(now().isoformat())
+    _, pantalla, _ = herdr("pane", "read", pane_id, "--source", "visible")
+    if "trust this folder" in pantalla:
+        # aceptar la confianza de una carpeta es una decisión de seguridad, no del vigía
+        st["confianza_avisada"] = aviso(cfg["nombre"], "pide confiar en su carpeta",
+                                        f"panel {pane_id}, carpeta {cfg['cwd']}: ábrelo y acepta, o registra otra", dry)
+        return {"accion": "fallo", "motivo": motivo, "paso": "confianza de carpeta", "pane": pane_id}
+    st["relances"] = st["relances"][-20:]
+    st.pop("tope_avisado", None)
+    return {"accion": "relanzada", "motivo": motivo, "pane": pane_id, "pasos": hechos}
+
+
+def ronda_una(cfg, dry):
+    nombre = cfg["nombre"]
+    stp = STATE / f"{nombre}.state.json"
+    st = load_json(stp, {})
+    panel, herdr_ok = buscar_panel(cfg["label"])
+    if not herdr_ok:
+        r = {"accion": "sin-herdr", "motivo": "herdr no responde (¿reinicio? el servicio lo levanta)"}
+    elif panel is None:
+        r = relanzar(cfg, "su panel no existe: sesión cerrada o máquina reiniciada", st, dry)
+    elif panel.get("agent") != "claude":
+        r = relanzar(cfg, "el panel sigue pero claude salió", st, dry, panel=panel)
+    else:
+        pid, estado = panel["pane_id"], panel.get("agent_status")
+        _, texto, _ = herdr("pane", "read", pid, "--source", "visible")
+        texto = texto[-4000:]
+        if LIMIT_RE.search(texto) and estado != "working":
+            t = st.get("reanudar") or (reset_at(texto, now()) or now() + timedelta(minutes=30)).isoformat()
+            st["reanudar"] = t
+            if now() >= datetime.fromisoformat(t):
+                if not dry:
+                    herdr("agent", "prompt", pid, "Se reinició el límite de uso: sigue con /cofoundy-orchestrator:factory donde quedaste.")
+                    st.pop("reanudar", None)
+                r = {"accion": "reanudada" if not dry else "reanudaria", "motivo": "límite de uso vencido"}
+            else:
+                r = {"accion": "espera-limite", "hasta": t}
+        elif estado == "blocked":
+            if not st.get("bloqueo_avisado"):
+                st["bloqueo_avisado"] = aviso(nombre, "espera una confirmación en su panel",
+                                              f"panel {pid}: pide permiso o pregunta; ábrelo en herdr", dry)
+            r = {"accion": "bloqueada", "aviso": st["bloqueo_avisado"]}
+        elif estado == "working":
+            st.pop("quieta_desde", None)
+            st.pop("bloqueo_avisado", None)
+            st.pop("reanudar", None)
+            r = {"accion": "nada", "estado": "working"}
+        else:
+            desde = st.setdefault("quieta_desde", now().isoformat())
+            mins = (now() - datetime.fromisoformat(desde)).total_seconds() / 60
+            if mins >= cfg.get("quieta_min", QUIETA_MIN):
+                if not dry:
+                    herdr("agent", "prompt", pid, "Ronda del vigía: llevas un rato quieta. Revisa tu /loop y sigue con /cofoundy-orchestrator:factory.")
+                    st["quieta_desde"] = now().isoformat()
+                r = {"accion": "empujada" if not dry else "empujaria", "quieta_min": round(mins)}
+            else:
+                r = {"accion": "nada", "estado": estado, "quieta_min": round(mins)}
+    if not dry:
+        STATE.mkdir(parents=True, exist_ok=True)
+        stp.write_text(json.dumps(st, ensure_ascii=False))
+        if r["accion"] != "nada":
+            log(nombre, r)
+    return {"nombre": nombre, **r}
+
+
+def fabricas():
+    return [load_json(f, None) for f in sorted(CONF.glob("*.json"))] if CONF.is_dir() else []
+
+
+def cmd_vigilar(a):
+    CONF.mkdir(parents=True, exist_ok=True)
+    cfg = {"nombre": a.nombre, "label": a.label or f"factory-{a.nombre}", "workspace_label": a.workspace_label,
+           "cwd": str(Path(a.cwd).expanduser()), "repo": a.repo, "kickoff": a.kickoff,
+           "worker_id": a.worker_id, "quieta_min": a.quieta_min, "max_relances": a.max_relances,
+           "desde": now().isoformat(timespec="seconds")}
+    (CONF / f"{a.nombre}.json").write_text(json.dumps(cfg, ensure_ascii=False, indent=1))
+    print(f"vigilando {a.nombre}: panel «{cfg['label']}» en «{a.workspace_label}»")
+    return 0
+
+
+def cmd_soltar(a):
+    f = CONF / f"{a.nombre}.json"
+    if f.exists():
+        f.unlink()
+        print(f"suelto: {a.nombre}")
+        return 0
+    print(f"no vigilaba {a.nombre}", file=sys.stderr)
+    return 1
+
+
+def cmd_ronda(a):
+    res = [ronda_una(c, a.dry_run) for c in fabricas() if c]
+    if a.json:
+        print(json.dumps(res, ensure_ascii=False))
+    else:
+        for r in res:
+            print(f"{r['nombre']}: {r['accion']} · {r.get('motivo') or r.get('estado') or ''}")
+        if not res:
+            print("sin fábricas que vigilar")
+    return 0
+
+
+def cmd_estado(a):
+    out = []
+    for c in fabricas():
+        if c:
+            out.append({**c, "estado": load_json(STATE / f"{c['nombre']}.state.json", {})})
+    print(json.dumps(out, ensure_ascii=False, indent=None if a.json else 1))
+    return 0
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog="fabrica-vigia", description=__doc__.split("\n\n")[0])
+    sub = p.add_subparsers(dest="cmd", required=True)
+    v = sub.add_parser("vigilar")
+    v.add_argument("--nombre", required=True)
+    v.add_argument("--workspace-label", required=True)
+    v.add_argument("--cwd", required=True)
+    v.add_argument("--repo", required=True)
+    v.add_argument("--label")
+    v.add_argument("--kickoff")
+    v.add_argument("--worker-id")
+    v.add_argument("--quieta-min", type=int, default=QUIETA_MIN)
+    v.add_argument("--max-relances", type=int, default=MAX_RELANCES)
+    s = sub.add_parser("soltar")
+    s.add_argument("--nombre", required=True)
+    r = sub.add_parser("ronda")
+    r.add_argument("--dry-run", action="store_true")
+    r.add_argument("--json", action="store_true")
+    e = sub.add_parser("estado")
+    e.add_argument("--json", action="store_true")
+    a = p.parse_args(argv)
+    return {"vigilar": cmd_vigilar, "soltar": cmd_soltar, "ronda": cmd_ronda, "estado": cmd_estado}[a.cmd](a)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
