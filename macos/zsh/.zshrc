@@ -1,6 +1,9 @@
 # Homebrew setup for Apple Silicon
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
+# Variables de sesión de Claude filtradas a paneles nuevos (ver el archivo)
+source "$HOME/dotfiles/shared/zsh/claude-env-scrub.zsh"
+
 # Add local bin to PATH
 export PATH="$HOME/.local/bin:$PATH"
 
