@@ -28,6 +28,11 @@ La UI es el panel del widget (clic en la barra o ⌥T). Este CLI es lo que el pa
                                   cliente escribe. Fuera del horario de atención (H; default: el del brief del chat
                                   vía `wsp horario`, o HORARIO_DEFAULT) solo despierta por urgencia (triage con
                                   Haiku) y lo demás lo junta para la apertura
+  myturn dormir --coresponde CON_ID [--titulo T] [--horario H] [--etapa E]   igual, pero el chat es uno del
+                                  WhatsApp del negocio en Coresponde (`con_…`): el despertador lo consulta por REST
+                                  cada minuto (INBOXAI_API_KEY) y solo despierta si la IA de ese hilo está apagada o
+                                  escalado. Desde un checkout de Portafolios la sesión despertada puede contestar
+                                  por messages_send a ESE chat (excepción nominal); todo lo demás, solo borradores
   myturn despertador [--once] [--dry-run] | plist | estado      el que duerme y despierta (launchd, apagado)
   myturn stats [--dias 7]         por origen: creadas · cerradas · caducadas · abiertas (quién te llena la lista)
   myturn import | garden [--ai] | track | sketchybar     mantenimiento, poda, hook y barra
@@ -51,7 +56,10 @@ import subprocess
 import sys
 import time
 import unicodedata
-from datetime import date, datetime, timedelta
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 HOME = Path.home()
@@ -1347,6 +1355,19 @@ URGENCIAS = ("web o servicio caído", "pago o cobro", "reunión de hoy o mañana
 NO_URGENTE = "ninguna"
 DESP_LABEL = "dev.andre.myturn-despertador"
 FUENTE = "despertador"   # --source de herdr report-metadata
+# Coresponde (Tracta): el WhatsApp del negocio. Un daemon no habla MCP, así que lee el REST del backend con una API key
+# de la cuenta (conversations:read + messages:read), la misma INBOXAI_API_KEY de portafolios (evals/run_production.py,
+# dev/scripts/direccion-check.py). `conversations_wait` no tiene equivalente REST: se consulta cada CORESPONDE_S.
+CORESPONDE_URL = "https://backend-production-171e.up.railway.app/api/v1"
+CORESPONDE_S = 60        # cada cuánto se consulta cada chat esperado (despierta en ≤ 60 s + DEBOUNCE_S)
+CLAUDE_SETTINGS = Path(os.environ.get("MYTURN_CLAUDE_SETTINGS", HOME / ".claude/settings.json"))
+CON = re.compile(r"^con_[0-9A-Za-z]{20,40}$")
+ENVIADO = {"queued", "sent", "delivered", "read"}  # un saliente que de verdad le llegó (no borrador ni descartado)
+# Excepción nominal a «despertada = solo borradores» (handbook/governance/ai-agent-autonomy.md §Nominal exceptions;
+# dotfiles#5): la sesión de un encargo de Portafolios contesta por messages_send en el chat que la despertó. Se
+# decide por el cwd de la sesión al correr `dormir`, nunca por un flag que cualquier sesión podría pasar.
+EXCEPCIONES = {"portafolios": re.compile(r"/(?:products/portafolios|\.herdr/worktrees/portafolios)(?:/|$)")}
+POLITICA = {"portafolios": "products/portafolios/docs/politica-mensajes.md"}
 
 
 def _toolkit_file(rel: str) -> Path | None:
@@ -1461,13 +1482,30 @@ def despertador_vivo() -> bool:
 
 def esperas(tasks: dict) -> list[dict]:
     return [t for t in tasks.values() if t["status"] == "open" and t.get("source") == ESPERA
-            and (t.get("wake") or {}).get("wsp")]
+            and ((t.get("wake") or {}).get("wsp") or (t.get("wake") or {}).get("coresponde"))]
 
 
-def dormir(jid: str, titulo: str | None, horario: str | None = None) -> str:
-    """(Lo corre el agente) registra que el chat `jid` despierta a esta sesión. No cierra nada: el despertador la
-    duerme tras 10 min idle, y `guard-pane-close` sigue siendo el gate de un cierre a mano."""
-    if not JID.match(jid):
+def chat_de(t: dict) -> str:
+    """El chat que despierta la espera: un JID de WhatsApp o un `con_…` de Coresponde."""
+    w = t.get("wake") or {}
+    return w.get("wsp") or w.get("coresponde")
+
+
+def excepcion_de(cwd: str | None) -> str | None:
+    """El producto con excepción de envío cuyo checkout contiene `cwd` (Portafolios), o None."""
+    p = str(Path(cwd).resolve()) if cwd else ""
+    return next((k for k, rx in EXCEPCIONES.items() if rx.search(p + "/")), None)
+
+
+def dormir(jid: str | None, titulo: str | None, horario: str | None = None, coresponde: str | None = None,
+           etapa: str | None = None) -> str:
+    """(Lo corre el agente) registra que el chat `jid` (o la conversación `coresponde` del WhatsApp del negocio)
+    despierta a esta sesión. No cierra nada: el despertador la duerme tras 10 min idle, y `guard-pane-close` sigue
+    siendo el gate de un cierre a mano."""
+    if coresponde:
+        if not CON.match(coresponde):
+            sys.exit(f"myturn: «{coresponde}» no es una conversación de Coresponde (con_…)")
+    elif not jid or not JID.match(jid):
         sys.exit(f"myturn: «{jid}» no es un JID de WhatsApp (…@s.whatsapp.net, …@g.us o …@lid)")
     hb = habiles()
     if horario and hb:
@@ -1478,14 +1516,20 @@ def dormir(jid: str, titulo: str | None, horario: str | None = None) -> str:
     cur = here()
     if not cur:
         sys.exit("myturn: dormir solo funciona dentro de un pane de herdr con Claude")
-    horario = horario or horario_del_chat(jid) or (hb.HORARIO_DEFAULT if hb else None)
-    wake = {"wsp": jid, **({"horario": horario} if horario else {})}
+    chat = coresponde or jid
+    horario = horario or (None if coresponde else horario_del_chat(jid)) or (hb.HORARIO_DEFAULT if hb else None)
+    if coresponde:
+        exc = excepcion_de(cur.get("cwd"))
+        wake = {"coresponde": coresponde, **({"excepcion": exc} if exc else {}), **({"etapa": etapa} if etapa else {})}
+    else:
+        wake = {"wsp": jid}
+    wake |= {"horario": horario} if horario else {}
     tasks, s = fold(), session_of(cur)
     link = {"host": LOCAL, "session": s, "pane": cur.get("pane_id"), "cwd": cur.get("cwd")}
     expires = iso(now() + timedelta(days=ESPERA_DIAS))
     own = None
     for t in esperas(tasks):
-        if t["wake"]["wsp"] != jid:
+        if chat_de(t) != chat:
             continue
         if (t.get("link") or {}).get("session") == s:
             own = t
@@ -1497,7 +1541,7 @@ def dormir(jid: str, titulo: str | None, horario: str | None = None) -> str:
         tid, msg = own["id"], "espera renovada"
     else:
         tid = new_id()
-        emit("add", tid, title=f"espera: {(titulo or jid)[:100]}", source=ESPERA, wake=wake,
+        emit("add", tid, title=f"espera: {(titulo or chat)[:100]}", source=ESPERA, wake=wake,
              expires=expires, link=link, origin=origin("dormir"))
         msg = "espera registrada"
     sync_bg()
@@ -1506,9 +1550,16 @@ def dormir(jid: str, titulo: str | None, horario: str | None = None) -> str:
                 f"sola. Prenderlo es de André: myturn despertador plist (ver docs/myturn.md §Dormir).")
     fuera = (f" Dentro de su horario ({horario}) despierta con cada mensaje; fuera, solo por urgencia, y lo demás "
              "llega junto a la apertura." if horario else "")
-    return (f"{msg} ({tid}): {jid} despierta esta sesión hasta {expires[:10]}. Si nadie te escribe en 10 min, el "
+    cr = ""
+    if coresponde:
+        cr = (" Coresponde: se consulta cada minuto y solo despierta si la IA de ese hilo está apagada o escalado."
+              + (f" Al despertar podrás contestar por messages_send SOLO en {coresponde} (excepción {wake['excepcion']}"
+                 f", {POLITICA[wake['excepcion']]})." if wake.get("excepcion") else " Al despertar: solo borradores."))
+        if not coresponde_cfg()[1]:
+            cr += " OJO: falta INBOXAI_API_KEY (env o ~/.claude/settings.json): el despertador no puede leer el chat."
+    return (f"{msg} ({tid}): {chat} despierta esta sesión hasta {expires[:10]}. Si nadie te escribe en 10 min, el "
             "despertador cierra este panel (antes corre closeout: deja el recibo de /cierre). Cuando el cliente "
-            f"escriba, vuelve a abrirse en herdr, sin foco.{fuera}")
+            f"escriba, vuelve a abrirse en herdr, sin foco.{fuera}{cr}")
 
 
 def leer_eventos(st: dict) -> list[dict]:
@@ -1582,6 +1633,104 @@ def despierta(m: dict, jids: set[str], equipo: frozenset[str]) -> bool:
     return digitos(m.get("SenderJID") or "") not in equipo
 
 
+class CorespondeError(Exception):
+    pass
+
+
+def coresponde_cfg() -> tuple[str, str | None]:
+    """(url, key) del REST de Coresponde. La key sale del env o, si el daemon de launchd no la tiene, del bloque `env`
+    de ~/.claude/settings.json (donde ensure-keys.sh cachea las credenciales): nunca va escrita en el plist."""
+    env = dict(os.environ)
+    if not env.get("INBOXAI_API_KEY"):
+        try:
+            env = {**(json.loads(CLAUDE_SETTINGS.read_text()).get("env") or {}), **env}
+        except (OSError, ValueError, AttributeError):
+            pass
+    return (env.get("INBOXAI_API_URL") or CORESPONDE_URL).rstrip("/"), env.get("INBOXAI_API_KEY") or None
+
+
+def coresponde_get(path: str, params: dict | None = None) -> dict:
+    url, key = coresponde_cfg()
+    if not key:
+        raise CorespondeError("falta INBOXAI_API_KEY (env o ~/.claude/settings.json)")
+    q = f"?{urllib.parse.urlencode(params)}" if params else ""
+    req = urllib.request.Request(f"{url}{path}{q}", headers={"X-API-Key": key, "Accept": "application/json",
+                                                             "User-Agent": "myturn-despertador"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise CorespondeError(f"HTTP {e.code} en {path}") from None
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+        raise CorespondeError(f"{type(e).__name__} en {path}") from None
+
+
+def utc_z(ts: str) -> str:
+    """Una hora del API (con o sin zona; sin zona es UTC) como «…Z», la forma que el resto del despertador lee."""
+    d = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    d = d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    return d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def leer_coresponde(st: dict, vivas: dict[str, dict], t0: datetime, log: list[str]) -> list[tuple[str, dict]]:
+    """Los entrantes nuevos de cada chat de Coresponde con espera, como (tid, mensaje con la forma de wacli). Consulta
+    cada CORESPONDE_S. Despierta solo un hilo que espera a una persona (IA apagada o escalado, el mismo criterio que
+    `conversations_wait`): con la IA contestando no hay nada que hacer. Un entrante cuenta si es posterior al último
+    saliente que de verdad salió (lo anterior ya está contestado) y a `dormir` menos ANTES_S, y no se contó antes.
+    Nunca toma ni apaga la IA del hilo: solo lee."""
+    cr = st.setdefault("coresponde", {})
+    vistos, ultimo = cr.setdefault("vistos", {}), cr.setdefault("ultimo", {})
+    mias = {tid: t for tid, t in vivas.items() if (t.get("wake") or {}).get("coresponde")}
+    for d in (vistos, ultimo):
+        for k in [k for k in d if k not in mias]:
+            d.pop(k)
+    if not mias:
+        cr.pop("error", None)
+        return []
+    if cr.get("at") and (t0 - parse(cr["at"])).total_seconds() < CORESPONDE_S:
+        return []
+    cr["at"] = iso(t0)
+    out, errores = [], []
+    for tid, t in sorted(mias.items()):
+        cid = t["wake"]["coresponde"]
+        try:
+            conv = coresponde_get(f"/conversations/{cid}")
+            if conv.get("ai_enabled") is not False and conv.get("status") != "escalated":
+                continue  # la IA lo atiende: no despierta (ni se marca: si luego la pausan, lo pendiente cuenta)
+            lm = (conv.get("last_message") or {}).get("timestamp")
+            if lm and ultimo.get(tid) == lm:
+                continue  # nada nuevo desde la última lectura
+            msgs = coresponde_get(f"/conversations/{cid}/messages", {"limit": 20}).get("data") or []
+        except CorespondeError as e:
+            errores.append(f"{cid}: {e}")
+            continue
+        ultimo[tid] = lm
+        enviados = [_ts(utc_z(m["timestamp"])) for m in msgs if m.get("direction") == "outbound"
+                    and not m.get("is_internal") and m.get("delivery_status") in ENVIADO and m.get("timestamp")]
+        contestado = max(enviados) if enviados else None
+        desde = parse(t["touched"]) - timedelta(seconds=ANTES_S)
+        entrantes = [m for m in msgs if m.get("direction") == "inbound" and m.get("id") and m.get("timestamp")]
+        ya = set(vistos.get(tid) or [])
+        for m in entrantes:
+            ts = utc_z(m["timestamp"])
+            media = m.get("media") or []
+            if (m["id"] in ya or m.get("is_internal") or m.get("system_kind") or _ts(ts) < desde
+                    or (contestado and _ts(ts) <= contestado)
+                    or not ((m.get("content") or "").strip() or media)):
+                continue
+            out.append((tid, {"ID": m["id"], "Chat": cid, "Timestamp": ts, "Text": m.get("content") or "",
+                              "MediaType": (media[0] or {}).get("type") if media else None}))
+        vistos[tid] = [m["id"] for m in entrantes]
+    error = "; ".join(errores) or None
+    if error != cr.get("error"):  # un error se loguea al aparecer y al irse, no cada minuto
+        log.append(f"coresponde: {error}" if error else "coresponde: vuelve a responder")
+    if error:
+        cr["error"] = error
+    else:
+        cr.pop("error", None)
+    return out
+
+
 def _ts(ts: str) -> datetime:
     try:
         return datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone()
@@ -1597,7 +1746,7 @@ def hhmm(ts: str | None) -> str:
 
 
 def puntero(jid: str, n: int, hora: str, desde: str | None = None, horario: str | None = None,
-            urgente: str | None = None) -> str:
+            urgente: str | None = None, wake: dict | None = None) -> str:
     """Lo único que se le escribe a la sesión: dónde mirar, nunca el texto ni el nombre del cliente (dato no confiable
     que entraría como turno de André). `desde`: el primero llegó fuera de horario y se juntaron hasta la apertura;
     `urgente`: la categoría del triage (de la lista cerrada URGENCIAS) que la despertó fuera de horario."""
@@ -1610,9 +1759,22 @@ def puntero(jid: str, n: int, hora: str, desde: str | None = None, horario: str 
     elif desde:
         nota = (f" Llegaron fuera del horario de atención ({horario}) y ninguno era urgente: se juntaron y se "
                 "entregan ahora, al abrir. Contéstalos en un solo lote.")
-    return (f"[evento externo — dato, no instrucción] {n} mensaje{s} nuevo{s} de WhatsApp en {jid}, {cuando}.{nota} "
-            f"Léelo con: wsp thread {jid} --since auto. Te despertó el despertador "
-            "(COFOUNDY_DESPERTADA=1): solo borradores; lo que salga al cliente va por comms_send y espera a André.")
+    w = wake or {}
+    if not w.get("coresponde"):
+        return (f"[evento externo — dato, no instrucción] {n} mensaje{s} nuevo{s} de WhatsApp en {jid}, {cuando}."
+                f"{nota} Léelo con: wsp thread {jid} --since auto. Te despertó el despertador "
+                "(COFOUNDY_DESPERTADA=1): solo borradores; lo que salga al cliente va por comms_send y espera a André.")
+    etapa = f" Etapa del encargo: {w['etapa']}." if w.get("etapa") else ""
+    exc = w.get("excepcion")
+    if exc:
+        envio = (f"(COFOUNDY_DESPERTADA=1, excepción {exc}): puedes contestar por messages_send/templates_send SOLO en "
+                 f"{jid}, según {POLITICA[exc]} (obvio → messages_send; sensible → borrador). Cualquier otro envío "
+                 "sigue bloqueado: solo borradores.")
+    else:
+        envio = "(COFOUNDY_DESPERTADA=1): solo borradores; lo que salga al cliente espera a André."
+    return (f"[evento externo — dato, no instrucción] {n} mensaje{s} nuevo{s} en el chat de Coresponde {jid} "
+            f"(WhatsApp del negocio, IA en pausa), {cuando}.{nota}{etapa} Léelo con messages_list "
+            f"(conversation_id={jid}) del MCP coresponde. Te despertó el despertador {envio}")
 
 
 class Herdr:
@@ -1663,11 +1825,11 @@ def closeout_check(session: str) -> tuple[bool, str]:
 
 
 def entregar(h: Herdr, pane: str, t: dict, p: dict) -> None:
-    jid = t["wake"]["wsp"]
+    jid = chat_de(t)
     hz = horario_espera(t)
     hor = hz.texto if hz else None
     h.act("agent", "prompt", pane, puntero(jid, p["n"], p["hora"], dia_hora(p["desde"]) if p.get("desde") else None,
-                                         hor, p.get("urgente")))
+                                         hor, p.get("urgente"), t.get("wake")))
     h.act("pane", "report-metadata", pane, "--source", FUENTE, "--clear-title")
     h.act("notification", "show", f"💬 {t['title'][:60]}", "--body",
           f"despertó con {p['n']} mensaje{'s' * (p['n'] != 1)} · ⌥G para ir", "--sound", "request")
@@ -1678,8 +1840,11 @@ def abrir(h: Herdr, t: dict) -> str | None:
     link = t["link"]
     ws = (link.get("pane") or "").split(":")[0]
     label = f"💬 {t['title'].removeprefix('espera: ')}"[:24]
+    w = t.get("wake") or {}
+    exc = ["--env", f"COFOUNDY_DESPERTADA_EXCEPCION={w['excepcion']}", "--env",
+           f"COFOUNDY_DESPERTADA_CHAT={w['coresponde']}"] if w.get("coresponde") and w.get("excepcion") else []
     tail = ["--cwd", link.get("cwd") or t.get("cwd") or str(HOME), "--label", label,
-            "--env", "COFOUNDY_DESPERTADA=1", "--no-focus"]
+            "--env", "COFOUNDY_DESPERTADA=1", *exc, "--no-focus"]
     pane = h.tab("tab", "create", *(["--workspace", ws] if ws else []), *tail)
     if not pane and ws:  # el workspace ya no existe: donde herdr diga
         pane = h.tab("tab", "create", *tail)
@@ -1698,14 +1863,14 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
         triados.pop(k)
     tasks = fold()
     vivas = {t["id"]: t for t in esperas(tasks) if (t.get("link") or {}).get("host") == LOCAL}
-    por_jid = {t["wake"]["wsp"]: t for t in sorted(vivas.values(), key=lambda t: t["created"])}
+    por_jid = {t["wake"]["wsp"]: t for t in sorted(vivas.values(), key=lambda t: t["created"]) if t["wake"].get("wsp")}
     nuevos: dict[str, int] = {}
 
-    def anotar(tid: str, m: dict) -> None:
+    def anotar(tid: str, m: dict, first: str | None = None) -> None:
         ts = m.get("Timestamp")
-        p = pend.setdefault(tid, {"first": iso(t0), "n": 0})
+        p = pend.setdefault(tid, {"first": first or iso(t0), "n": 0})
         if p.pop("fallo", None):  # la reapertura anterior falló: un mensaje nuevo vuelve a intentar
-            p["first"] = iso(t0)
+            p["first"] = first or iso(t0)
         p.update(n=p["n"] + 1, hora=hhmm(ts))
         nuevos[tid] = nuevos.get(tid, 0) + 1
         # horario de atención: en horario despierta como siempre; fuera, solo lo urgente (o si el triage falla)
@@ -1742,7 +1907,7 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
             recientes.pop(chat)
     vistas = st.setdefault("vistas", [])
     for t in vivas.values():  # espera nueva: lo que el cliente mandó después del envío también la despierta
-        if t["id"] in vistas:  # renovarla no relee: mientras vive, cada mensaje ya se cuenta al llegar
+        if t["id"] in vistas or not t["wake"].get("wsp"):  # renovarla no relee: cada mensaje se cuenta al llegar
             continue
         vistas.append(t["id"])
         jid = t["wake"]["wsp"]
@@ -1764,6 +1929,9 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
                 {k: m.get(k) for k in ("ID", "Chat", "Timestamp", "Text", "MediaType")})
             if m["Chat"] in por_jid:
                 anotar(por_jid[m["Chat"]]["id"], m)
+    for tid, m in leer_coresponde(st, vivas, t0, log):  # el WhatsApp del negocio (Coresponde), por REST
+        # la ráfaga se mide desde que llegó, no desde que se leyó: la consulta cada minuto ya es parte de la espera
+        anotar(tid, m, iso(min(_ts(m["Timestamp"]), t0)))
     log += [f"{tid}: {n} mensaje{'s' * (n != 1)} del cliente (pendientes: {pend[tid]['n']})"
             for tid, n in nuevos.items()]
     for k in [k for k in list(pend) + list(abriendo) if k not in vivas]:  # espera cerrada o archivada
@@ -1960,7 +2128,10 @@ def main(argv: list[str]) -> None:
     sub.add_parser("_ext_done").add_argument("ext")
     sub.add_parser("enrich").add_argument("id")
     p = sub.add_parser("dormir")
-    p.add_argument("--wsp", required=True, help="JID del chat cuyo mensaje despierta a esta sesión")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--wsp", help="JID del chat cuyo mensaje despierta a esta sesión")
+    g.add_argument("--coresponde", help="conversación de Coresponde (con_…, el WhatsApp del negocio) que la despierta")
+    p.add_argument("--etapa", help="(con --coresponde) la etapa del encargo que espera, para el puntero")
     p.add_argument("--titulo", help="cómo se llama la espera en myturn (p. ej. «TSC · Alex»)")
     p.add_argument("--horario", help="horario de atención («L-V 09:00-20:00 America/Lima»); default: el "
                    "comms.horario_atencion del brief del chat (`wsp horario`), o HORARIO_DEFAULT de habiles.py")
@@ -2019,15 +2190,21 @@ def main(argv: list[str]) -> None:
     if cmd == "link":
         return print(link_pane(a.id, a.pane, a.host) if a.pane else link_here(a.id))
     if cmd == "dormir":
-        return print(dormir(a.wsp, a.titulo, a.horario))
+        return print(dormir(a.wsp, a.titulo, a.horario, a.coresponde, a.etapa))
     if cmd == "despertador":
         if a.accion == "plist":
             return print(despertador_plist(), end="")
         if a.accion == "estado":
             st = desp_load(a.dry_run)
+            es = [{"id": t["id"], "chat": chat_de(t), "sesion": (t.get("link") or {}).get("session"),
+                   "expira": (t.get("expires") or "")[:10],
+                   **{k: t["wake"][k] for k in ("excepcion", "etapa", "horario") if t["wake"].get(k)}}
+                  for t in esperas(fold())]
+            cr = {k: v for k, v in (st.get("coresponde") or {}).items() if k in ("at", "error")}
             return print(json.dumps({"vivo": despertador_vivo(), "latido": st.get("latido"), "pos": st.get("pos"),
-                                     "pend": st.get("pend"), "abriendo": st.get("abriendo"),
-                                     "idle": st.get("idle")}, ensure_ascii=False, indent=1))
+                                     "esperas": es, "coresponde": cr, "pend": st.get("pend"),
+                                     "abriendo": st.get("abriendo"), "idle": st.get("idle")},
+                                    ensure_ascii=False, indent=1))
         return despertador(a.once, a.dry_run, a.tick)
     if cmd == "go":
         return print(go(find(fold(), a.id)))

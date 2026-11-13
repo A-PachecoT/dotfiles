@@ -653,3 +653,244 @@ def test_dormir_toma_el_horario_del_brief_del_chat(mt, world, horario, monkeypat
     assert mt.esperas(mt.fold())[0]["wake"]["horario"] == "L-D 08:00-22:00 America/Lima"
     with pytest.raises(SystemExit):
         mt.dormir(GRUPO, None, "todo el día")
+
+
+# ── Coresponde: el WhatsApp del negocio, por REST (dotfiles#5) ───────────────────────────────────────────────
+CON = "con_01M6PV1CS97XX51HV3X933H4BM"
+OTRO = "con_01M0WZEND8DTSFHHQSCZR92ZFY"
+PORTA = "/Users/x/cofoundy/products/portafolios/.claude/worktrees/proceso-agencia"
+
+
+class Coresponde:
+    """El REST de Coresponde falso: `conv` es GET /conversations/{id}, `msgs` GET …/messages; `calls` lo pedido."""
+
+    def __init__(self):
+        self.conv = {"id": CON, "ai_enabled": False, "ai_paused_reason": "handoff", "status": "open",
+                     "last_message": None}
+        self.msgs: list[dict] = []
+        self.calls: list[str] = []
+        self.falla = None
+
+    def get(self, path, params=None):
+        self.calls.append(path)
+        if self.falla:
+            raise self.falla
+        if path.endswith("/messages"):
+            return {"data": list(self.msgs), "pagination": {"has_more": False}}
+        return self.conv
+
+    def entra(self, i, at, text="ya elegí el territorio 2", **kw):
+        m = {"id": f"msg_{i}", "conversation_id": CON, "direction": "inbound", "content": text, "media": None,
+             "delivery_status": "delivered", "is_internal": False, "system_kind": None,
+             "timestamp": at.astimezone(timezone.utc).isoformat(), **kw}
+        self.msgs.append(m)
+        self.conv["last_message"] = {"direction": m["direction"], "timestamp": m["timestamp"], "content": text}
+        return m
+
+    def sale(self, i, at, status="sent", **kw):
+        return self.entra(i, at, text="¿cuál territorio te gustó?", direction="outbound", delivery_status=status, **kw)
+
+
+@pytest.fixture
+def cr(mt, monkeypatch):
+    c = Coresponde()
+    monkeypatch.setattr(mt, "coresponde_get", c.get)
+    monkeypatch.setenv("INBOXAI_API_KEY", "fov_prueba")
+    return c
+
+
+def espera_cr(mt, excepcion="portafolios", session="s-pame", con=CON, tid="c1", **wake):
+    w = {"coresponde": con, **({"excepcion": excepcion} if excepcion else {}), **wake}
+    mt.emit("add", tid, title="espera: Pame · E4", source=mt.ESPERA, wake=w,
+            expires=mt.iso(mt.now() + timedelta(days=21)),
+            link={"host": mt.LOCAL, "session": session, "pane": "wP:p1", "cwd": PORTA})
+
+
+def test_dormir_coresponde_registra_la_excepcion_por_cwd_y_estado_la_muestra(mt, world, clock, monkeypatch, capsys,
+                                                                              cr):
+    mt.write_atomic(mt.desp_file(False), json.dumps({"latido": mt.iso(mt.now())}))
+    monkeypatch.setattr(mt, "here", lambda: {"agent_session": {"value": "s-pame"}, "pane_id": "wP:p1", "cwd": PORTA})
+    out = mt.dormir(None, "Pame · E4", None, CON, "E4 · Territorios")
+    assert f"messages_send SOLO en {CON}" in out and "politica-mensajes.md" in out
+    (t,) = mt.esperas(mt.fold())
+    assert t["wake"]["coresponde"] == CON and t["wake"]["excepcion"] == "portafolios"
+    assert t["wake"]["etapa"] == "E4 · Territorios" and "wsp" not in t["wake"]
+    # otra sesión fuera de Portafolios: reemplaza la espera de ese chat y NO hereda la excepción
+    monkeypatch.setattr(mt, "here", lambda: {"agent_session": {"value": "s-otra"}, "pane_id": "wD:p1",
+                                             "cwd": "/Users/x/cofoundy/deals"})
+    assert "solo borradores" in mt.dormir(None, None, None, CON)
+    (t,) = mt.esperas(mt.fold())
+    assert t["link"]["session"] == "s-otra" and "excepcion" not in t["wake"]
+    with pytest.raises(SystemExit):
+        mt.dormir(None, None, None, "pame")
+    capsys.readouterr()
+    mt.main(["despertador", "estado"])
+    (e,) = json.loads(capsys.readouterr().out)["esperas"]
+    assert e["chat"] == CON and e["sesion"] == "s-otra"
+
+
+def test_dormir_coresponde_avisa_si_falta_la_key(mt, world, clock, monkeypatch, tmp_path):
+    monkeypatch.delenv("INBOXAI_API_KEY", raising=False)
+    monkeypatch.setattr(mt, "CLAUDE_SETTINGS", tmp_path / "no-hay.json")
+    mt.write_atomic(mt.desp_file(False), json.dumps({"latido": mt.iso(mt.now())}))
+    monkeypatch.setattr(mt, "here", lambda: {"agent_session": {"value": "s"}, "pane_id": "wP:p1", "cwd": PORTA})
+    assert "falta INBOXAI_API_KEY" in mt.dormir(None, None, None, CON)
+    (tmp_path / "s.json").write_text(json.dumps({"env": {"INBOXAI_API_KEY": "fov_de_settings"}}))
+    monkeypatch.setattr(mt, "CLAUDE_SETTINGS", tmp_path / "s.json")
+    assert mt.coresponde_cfg() == (mt.CORESPONDE_URL, "fov_de_settings")  # el daemon de launchd la lee de ahí
+
+
+def test_coresponde_en_handoff_despierta_con_la_excepcion_y_un_puntero_sin_el_texto(mt, world, clock, cr):
+    espera_cr(mt)
+    cr.sale(0, mt.now() - timedelta(minutes=1))  # el agente preguntó y se durmió
+    tick(mt)
+    assert world.herdr == []
+    cr.entra(1, mt.now() + timedelta(seconds=1))
+    clock(seconds=61)  # la siguiente consulta (cada minuto)
+    tick(mt)
+    assert mt.desp_load()["pend"]["c1"]["n"] == 1
+    clock(seconds=30)  # 91 s desde que llegó: la ráfaga cuenta desde el mensaje, no desde la consulta
+    tick(mt)
+    create, run_ = world.herdr
+    envs = [create[i + 1] for i, a in enumerate(create) if a == "--env"]
+    assert envs == ["COFOUNDY_DESPERTADA=1", "COFOUNDY_DESPERTADA_EXCEPCION=portafolios",
+                    f"COFOUNDY_DESPERTADA_CHAT={CON}"]
+    assert "--no-focus" in create and run_ == ["pane", "run", "wT:n1", "claude --resume s-pame"]
+    world.agents = [claude("s-pame", "idle", "wT:n1")]
+    clock(seconds=15)
+    tick(mt)
+    txt = next(c for c in world.herdr if c[:2] == ["agent", "prompt"])[3]
+    assert f"chat de Coresponde {CON}" in txt and "messages_list" in txt and "SOLO en " + CON in txt
+    assert "politica-mensajes.md" in txt and "territorio 2" not in txt  # el texto del cliente nunca va al puntero
+
+
+def test_coresponde_con_la_ia_contestando_no_despierta_ni_lee_el_hilo(mt, world, clock, cr):
+    cr.conv["ai_enabled"], cr.conv["ai_paused_reason"] = True, None
+    espera_cr(mt)
+    cr.entra(1, mt.now())
+    tick(mt)
+    clock(seconds=200)
+    tick(mt)
+    assert world.herdr == [] and not mt.desp_load().get("pend")
+    assert not any(c.endswith("/messages") for c in cr.calls)  # ni siquiera pide los mensajes
+
+
+def test_coresponde_escalado_despierta_aunque_la_ia_figure_prendida(mt, world, clock, cr):
+    cr.conv["ai_enabled"], cr.conv["status"] = True, "escalated"
+    espera_cr(mt, excepcion=None)
+    cr.entra(1, mt.now() - timedelta(minutes=2))
+    tick(mt)
+    create = next(c for c in world.herdr if c[:2] == ["tab", "create"])
+    assert [create[i + 1] for i, a in enumerate(create) if a == "--env"] == ["COFOUNDY_DESPERTADA=1"]
+
+
+def test_coresponde_lo_contestado_lo_viejo_y_lo_ya_contado_no_despiertan(mt, world, clock, cr):
+    espera_cr(mt)
+    cr.entra(1, mt.now() - timedelta(minutes=30))  # de antes de `dormir`
+    cr.entra(2, mt.now() - timedelta(minutes=2))
+    cr.sale(3, mt.now() - timedelta(minutes=1))  # ya contestado
+    cr.sale(4, mt.now(), status="draft")  # un borrador no contesta nada…
+    tick(mt)
+    assert not mt.desp_load().get("pend")
+    cr.entra(5, mt.now() + timedelta(seconds=5), is_internal=True)  # …ni una nota interna es del cliente
+    cr.entra(6, mt.now() + timedelta(seconds=6), text="", system_kind="revoke")
+    clock(seconds=61)
+    tick(mt)
+    assert not mt.desp_load().get("pend")
+    cr.entra(7, mt.now())
+    clock(seconds=61)
+    tick(mt)
+    clock(seconds=61)
+    cr.conv["last_message"]["timestamp"] = "2026-11-07T15:59:59+00:00"  # cambió algo, se relee la página
+    tick(mt)
+    assert sum(1 for c in world.herdr if c[:2] == ["tab", "create"]) == 1
+    assert mt.desp_load()["abriendo"]["c1"]["n"] == 1  # el mismo mensaje no se cuenta dos veces
+
+
+def test_coresponde_consulta_cada_minuto_y_un_error_se_loguea_una_vez(mt, world, clock, cr):
+    espera_cr(mt)
+    tick(mt)
+    n = len(cr.calls)
+    clock(seconds=15)
+    tick(mt)
+    assert len(cr.calls) == n  # dentro del minuto no consulta
+    cr.falla = mt.CorespondeError("HTTP 403 en /conversations/x")
+    clock(seconds=61)
+    assert any("HTTP 403" in ln for ln in tick(mt))
+    clock(seconds=61)
+    assert not any("coresponde" in ln for ln in tick(mt))  # el mismo error no se repite cada minuto
+    assert "HTTP 403" in mt.desp_load()["coresponde"]["error"]
+    cr.falla = None
+    clock(seconds=61)
+    assert "coresponde: vuelve a responder" in tick(mt)
+
+
+def test_coresponde_fuera_de_horario_respeta_el_triage(mt, world, horario, cr):
+    espera_cr(mt, horario=HORARIO_VH)
+    tick(mt)
+    cr.entra(1, horario.at(), text="gracias, mañana veo")
+    horario.clock(seconds=61)
+    tick(mt)
+    assert len(horario.triage) == 1 and "gracias, mañana veo" in horario.triage[0][1]
+    assert mt.desp_load()["pend"]["c1"]["abre"].startswith("2026-11-12T09:00")
+    assert not any(c[:2] == ["tab", "create"] for c in world.herdr)
+
+
+def test_cli_coresponde_once_dry_run_contra_un_api_falso(mt, tmp_path):
+    """El comando entero del issue contra un REST falso: en handoff imprime el herdr; con la IA activa, nada."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    estado = {"ai": False}
+    ts = (datetime.now(timezone.utc) - timedelta(minutes=2)).isoformat()
+
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            assert self.headers["X-API-Key"] == "fov_prueba"
+            if self.path.startswith(f"/api/v1/conversations/{CON}/messages"):
+                body = {"data": [{"id": "msg_1", "direction": "inbound", "content": "hola", "timestamp": ts,
+                                  "delivery_status": "delivered", "is_internal": False}]}
+            elif self.path == f"/api/v1/conversations/{CON}":
+                body = {"id": CON, "ai_enabled": estado["ai"], "status": "open",
+                        "last_message": {"direction": "inbound", "timestamp": ts}}
+            else:
+                self.send_response(404)
+                self.end_headers()
+                return
+            data = json.dumps(body).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *a):
+            pass
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    mt.emit("add", "c1", title="espera: Pame · E4", source=mt.ESPERA,
+            wake={"coresponde": CON, "excepcion": "portafolios"},
+            expires=mt.iso(mt.now() + timedelta(days=21)),
+            link={"host": mt.LOCAL, "session": "s-pame-prueba", "pane": "wP:p1", "cwd": str(tmp_path)})
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "herdr").write_text("#!/bin/sh\necho '{\"result\":{\"agents\":[]}}'\n")
+    (bindir / "herdr").chmod(0o755)
+
+    def corre(cache):
+        env = {**os.environ, "MYTURN_CACHE": str(tmp_path / cache), "MYTURN_HABILES": str(tmp_path / "no-hay.py"),
+               "INBOXAI_API_KEY": "fov_prueba", "INBOXAI_API_URL": f"http://127.0.0.1:{srv.server_port}/api/v1",
+               "PATH": f"{bindir}:{os.environ['PATH']}"}
+        p = subprocess.run([str(SCRIPT), "despertador", "--once", "--dry-run"], env=env, capture_output=True,
+                           text=True, timeout=60)
+        assert p.returncode == 0, p.stderr
+        return p.stdout
+
+    try:
+        out = corre("c-handoff")
+        assert "$ herdr tab create" in out and f"COFOUNDY_DESPERTADA_CHAT={CON}" in out
+        assert "$ herdr pane run dry:p1 'claude --resume s-pame-prueba'" in out
+        estado["ai"] = True  # control negativo: la IA contesta ese hilo
+        assert "herdr" not in corre("c-ia")
+    finally:
+        srv.shutdown()
