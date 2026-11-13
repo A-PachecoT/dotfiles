@@ -214,6 +214,7 @@ dueño y `end_date` = caducidad; `brain tarea add`), y myturn lo trae como una f
 | Hammerspoon | `hammerspoon://myturn-goto?q=<pane>&downs=N`: teclea el navegador de herdr para cambiar de máquina |
 | Claude Code | hook `UserPromptSubmit` (session_id + `HERDR_PANE_ID`); `claude -p --json-schema` para la IA |
 | Obsidian (BrainFlow) | `Tareas.md` espejo + consulta ```tasks``` en el daily note + importación de `- [ ]` del To-do; `daily_prep.py` y morning-brief (Hermes) parcheados |
+| Coresponde (Tracta, WhatsApp del negocio) | REST del backend con `X-API-Key` = `INBOXAI_API_KEY` (env o el `env` de `~/.claude/settings.json`; key de cuenta de `ten_cofoundy` con `conversations:read` + `messages:read`), `INBOXAI_API_URL` opcional: `GET /conversations/{id}` y `GET /conversations/{id}/messages?limit=20`. `conversations_wait` es solo MCP (sin equivalente REST) y un daemon no es cliente MCP: se consulta cada 60 s |
 | Vikunja, calendario, celular | fuera de alcance por ahora |
 
 ### Dormir: una sesión que espera a un cliente no ocupa nada
@@ -221,6 +222,7 @@ dueño y `end_date` = caducidad; `brain tarea add`), y myturn lo trae como una f
 André, 2026-11-06: «quiero q no consuma recursos o lo minimo, PERO que aun asi puedan despertar cuando el evento en
 cuestion suceda» · «tiene q ser el herdr xq si no como interactuo???». Diseño, críticas y corrida:
 `~/cofoundy/core/docs/research/2026-11-06_sesiones-dormidas/`. **v0: André, Mac, solo WhatsApp, sin despertar por fecha.**
+Desde 2026-11-12 (dotfiles#5) también el WhatsApp del negocio: `dormir --coresponde <con_…>` (fila «Coresponde»).
 
 | Paso | Qué pasa |
 |---|---|
@@ -230,12 +232,14 @@ cuestion suceda» · «tiene q ser el herdr xq si no como interactuo???». Dise�
 | Despertar | sigue `~/.wacli/events.jsonl` desde `(inode, offset)` (lee el resto de `events.jsonl.1` si rotó). Mensaje entrante con contenido, de alguien que no es del equipo (`wsp equipo`: teléfonos de `team.md` + sus LID), en un chat con espera → 90 s desde el primero (una ráfaga = un despertar) → `tab create --workspace <el suyo> --env COFOUNDY_DESPERTADA=1 --no-focus` + `pane run "claude --resume <sesión>"`; cuando herdr la ve `idle`, `agent prompt` con un puntero (`jid` + `hh:mm`, nunca el texto ni el nombre del cliente) + `notification show`. Viva e `idle` → solo el puntero; `working`/`blocked` → espera a `idle`; a la vista de André → solo el aviso. Cada chat se recuerda 5 min: si el cliente contestó entre el envío y `dormir` (hasta 3 min antes y después del último mensaje del equipo en ese chat), la espera nueva despierta igual; renovarla no relee. Tras un fallo de reapertura, el mensaje siguiente vuelve a intentar. Si `claude --resume` no queda idle en 3 min: aviso, y el puntero espera a que aparezca (no reabre en bucle) |
 | Horario de atención | André, 2026-11-11 20:32: «escuchar todo, sí; reaccionar a todo, no; ante urgencias sí». `wake.horario` lo pone `dormir`: `--horario "<texto de habiles>"`, si no el `comms.horario_atencion` del brief que tiene vinculado el chat (`wsp horario <jid>`), si no `HORARIO_DEFAULT` de `habiles.py` (L-V 09:00-18:00 America/Lima, el que hereda todo cliente sin brief; una espera vieja sin `wake.horario` también). Cada mensaje se juzga por su hora de llegada: **en horario** despierta como arriba. **Fuera**, triage con Haiku (`claude_json`, una vez por mensaje, cacheado por `ID` 3 d en `triage` del caché) contra una lista cerrada (`URGENCIAS`: web o servicio caído · pago o cobro · reunión de hoy o mañana cambiada o cancelada · pide que lo llamen ya · salud o seguridad). Urgente → despierta ya, sin los 90 s de ráfaga, con aviso de macOS (`🚨 <espera>: <categoría>`) y el puntero dice la categoría. No urgente → se difiere: el pendiente guarda `abre` (la próxima apertura, `habiles.vence(t, 0)`) y `desde`; la sesión se duerme igual, y al abrir despierta **una sola vez** con todo lo juntado (el puntero dice cuántos, desde qué día y hora, y que llegaron fuera de horario). Triage fallido (sin `claude`, timeout, JSON roto) o `habiles.py` ausente → despierta (fail-open). `wsp watch` sigue la misma regla: fuera de horario imprime una línea y sale |
 | Atender | `COFOUNDY_DESPERTADA=1`: solo borradores. `comms_send` siempre con diálogo (sin autorizaciones automáticas), `/mail` cae a `low` y rechaza `send --production`/`schedule`, y el hook `guard-despertada.sh` del toolkit bloquea el resto (Gmail send/reply/forward, Fovente/coresponde `messages_send`/`templates_send`, wacli, buzz, Resend, eventos de calendario, `unset COFOUNDY_DESPERTADA`) |
+| Coresponde | `myturn dormir --coresponde <con_…> [--etapa "E4 · Territorios"]`: el chat es una conversación del WhatsApp del negocio (`wake.coresponde`; horario = `--horario` o `HORARIO_DEFAULT`, no hay brief que lo vincule). El despertador consulta cada 60 s (`CORESPONDE_S`) `GET /conversations/{id}`: si la IA del hilo contesta (`ai_enabled` y no `escalated`, el criterio de `conversations_wait`) no despierta ni lee mensajes; si espera a una persona, lee la última página y cuenta cada entrante con contenido, no interno ni de sistema, posterior al último saliente que salió de verdad (`queued/sent/delivered/read`; un borrador no contesta) y a `dormir` − 3 min, una sola vez (ids vistos). La ráfaga de 90 s se mide desde la hora del mensaje: despierta en ≤ ~2 min. Horario y triage, iguales que en WhatsApp. Un error del API (sin key, 403, caído) se loguea al aparecer y al irse. Nunca toma ni apaga la IA del hilo. Puntero: el `con_…`, `messages_list` del MCP coresponde y la etapa, nunca el texto |
+| Excepción Portafolios | si `dormir --coresponde` corre desde un checkout de `products/portafolios` (o su worktree de herdr), la espera guarda `wake.excepcion: portafolios` y la reapertura suma `--env COFOUNDY_DESPERTADA_EXCEPCION=portafolios --env COFOUNDY_DESPERTADA_CHAT=<con_…>` (`COFOUNDY_DESPERTADA=1` sigue: /mail y comms_send no cambian). `guard-despertada.sh` deja pasar **solo** `messages_send`/`templates_send` del MCP de Coresponde/Tracta con `conversation_id` = ese chat; lo demás sigue bloqueado. La sesión envía según `products/portafolios/docs/politica-mensajes.md` (obvio → envía; sensible → borrador). Excepción nominal de `handbook/governance/ai-agent-autonomy.md`; se decide por el cwd, nunca por un flag |
 | Volver a dormir | sigue esperando → `myturn dormir` otra vez (renueva); ya no → `myturn done <id>` |
 
 **Prenderlo (André; nada lo carga solo):**
 `myturn despertador plist > ~/Library/LaunchAgents/dev.andre.myturn-despertador.plist && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.andre.myturn-despertador.plist`.
 Apagar: `launchctl bootout gui/$(id -u)/dev.andre.myturn-despertador`. Estado: `myturn despertador estado` (latido,
-offset, pendientes, cuentas regresivas). Log: `~/Library/Logs/myturn-despertador.log`. Probar en seco sin tocar nada:
+offset, esperas con su chat, el último error de Coresponde, pendientes, cuentas regresivas). Log: `~/Library/Logs/myturn-despertador.log`. Probar en seco sin tocar nada:
 `MYTURN_CACHE=$(mktemp -d) myturn despertador --once --dry-run` (imprime los comandos herdr que correría).
 Lo transitorio (offset, pendientes, contadores, el triage por mensaje y el texto de lo recibido en los últimos 5 min) vive en `~/.cache/myturn/despertador.json`, nunca en el log de git. Ver lo diferido: `myturn despertador estado` (`pend.<id>.abre`).
 
@@ -330,6 +334,15 @@ tarea.
   `dormir` toma el horario del brief y valida `--horario`). En vivo: triage real con Haiku sobre 3 mensajes (web caída
   → urgente «web o servicio caído», 6 s; «gracias, mañana te mando las fotos» → no; un intento de inyección → no);
   `horario_del_chat` del grupo de VeronicaHinojosa → «L-V 09:00-20:00 America/Lima», de un chat sin brief → el default.
+
+- 2026-11-12, despertador por Coresponde (dotfiles#5): 9 tests nuevos en `scripts/tests/test_despertador.py` (dormir
+  registra la espera y la excepción por cwd, otra sesión la reemplaza sin heredarla, `estado` la muestra; falta de key
+  avisada y leída de `settings.json`; en handoff despierta con los 3 `--env` y un puntero sin el texto; con la IA
+  contestando no despierta ni pide mensajes; escalado despierta; lo contestado, lo viejo, borradores, notas internas y
+  lo ya contado no despiertan; consulta cada minuto y un error se loguea una vez; fuera de horario pasa por el triage;
+  el CLI `--once --dry-run` contra un REST falso imprime el `herdr` y con la IA activa nada). Ground truth del API:
+  `cofoundy/tracta` `api/routes/conversations.py` + `messages.py` + `services/api_key_scopes.py`; la `TRACTA_API_KEY`
+  (solo deals) da 403 en `/conversations` (medido 2026-11-12). Sin correr en vivo: falta la key con conversaciones.
 
 ## Roadmap
 
