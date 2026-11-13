@@ -1,6 +1,6 @@
 """Prueba en seco del despertador (sesiones dormidas v0): los 4 casos de corrida.md más dormir y la cuenta regresiva.
 
-Miran el EFECTO: los comandos herdr que el despertador emite y el estado que deja, con herdr, pgrep, closeout y
+Miran el EFECTO: los comandos que el despertador emite y el estado que deja, con el TUI, pgrep, closeout y
 `wsp equipo` falsos. Correr: uv run --with pytest pytest scripts/tests/
 Diseño: ~/cofoundy/core/docs/research/2026-11-06_sesiones-dormidas/ (opciones v4, corrida.md)."""
 import importlib.machinery
@@ -26,7 +26,9 @@ def mt(tmp_path, monkeypatch):
     monkeypatch.setenv("MYTURN_CACHE", str(tmp_path / "cache"))
     monkeypatch.setenv("MYTURN_WACLI_EVENTS", str(tmp_path / "wacli" / "events.jsonl"))
     monkeypatch.setenv("MYTURN_NO_SYNC", "1")
-    monkeypatch.delenv("HERDR_PANE_ID", raising=False)
+    monkeypatch.delenv("HERDR_PANE_ID", raising=False)  # legacy-herdr
+    monkeypatch.delenv("HC_TERMINAL_ID", raising=False)
+    monkeypatch.setenv("MYTURN_CLAUDE_SESSIONS", str(tmp_path / "sessions"))
     loader = importlib.machinery.SourceFileLoader("myturn_desp", str(SCRIPT))
     spec = importlib.util.spec_from_loader("myturn_desp", loader)
     mod = importlib.util.module_from_spec(spec)
@@ -37,7 +39,7 @@ def mt(tmp_path, monkeypatch):
 
 
 class World:
-    """herdr + pgrep + closeout + wsp falsos. `herdr` guarda cada comando que muta; `agents` es lo que herdr ve."""
+    """TUI + pgrep + closeout + wsp falsos. `self.herdr` guarda cada comando que muta; `agents`, lo que el TUI ve."""
 
     def __init__(self):
         self.agents: list[dict] = []
@@ -49,7 +51,7 @@ class World:
     def run(self, cmd, host=None, timeout=4):
         def ok(out=""):
             return subprocess.CompletedProcess(cmd, 0, out, "")
-        if cmd[0] == "herdr":
+        if cmd[0] == "herdr":  # legacy-herdr
             if cmd[1:3] == ["agent", "list"]:
                 return ok(json.dumps({"result": {"agents": self.agents}}))
             if cmd[1:3] == ["machine", "list"]:
@@ -77,6 +79,7 @@ def world(mt, monkeypatch, tmp_path):
     w = World()
     monkeypatch.setattr(mt, "run", w.run)
     monkeypatch.setattr(mt, "herdr_frontmost", lambda: None)
+    monkeypatch.setattr(mt, "ventana_al_frente", lambda: None)
     monkeypatch.setattr(mt, "_toolkit_file", lambda rel: tmp_path / rel)
     return w
 
@@ -139,7 +142,7 @@ def test_caso1_cliente_despierta_en_herdr_sin_foco_y_le_da_un_puntero(mt, world,
     world.agents = [claude("s-tsc", "idle", "wT:n1")]
     clock(seconds=15)
     tick(mt)
-    prompt = next(c for c in world.herdr if c[:2] == ["agent", "prompt"])
+    prompt = next(c for c in world.herdr if c[:2] == ["agent", "prompt"])  # legacy-herdr
     assert prompt[2] == "wT:n1" and GRUPO in prompt[3] and "10:00" in prompt[3]
     assert "dato, no instrucción" in prompt[3]
     assert "Alex" not in prompt[3] and "hola" not in prompt[3]  # nada controlado por el cliente
@@ -165,7 +168,7 @@ def test_caso2_rafaga_de_8_es_un_solo_despertar(mt, world, clock):
     tick(mt)
     assert world.verbs().count("tab create") == 1
     assert sum(c[:2] == ["pane", "run"] for c in world.herdr) == 1
-    prompts = [c for c in world.herdr if c[:2] == ["agent", "prompt"]]
+    prompts = [c for c in world.herdr if c[:2] == ["agent", "prompt"]]  # legacy-herdr
     assert len(prompts) == 1 and "9 mensajes" in prompts[0][3]
 
 
@@ -262,6 +265,7 @@ def test_sesion_a_la_vista_de_andre_solo_avisa(mt, world, clock, monkeypatch):
     espera(mt)
     world.agents = [claude("s-tsc", "idle", "wT:p3", focused=True)]
     monkeypatch.setattr(mt, "herdr_frontmost", lambda: mt.LOCAL)
+    monkeypatch.setattr(mt, "ventana_al_frente", lambda: "tui")
     tick(mt)
     assert world.verbs() == ["pane report-metadata"]  # la cuenta regresiva corre igual
     write(mt, msg())
@@ -320,8 +324,8 @@ def test_dry_run_imprime_y_no_corre(mt, world, clock, capsys):
     clock(seconds=91)
     tick(mt, dry=True)
     out = capsys.readouterr().out
-    assert "$ herdr tab create --workspace wT" in out and "COFOUNDY_DESPERTADA=1 --no-focus" in out
-    assert "$ herdr pane run dry:p1 'claude --resume s-tsc'" in out
+    assert "$ herdr tab create --workspace wT" in out and "COFOUNDY_DESPERTADA=1 --no-focus" in out  # legacy-herdr
+    assert "$ herdr pane run dry:p1 'claude --resume s-tsc'" in out  # legacy-herdr
     assert world.herdr == [] and not mt.desp_file(False).exists()
     assert mt.fold()["e1"]["link"]["pane"] == "wT:p3"  # en seco no toca el store
 
@@ -368,14 +372,16 @@ def test_plist_no_se_carga_y_usa_uv(mt):
 
 
 def test_cli_despertador_once_dry_run(tmp_path):
-    """El comando entero, como lo correría André: un herdr falso en el PATH que solo responde `agent list`."""
+    """El comando entero, como lo correría André: un TUI falso en el PATH que solo responde `agent list`."""
     bindir = tmp_path / "bin"
     bindir.mkdir()
-    (bindir / "herdr").write_text("#!/bin/sh\necho '{\"result\":{\"agents\":[]}}'\n")
-    (bindir / "herdr").chmod(0o755)
+    (bindir / "herdr").write_text("#!/bin/sh\necho '{\"result\":{\"agents\":[]}}'\n")  # legacy-herdr
+    (bindir / "hc").write_text("#!/bin/sh\nexit 1\n")
+    for f in bindir.iterdir():
+        f.chmod(0o755)
     env = {**os.environ, "MYTURN_HOME": str(tmp_path / "t"), "MYTURN_CACHE": str(tmp_path / "c"),
            "MYTURN_NO_SYNC": "1", "MYTURN_WACLI_EVENTS": str(tmp_path / "ev.jsonl"),
-           "PATH": f"{bindir}:{os.environ['PATH']}"}
+           "MYTURN_PATH": f"{bindir}:/usr/bin:/bin"}
     (tmp_path / "ev.jsonl").write_text("")
     p = subprocess.run([str(SCRIPT), "despertador", "--once", "--dry-run"], env=env, capture_output=True, text=True,
                        timeout=60)
@@ -393,7 +399,7 @@ def test_respuesta_antes_de_dormir_igual_despierta(mt, world, clock):
     espera(mt)
     world.agents = [claude("s-tsc", "idle", "wT:p3")]
     tick(mt)
-    prompts = [c for c in world.herdr if c[:2] == ["agent", "prompt"]]
+    prompts = [c for c in world.herdr if c[:2] == ["agent", "prompt"]]  # legacy-herdr
     assert len(prompts) == 1 and "1 mensaje nuevo" in prompts[0][3]
 
 
@@ -437,12 +443,14 @@ def test_no_cierra_el_panel_que_andre_tiene_delante(mt, world, clock, monkeypatc
     espera(mt)
     world.agents = [claude("s-tsc", "idle", "wT:p3", focused=True)]
     monkeypatch.setattr(mt, "herdr_frontmost", lambda: mt.LOCAL)
+    monkeypatch.setattr(mt, "ventana_al_frente", lambda: "tui")
     tick(mt)
     clock(minutes=11)
     tick(mt)
     assert ["pane", "close", "wT:p3"] not in world.herdr
     assert world.herdr[-1][-1] == "💤 se duerme cuando salgas"
     monkeypatch.setattr(mt, "herdr_frontmost", lambda: None)
+    monkeypatch.setattr(mt, "ventana_al_frente", lambda: None)
     clock(seconds=15)
     tick(mt)
     assert world.herdr[-1] == ["pane", "close", "wT:p3"]
@@ -588,7 +596,7 @@ def test_fuera_de_horario_no_urgente_difiere_duerme_y_despierta_una_vez_al_abrir
     world.agents = [claude("s-vh", "idle", "wT:n1")]
     horario.clock(seconds=15)
     tick(mt)
-    prompts = [c for c in world.herdr if c[:2] == ["agent", "prompt"]]
+    prompts = [c for c in world.herdr if c[:2] == ["agent", "prompt"]]  # legacy-herdr
     assert len(prompts) == 1
     txt = prompts[0][3]
     assert "2 mensajes" in txt and "desde el mié 11-11 21:30" in txt and "hasta las 22:30" in txt
@@ -611,7 +619,7 @@ def test_fuera_de_horario_urgente_despierta_ya_y_avisa_en_macos(mt, world, horar
     world.agents = [claude("s-vh", "idle", "wT:n1")]
     horario.clock(seconds=15)
     tick(mt)
-    txt = next(c for c in world.herdr if c[:2] == ["agent", "prompt"])[3]
+    txt = next(c for c in world.herdr if c[:2] == ["agent", "prompt"])[3]  # legacy-herdr
     assert "urgente (web o servicio caído)" in txt and "no carga" not in txt
     assert len(horario.mac) == 1
 
@@ -759,7 +767,7 @@ def test_coresponde_en_handoff_despierta_con_la_excepcion_y_un_puntero_sin_el_te
     world.agents = [claude("s-pame", "idle", "wT:n1")]
     clock(seconds=15)
     tick(mt)
-    txt = next(c for c in world.herdr if c[:2] == ["agent", "prompt"])[3]
+    txt = next(c for c in world.herdr if c[:2] == ["agent", "prompt"])[3]  # legacy-herdr
     assert f"chat de Coresponde {CON}" in txt and "messages_list" in txt and "SOLO en " + CON in txt
     assert "politica-mensajes.md" in txt and "territorio 2" not in txt  # el texto del cliente nunca va al puntero
 
@@ -780,7 +788,7 @@ def test_coresponde_escalado_despierta_aunque_la_ia_figure_prendida(mt, world, c
     espera_cr(mt, excepcion=None)
     cr.entra(1, mt.now() - timedelta(minutes=2))
     tick(mt)
-    create = next(c for c in world.herdr if c[:2] == ["tab", "create"])
+    create = next(c for c in world.herdr if c[:2] == ["tab", "create"])  # legacy-herdr
     assert [create[i + 1] for i, a in enumerate(create) if a == "--env"] == ["COFOUNDY_DESPERTADA=1"]
 
 
@@ -803,7 +811,7 @@ def test_coresponde_lo_contestado_lo_viejo_y_lo_ya_contado_no_despiertan(mt, wor
     clock(seconds=61)
     cr.conv["last_message"]["timestamp"] = "2026-11-07T15:59:59+00:00"  # cambió algo, se relee la página
     tick(mt)
-    assert sum(1 for c in world.herdr if c[:2] == ["tab", "create"]) == 1
+    assert sum(1 for c in world.herdr if c[:2] == ["tab", "create"]) == 1  # legacy-herdr
     assert mt.desp_load()["abriendo"]["c1"]["n"] == 1  # el mismo mensaje no se cuenta dos veces
 
 
@@ -872,15 +880,19 @@ def test_cli_coresponde_once_dry_run_contra_un_api_falso(mt, tmp_path):
             wake={"coresponde": CON, "excepcion": "portafolios"},
             expires=mt.iso(mt.now() + timedelta(days=21)),
             link={"host": mt.LOCAL, "session": "s-pame-prueba", "pane": "wP:p1", "cwd": str(tmp_path)})
-    bindir = tmp_path / "bin"
+    bindir = tmp_path / "bin"  # el TUI de respaldo: herdr responde y el core de hc no (legacy-herdr)
     bindir.mkdir()
-    (bindir / "herdr").write_text("#!/bin/sh\necho '{\"result\":{\"agents\":[]}}'\n")
-    (bindir / "herdr").chmod(0o755)
+    (bindir / "herdr").write_text("#!/bin/sh\necho '{\"result\":{\"agents\":[]}}'\n")  # legacy-herdr
+    (bindir / "hc").write_text("#!/bin/sh\nexit 1\n")
+    for f in bindir.iterdir():
+        f.chmod(0o755)
 
-    def corre(cache):
+    def corre(cache, bindir=bindir):
         env = {**os.environ, "MYTURN_CACHE": str(tmp_path / cache), "MYTURN_HABILES": str(tmp_path / "no-hay.py"),
                "INBOXAI_API_KEY": "fov_prueba", "INBOXAI_API_URL": f"http://127.0.0.1:{srv.server_port}/api/v1",
-               "PATH": f"{bindir}:{os.environ['PATH']}"}
+               "MYTURN_PATH": f"{bindir}:/usr/bin:/bin", "MYTURN_CLAUDE_SESSIONS": str(tmp_path / "sessions")}
+        for k in ("HERDR_PANE_ID", "HC_TERMINAL_ID", "HC_TERMINAL_SOCKET"):  # sin terminal; legacy-herdr
+            env.pop(k, None)
         p = subprocess.run([str(SCRIPT), "despertador", "--once", "--dry-run"], env=env, capture_output=True,
                            text=True, timeout=60)
         assert p.returncode == 0, p.stderr
@@ -888,9 +900,469 @@ def test_cli_coresponde_once_dry_run_contra_un_api_falso(mt, tmp_path):
 
     try:
         out = corre("c-handoff")
-        assert "$ herdr tab create" in out and f"COFOUNDY_DESPERTADA_CHAT={CON}" in out
-        assert "$ herdr pane run dry:p1 'claude --resume s-pame-prueba'" in out
+        assert "$ herdr tab create" in out and f"COFOUNDY_DESPERTADA_CHAT={CON}" in out  # legacy-herdr
+        assert "$ herdr pane run dry:p1 'claude --resume s-pame-prueba'" in out  # legacy-herdr
+        # la app: el core de hc responde y el TUI viejo sale con error y anota cada llamada
+        app = tmp_path / "bin-app"
+        app.mkdir()
+        (app / "herdr").write_text(f"#!/bin/sh\necho \"$*\" >> {tmp_path}/herdr.log\nexit 1\n")  # legacy-herdr
+        (app / "hc").write_text(
+            "#!/bin/sh\n[ \"$1\" = ls ] && echo '{\"terminals\":[],\"machines\":[]}' && exit 0\nexit 1\n")
+        (app / "herdr-app").write_text("#!/bin/sh\n[ \"$1\" = ls ] && echo '{\"spaces\":[]}' && exit 0\nexit 1\n")
+        for f in app.iterdir():
+            f.chmod(0o755)
+        out = corre("c-app", app)
+        run_ = next(ln for ln in out.splitlines() if ln.startswith("$ hc run "))
+        assert "--bg --keep --no-parent" in run_ and "--label herdr.space=sp" in run_ and "--label herdr.tab=tb" in run_
+        assert (f"env COFOUNDY_DESPERTADA=1 COFOUNDY_DESPERTADA_EXCEPCION=portafolios COFOUNDY_DESPERTADA_CHAT={CON} "
+                "claude --resume s-pame-prueba") in run_
+        assert "$ herdr-app do space.rename" in out and "--name Pame" in out  # espacio nuevo con el nombre del cliente
+        assert "$ herdr " not in out and "agent.focus" not in out  # sin foco y nada al TUI
         estado["ai"] = True  # control negativo: la IA contesta ese hilo
-        assert "herdr" not in corre("c-ia")
+        assert "herdr" not in corre("c-ia")  # legacy-herdr
     finally:
         srv.shutdown()
+
+
+# ── H1: la Herdr app (hc + herdr-app). Diseño: core/docs/research/2026-11-12_herdr-hub-operaciones/migracion/
+#    h1-despertador/
+class App(World):
+    """La app falsa: `hc` (terminales) + `herdr-app` (ventana) + `ps`. El TUI viejo FALLA y anota cada llamada:
+    lo que todavía dependa de él se ve en `self.tui`. `terms` = {dirección: (sesión, estado, pid)}."""
+
+    def __init__(self, sessions: Path):
+        super().__init__()
+        self.terms: dict[str, tuple] = {}
+        self.spaces = [{"id": "spTSC", "name": "TSC", "machine": None, "tabs": [{"id": "tbV", "name": "pm"}]}]
+        self.hc: list[list[str]] = []
+        self.app: list[list[str]] = []
+        self.tui: list[list[str]] = []
+        self.foco = None
+        self.tui_ws: dict[str, str] = {}  # workspaces del TUI que responde (vacío: el TUI falla)
+        self.sessions = sessions
+        self.n = 0
+
+    def run(self, cmd, host=None, timeout=4):
+        def ok(out=""):
+            return subprocess.CompletedProcess(cmd, 0, out, "")
+        if cmd[0] == "herdr":  # legacy-herdr
+            self.tui.append(cmd[1:])
+            if self.tui_ws and cmd[1:3] == ["workspace", "list"]:
+                return ok(json.dumps({"result": {"workspaces": [{"workspace_id": k, "label": v}
+                                                                for k, v in self.tui_ws.items()]}}))
+            return subprocess.CompletedProcess(cmd, 1, "", "herdr: no server")
+        if cmd[0] == "hc":
+            if cmd[1] == "ls":
+                return ok(json.dumps({"terminals": [{"address": a, "agent": "claude-code", "state": "live"}
+                                                    for a in self.terms], "machines": []}))
+            if cmd[1] == "get":
+                a = cmd[2]
+                if a not in self.terms:
+                    return subprocess.CompletedProcess(cmd, 1, "", "no such terminal")
+                s, st, pid = self.terms[a]
+                return ok(json.dumps({"address": a, "turn": 1, "status_ms": 5, "title": "✳ TSC",
+                                      "status": {"app": "claude-code", "state": st},
+                                      "foreground": {"argv": ["claude"], "cwd": "/tmp/tsc", "pid": pid},
+                                      "labels": {"herdr.space": "spTSC", "herdr.tab": f"tb{a}"}}))
+            self.hc.append(cmd[1:])
+            if cmd[1] == "run":
+                self.n += 1
+                tab = next(x.split("=", 1)[1] for x in cmd if x.startswith("herdr.tab="))
+                sp = next(x.split("=", 1)[1] for x in cmd if x.startswith("herdr.space="))
+                if not any(x["id"] == sp for x in self.spaces):
+                    self.spaces.append({"id": sp, "name": "", "machine": None, "tabs": []})
+                next(x for x in self.spaces if x["id"] == sp)["tabs"].append({"id": tab, "name": "1"})
+                return ok(json.dumps({"address": f"t9{self.n}", "state": "live"}))
+            return ok("{}")
+        if cmd[0] == "herdr-app":
+            if cmd[1] == "ls":
+                return ok(json.dumps({"spaces": self.spaces}))
+            if cmd[1] == "status":
+                return ok(json.dumps({"agent": self.foco}))
+            self.app.append(cmd[1:])
+            return ok('{"ok": true}')
+        if cmd[0] == "ps":
+            return subprocess.run(cmd, capture_output=True, text=True)
+        return super().run(cmd, host, timeout)
+
+    def vivo(self, addr, session, status="idle"):
+        """Un Claude vivo en la app: su terminal y su ~/.claude/sessions/<pid>.json."""
+        pid = 40000 + len(self.terms)
+        self.sessions.mkdir(exist_ok=True)
+        (self.sessions / f"{pid}.json").write_text(json.dumps({"pid": pid, "sessionId": session}))
+        self.terms[addr] = (session, status, pid)
+        self.spaces[0]["tabs"].append({"id": f"tb{addr}", "name": "pm"})
+
+
+@pytest.fixture
+def app(mt, monkeypatch, tmp_path):
+    w = App(tmp_path / "sessions")
+    monkeypatch.setattr(mt, "run", w.run)
+    monkeypatch.setattr(mt, "herdr_frontmost", lambda: None)
+    monkeypatch.setattr(mt, "ventana_al_frente", lambda: None)
+    monkeypatch.setattr(mt, "_toolkit_file", lambda rel: tmp_path / rel)
+    monkeypatch.setattr(mt.time, "sleep", lambda s: None)
+    return w
+
+
+def test_h1_dormida_del_tui_despierta_en_la_app_sin_foco_y_con_su_entorno(mt, app, clock):
+    """Las 6 dormidas de hoy tienen enlace del TUI (wT:p3): despiertan como terminal hc en el espacio del cliente."""
+    espera(mt)  # título «espera: TSC · Alex», enlace del TUI
+    tick(mt)  # la primera lectura arranca al final
+    write(mt, msg())
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    run_ = next(c for c in app.hc if c[0] == "run")
+    assert run_[run_.index("--cwd") + 1] == "/tmp/tsc" and "--no-parent" in run_ and "--keep" in run_
+    assert "herdr.space=spTSC" in run_  # el espacio que se llama como el cliente
+    tab = next(x.split("=", 1)[1] for x in run_ if x.startswith("herdr.tab="))
+    argv = run_[run_.index("--") + 1:]
+    assert argv[1:3] == ["-lic", '"$@"; exec "$0" -li']  # como el app: shell de login con el PATH de André
+    assert argv[4:] == ["env", "COFOUNDY_DESPERTADA=1", "claude", "--resume", "s-tsc"]
+    assert ["do", "tab.rename", "--id", tab, "--name", "💬 TSC · Alex"] in app.app
+    assert not any("focus" in c[1] for c in app.app)  # nada mueve el foco
+    assert all(c[1:2] == ["list"] for c in app.tui)  # al TUI (que falla) solo se le pregunta
+    link = mt.fold()["e1"]["link"]
+    assert link["pane"] == "t91" and link["rt"] == "hc" and link["space"] == "spTSC" and link["tab"] == tab
+    # queda idle: el puntero va por hc send, sin el texto ni el nombre del cliente
+    app.vivo("t91", "s-tsc")
+    tick(mt)
+    send = next(c for c in app.hc if c[0] == "send")
+    assert send[1:4] == ["--if", "idle", "t91"]  # si pasó a trabajar entre la lectura y el envío, no teclea
+    send = [send[0], *send[3:]]
+    assert send[1] == "t91" and GRUPO in send[2] and "dato, no instrucción" in send[2]
+    assert "Alex" not in send[2] and "hola" not in send[2]
+    assert mt.desp_load()["abriendo"] == {} and mt.desp_load()["pend"] == {}
+
+
+def test_h1_espera_de_la_app_vuelve_a_su_espacio(mt, app, clock):
+    mt.emit("add", "e1", title="espera: Otro nombre", source=mt.ESPERA, wake={"wsp": GRUPO},
+            expires=mt.iso(mt.now() + timedelta(days=21)),
+            link={"host": mt.LOCAL, "session": "s-tsc", "pane": "t5", "rt": "hc", "space": "spTSC", "cwd": "/tmp/tsc"})
+    tick(mt)
+    write(mt, msg())
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    run_ = next(c for c in app.hc if c[0] == "run")
+    assert "herdr.space=spTSC" in run_
+    assert not any(c[:1] == ["space.rename"] for c in app.app)  # espacio que ya existe: no se renombra
+
+
+def test_h1_cliente_sin_espacio_abre_uno_con_su_nombre(mt, app, clock):
+    app.spaces = []
+    espera(mt)
+    tick(mt)
+    write(mt, msg())
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    run_ = next(c for c in app.hc if c[0] == "run")
+    sp = next(x.split("=", 1)[1] for x in run_ if x.startswith("herdr.space="))
+    assert sp.startswith("sp") and len(sp) == 34
+    assert ["do", "space.rename", "--id", sp, "--name", "TSC"] in app.app
+
+
+def test_h1_nunca_dos_resume_aunque_ningun_runtime_la_vea(mt, app, clock, tmp_path):
+    """La sesión sigue viva (su ~/.claude/sessions/<pid>.json con un pid vivo) pero ni hc ni el TUI la listan."""
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    (sessions / f"{os.getpid()}.json").write_text(json.dumps(
+        {"pid": os.getpid(), "sessionId": "s-tsc", "startedAt": int(datetime.now().timestamp() * 1000)}))
+    espera(mt)
+    tick(mt)
+    write(mt, msg())
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    assert not any(c[0] == "run" for c in app.hc)
+    assert mt.desp_load()["pend"]["e1"]["n"] == 1  # el puntero espera a que aparezca
+
+
+def test_h1_pid_reciclado_no_cuenta_como_viva(mt, app, clock, tmp_path):
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    (sessions / f"{os.getpid()}.json").write_text(json.dumps(  # mi pid, pero la sesión «empezó» hace un año
+        {"pid": os.getpid(), "sessionId": "s-tsc", "startedAt": int((datetime.now().timestamp() - 3e7) * 1000)}))
+    assert not mt.sesion_viva("s-tsc")
+
+
+def test_h1_cuenta_regresiva_en_la_pestana_y_cierre_por_hc(mt, app, clock):
+    espera(mt, pane="t7")
+    app.vivo("t7", "s-tsc")
+    tick(mt)
+    assert app.app[-1] == ["do", "tab.rename", "--id", "tbt7", "--name", "💤 se duerme en 10:00"]
+    assert mt.desp_load()["nombres"] == {"tbt7": "pm"}  # el nombre original, para devolverlo
+    clock(minutes=4)
+    app.terms["t7"] = ("s-tsc", "working", app.terms["t7"][2])
+    tick(mt)
+    assert app.app[-1] == ["do", "tab.rename", "--id", "tbt7", "--name", "pm"]  # vuelve a su nombre
+    app.terms["t7"] = ("s-tsc", "idle", app.terms["t7"][2])
+    tick(mt)
+    clock(minutes=10, seconds=1)
+    tick(mt)
+    assert app.hc[-2:] == [["kill", "t7"], ["rm", "t7"]]
+    assert not app.tui or all(c[:2] == ["agent", "list"] for c in app.tui)  # al TUI solo se le preguntó
+
+
+def test_h1_a_la_vista_en_la_app_solo_avisa_y_no_cierra(mt, app, clock, monkeypatch):
+    espera(mt, pane="t7")
+    app.vivo("t7", "s-tsc")
+    app.foco = "t7"
+    monkeypatch.setattr(mt, "herdr_frontmost", lambda: mt.LOCAL)
+    monkeypatch.setattr(mt, "ventana_al_frente", lambda: "hc")
+    tick(mt)
+    write(mt, msg())
+    tick(mt)
+    assert not any(c[0] == "send" for c in app.hc)
+    clock(minutes=11)
+    tick(mt)
+    assert ["kill", "t7"] not in app.hc and app.app[-1][-1] == "💤 se duerme cuando salgas"
+
+
+def test_h1_dry_run_imprime_el_hc_run(mt, app, clock, capsys):
+    espera(mt)
+    tick(mt, dry=True)
+    write(mt, msg())
+    tick(mt, dry=True)
+    clock(seconds=91)
+    tick(mt, dry=True)
+    out = capsys.readouterr().out
+    assert "$ hc run --bg --keep --no-parent --no-notify --json --cwd /tmp/tsc --label herdr.space=spTSC" in out
+    assert "env COFOUNDY_DESPERTADA=1 claude --resume s-tsc" in out
+    assert app.hc == [] and app.app == [] and mt.fold()["e1"]["link"]["pane"] == "wT:p3"
+
+
+def test_h1_core_caido_cae_al_tui(mt, world, clock):
+    """Sin core de hc (la World vieja no lo simula), la reapertura sigue en el TUI: el respaldo legacy-herdr."""
+    espera(mt)
+    tick(mt)
+    write(mt, msg())
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    assert world.verbs()[:2] == ["tab create", "pane run"]
+
+
+# ── H1: lo que corre un agente elige su runtime por el entorno (skill herdr §0) ──────────────────────────────
+@pytest.fixture
+def en_la_app(mt, app, monkeypatch):
+    """Un Claude dentro de un terminal de la app: solo HC_*, y el TUI viejo falla."""
+    monkeypatch.delenv("HERDR_PANE_ID", raising=False)  # legacy-herdr
+    monkeypatch.setenv("HC_TERMINAL_ID", "t5")
+    monkeypatch.setenv("HC_TERMINAL_SOCKET", "/tmp/hc.sock")
+    real = mt.shutil.which
+    monkeypatch.setattr(mt.shutil, "which", lambda b: "/fake/hc" if b == "hc" else real(b))
+    app.vivo("t5", "s-app")
+    return app
+
+
+def test_h1_link_y_dormir_dentro_de_la_app_sin_tocar_el_tui(mt, en_la_app, clock):
+    mt.emit("add", "k1", title="UK Confianza", source="user")
+    assert "Enlazado" in mt.link_here("k1")
+    link = mt.fold()["k1"]["link"]
+    assert link == {"host": mt.LOCAL, "session": "s-app", "pane": "t5", "cwd": "/tmp/tsc", "rt": "hc",
+                    "space": "spTSC", "tab": "tbt5"}
+    mt.write_atomic(mt.desp_file(False), json.dumps({"latido": mt.iso(mt.now())}))  # el despertador corre
+    out = mt.dormir(GRUPO, "TSC · Alex", horario="L-V 09:00-18:00")
+    assert "Herdr app" in out
+    e = mt.esperas(mt.fold())[0]
+    assert e["link"]["rt"] == "hc" and e["link"]["space"] == "spTSC"
+    # del CLI viejo, que falla: solo la lectura del panel (refresh), nunca algo de lo que dependa el enlace
+    assert all(c[1:2] == ["list"] for c in en_la_app.tui)
+
+
+def test_h1_track_en_la_app(mt, en_la_app):
+    mt.track({"session_id": "s-app", "cwd": "/tmp/tsc", "prompt": "hola"})
+    t = mt.by_session(mt.fold())["s-app"]
+    assert t["link"]["pane"] == "t5" and t["link"]["rt"] == "hc" and en_la_app.tui == []  # el hook ni pregunta
+    mt.track({"session_id": "otra", "cwd": "/tmp"})  # un `claude -p` dentro del terminal: no es esta sesión
+    assert "otra" not in mt.by_session(mt.fold())
+
+
+def test_h1_tui_dentro_de_hc_gana_el_mas_interno(mt, monkeypatch):
+    monkeypatch.setenv("HC_TERMINAL_ID", "t1")
+    monkeypatch.setenv("HC_TERMINAL_SOCKET", "/tmp/hc.sock")
+    monkeypatch.setenv("HERDR_PANE_ID", "wHF:p6")  # legacy-herdr
+    assert mt.runtime_env() == "tui" and mt.mi_terminal() == "wHF:p6"
+    monkeypatch.delenv("HERDR_PANE_ID")  # legacy-herdr
+    monkeypatch.setattr(mt.shutil, "which", lambda b: "/fake/hc")
+    assert mt.runtime_env() == "hc" and mt.mi_terminal() == "t1"
+
+
+def test_h1_go_enfoca_la_viva_y_reabre_la_cerrada_en_la_app(mt, app, monkeypatch):
+    monkeypatch.setattr(mt, "focus_app", lambda: True)
+    mt.emit("add", "k1", title="UK Confianza · PM", source="user",
+            link={"host": mt.LOCAL, "session": "s-uk", "pane": "wHF:p6", "cwd": "/tmp/deals"})
+    app.vivo("t1r", "s-uk")
+    assert mt.go(mt.fold()["k1"]).startswith("→")
+    assert app.app == [["do", "agent.focus", "--terminal", "t1r"]] and not any(c[0] == "run" for c in app.hc)
+    del app.terms["t1r"]  # se cerró
+    app.app.clear()
+    assert mt.go(mt.fold()["k1"]).startswith("↻")
+    run_ = next(c for c in app.hc if c[0] == "run")
+    assert run_[run_.index("--cwd") + 1] == "/tmp/deals" and run_[-3:] == ["claude", "--resume", "s-uk"]
+    assert app.app[-1] == ["do", "agent.focus", "--terminal", "t91"]  # `go` sí enfoca: lo pediste
+    assert all(c[1:2] == ["list"] for c in app.tui)
+
+
+def test_h1_enlace_del_tui_vuelve_al_espacio_de_su_workspace(mt, app, clock):
+    """5 de las 6 dormidas viven en el workspace «prospectos» del TUI, que ya existe como espacio en la app."""
+    app.spaces.append({"id": "spPROS", "name": "prospectos", "machine": None, "tabs": []})
+    app.tui_ws = {"wT": "prospectos"}
+    espera(mt)  # enlace wT:p3, cliente «TSC» (también tiene espacio): gana el workspace del enlace
+    tick(mt)
+    write(mt, msg())
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    run_ = next(c for c in app.hc if c[0] == "run")
+    assert "herdr.space=spPROS" in run_ and not any(c[1] == "space.rename" for c in app.app)
+
+
+def test_h1_puntero_que_no_llega_se_reintenta(mt, app, clock, monkeypatch):
+    espera(mt, pane="t7")
+    app.vivo("t7", "s-tsc")
+    tick(mt)
+    write(mt, msg())
+    real = app.run
+
+    def send_falla(cmd, host=None, timeout=4):
+        if cmd[:2] == ["hc", "send"]:
+            app.hc.append(cmd[1:])
+            return subprocess.CompletedProcess(cmd, 1, "", "draft pending")
+        return real(cmd, host, timeout)
+    monkeypatch.setattr(mt, "run", send_falla)
+    tick(mt)
+    assert mt.desp_load()["pend"]["e1"]["n"] == 1  # no se dio por entregado
+    monkeypatch.setattr(mt, "run", real)
+    tick(mt)
+    assert mt.desp_load()["pend"] == {} and sum(c[0] == "send" for c in app.hc) == 2
+
+
+# ── H1: el contrato del despertador, en la app (la misma secuencia que las pruebas del TUI de arriba) ─────────────
+def espera_h_app(mt, horario_txt=HORARIO_VH, pane="t7"):
+    mt.emit("add", "e1", title="espera: VH · revisión", source=mt.ESPERA, wake={"wsp": GRUPO, "horario": horario_txt},
+            expires=mt.iso(mt.now() + timedelta(days=21)),
+            link={"host": mt.LOCAL, "session": "s-vh", "pane": pane, "rt": "hc", "space": "spTSC", "cwd": "/tmp/vh"})
+
+
+def test_h1_app_fuera_de_horario_difiere_duerme_por_hc_y_despierta_una_vez_al_abrir(mt, app, horario):
+    espera_h_app(mt)
+    app.vivo("t7", "s-vh")  # viva y ociosa: no se le escribe, se duerme igual
+    tick(mt)
+    write(mt, msg_ahora(horario, 1, text="gracias, mañana lo reviso"))
+    tick(mt)
+    horario.clock(hours=1)
+    tick(mt)
+    assert len(horario.triage) == 1 and not any(c[0] in ("send", "run") for c in app.hc)
+    assert ["kill", "t7"] in app.hc  # se durmió con el pendiente diferido
+    del app.terms["t7"]
+    horario.clock(hours=10, minutes=11)  # jueves 08:41: cerrado
+    tick(mt)
+    assert not any(c[0] == "run" for c in app.hc)
+    horario.clock(minutes=20)  # jueves 09:01: abre
+    tick(mt)
+    tick(mt)
+    assert sum(c[0] == "run" for c in app.hc) == 1
+    app.vivo("t91", "s-vh")
+    horario.clock(seconds=15)
+    tick(mt)
+    sends = [c for c in app.hc if c[0] == "send"]
+    assert len(sends) == 1 and "ninguno era urgente" in sends[0][-1] and "gracias" not in sends[0][-1]
+    horario.clock(minutes=5)
+    tick(mt)
+    assert sum(c[0] == "run" for c in app.hc) == 1  # ese día, una sola vez
+
+
+def test_h1_app_urgente_despierta_ya_y_avisa_en_macos(mt, app, horario):
+    horario.respuesta = {"urgente": True, "motivo": "web o servicio caído"}
+    espera_h_app(mt)
+    tick(mt)
+    write(mt, msg_ahora(horario, 1, text="la web no carga"))
+    tick(mt)  # sin la ráfaga de 90 s
+    assert sum(c[0] == "run" for c in app.hc) == 1
+    assert horario.mac and "web o servicio caído" in horario.mac[0] and "no carga" not in horario.mac[0]
+    app.vivo("t91", "s-vh")
+    horario.clock(seconds=15)
+    tick(mt)
+    assert "urgente (web o servicio caído)" in next(c for c in app.hc if c[0] == "send")[-1]
+
+
+def test_h1_app_rafaga_de_8_es_un_solo_despertar(mt, app, clock):
+    espera(mt)
+    tick(mt)
+    write(mt, *[msg(ID=f"M{i}") for i in range(8)])
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    write(mt, msg(ID="M9"))
+    tick(mt)
+    assert sum(c[0] == "run" for c in app.hc) == 1
+    app.vivo("t91", "s-tsc")
+    tick(mt)
+    sends = [c for c in app.hc if c[0] == "send"]
+    assert len(sends) == 1 and "9 mensajes" in sends[0][-1]
+
+
+def test_h1_app_closeout_rojo_no_mata_y_lo_dice_en_la_pestana(mt, app, clock):
+    espera(mt, pane="t7")
+    app.vivo("t7", "s-tsc")
+    app.closeout_ok = False
+    tick(mt)
+    clock(minutes=10, seconds=1)
+    tick(mt)
+    assert ["kill", "t7"] not in app.hc
+    assert app.app[-1][:4] == ["do", "tab.rename", "--id", "tbt7"] and app.app[-1][-1].startswith("💤 no se duerme")
+
+
+def test_h1_app_resume_que_no_queda_idle_avisa_y_no_reabre_en_bucle(mt, app, clock):
+    espera(mt)
+    tick(mt)
+    write(mt, msg())
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    app.vivo("t91", "s-tsc", status="working")
+    clock(seconds=181)
+    del app.terms["t91"]
+    tick(mt)
+    clock(seconds=60)
+    tick(mt)
+    assert sum(c[0] == "run" for c in app.hc) == 1
+    assert mt.desp_load()["pend"]["e1"]["fallo"] is True
+
+
+def test_h1_app_working_espera_idle_y_no_abre_otra(mt, app, clock):
+    espera(mt, pane="t7")
+    app.vivo("t7", "s-tsc", status="working")
+    tick(mt)
+    write(mt, msg())
+    tick(mt)
+    clock(seconds=91)
+    tick(mt)
+    assert app.hc == []
+    app.terms["t7"] = ("s-tsc", "idle", app.terms["t7"][2])
+    tick(mt)
+    assert [c[0] for c in app.hc] == ["send"]
+
+
+def test_h1_panel_y_link_pane_ven_los_agentes_de_la_app(mt, app):
+    app.vivo("t1r", "s-uk", status="done")
+    mt.emit("add", "k1", title="UK", source="user")
+    assert "t1r" in mt.link_pane("k1", "t1r", mt.LOCAL)
+    st = mt.compute()  # enlazada ya terminada: «ya lo viste»
+    assert st["herdr_ok"] and [r["id"] for r in st["seen"]] == ["k1"]
+    app.terms["t1r"] = ("s-uk", "working", app.terms["t1r"][2])
+    assert [r["id"] for r in mt.compute()["working"]] == ["k1"]
+    app.terms["t1r"] = ("s-uk", "done", app.terms["t1r"][2])
+    assert [r["id"] for r in mt.compute()["waiting"]] == ["k1"]  # volvió a terminar: te espera
+
+
+def test_h1_una_despertada_no_usa_go(mt, app, monkeypatch):
+    """Revisión 2 del crítico: `myturn go` desde una despertada reabriría otra sesión sin la variable y con foco."""
+    monkeypatch.setenv("COFOUNDY_DESPERTADA", "1")
+    mt.emit("add", "k1", title="UK", source="user", link={"host": mt.LOCAL, "session": "s-uk", "pane": "t1r"})
+    assert "despertada" in mt.go(mt.fold()["k1"])
+    assert app.hc == [] and app.app == []

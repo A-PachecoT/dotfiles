@@ -24,7 +24,7 @@ La UI es el panel del widget (clic en la barra o ⌥T). Este CLI es lo que el pa
   myturn panel                    JSON para el panel de Hammerspoon
   myturn obsidian                 (timer del Arch) espejo Tareas.md + importar lo anotado en el daily note
   myturn dormir --wsp JID [--titulo T] [--horario H]   (lo corre un agente) este chat de WhatsApp despierta ESTA
-                                  sesión; el despertador la cierra tras 10 min idle y la reabre en herdr cuando el
+                                  sesión; el despertador la cierra tras 10 min idle y la reabre en la app Herdr si el
                                   cliente escribe. Fuera del horario de atención (H; default: el del brief del chat
                                   vía `wsp horario`, o HORARIO_DEFAULT) solo despierta por urgencia (triage con
                                   Haiku) y lo demás lo junta para la apertura
@@ -71,9 +71,13 @@ LOCAL = "mac" if platform.system() == "Darwin" else "arch"
 REMOTE_SSH = {"arch": "andre-arch", "mac": "styreep@100.73.150.52"}
 # brain.py (`tarea --agente`) nombra la caja por su hostname corto; myturn la nombra con sus claves
 HOSTNAMES = {"Andres-MacBook-Pro": "mac", "archlinux": "arch", socket.gethostname().split(".")[0]: LOCAL}
-# la ventana de `h` (workspace 2): Local y las otras cajas como máquinas de herdr (`herdr machine add`). Su título es
-# «herdr-mac» si la abrió dev-startup.sh (fijo) o el de `ui.window_title` («herdr · {hostname} · …») si no
+# Dos runtimes mientras exista el TUI viejo (padre: core/docs/research/2026-11-12_herdr-hub-operaciones/migracion/):
+# - la Herdr app: herdr-core `hc` corre los terminales y `herdr-app` es la ventana (app-name «Herdr», workspace 2);
+# - el TUI viejo, en la ventana de `h` (título «herdr-mac» o «herdr · {hostname} · …»): fallback `legacy-herdr`.
 HERDR_WINDOW = re.compile(r"^herdr\b")
+APP_NAME = "Herdr"
+HC_ID = re.compile(r"^t[0-9a-z]+$")  # dirección de un terminal hc (t7, t1r); un pane del TUI es «wX:pN»
+CLAUDE_SESSIONS = Path(os.environ.get("MYTURN_CLAUDE_SESSIONS", HOME / ".claude/sessions"))  # <pid>.json → sessionId
 NO_SYNC = os.environ.get("MYTURN_NO_SYNC") == "1"
 SELF = str(Path(__file__).resolve())
 WAITING = {"idle", "blocked", "done"}
@@ -86,8 +90,9 @@ TAREAS = VAULT / "05. System" / "myturn" / "Tareas.md"
 GATE = Path(os.environ.get("MYTURN_GATE", HOME / ".local/bin/vault-write-gate.py"))
 SOURCES = Path(os.environ.get("MYTURN_SOURCES", HOME / ".config/myturn/sources"))
 
-# sketchybar, Hammerspoon y los hooks arrancan con PATH mínimo
-os.environ["PATH"] = os.pathsep.join(
+# sketchybar, Hammerspoon y los hooks arrancan con PATH mínimo. MYTURN_PATH lo fija entero (tests con binarios falsos:
+# si no, los ~/.local/bin/{hc,herdr} de verdad taparían a los falsos)
+os.environ["PATH"] = os.environ.get("MYTURN_PATH") or os.pathsep.join(
     [str(HOME / ".local/bin"), "/opt/homebrew/bin", "/usr/local/bin", os.environ.get("PATH", "/usr/bin:/bin")])
 os.environ.setdefault("USER", HOME.name)
 
@@ -118,7 +123,7 @@ def emit(op: str, id: str, **data) -> dict:
 
 def origin(tag: str | None = None) -> dict:
     """Quién escribe: un agente (Claude Code pone CLAUDECODE=1) o André (widget/terminal). Sin flags: del env."""
-    o = {"by": "agent" if os.environ.get("CLAUDECODE") == "1" else "user", "pane": os.environ.get("HERDR_PANE_ID"),
+    o = {"by": "agent" if os.environ.get("CLAUDECODE") == "1" else "user", "pane": mi_terminal(),
          "cwd": os.getcwd() if os.environ.get("CLAUDECODE") == "1" else None, "tag": tag}
     return {k: v for k, v in o.items() if v}
 
@@ -251,7 +256,7 @@ def run(cmd: list[str], host: str = LOCAL, timeout: float = 4) -> subprocess.Com
 
 
 def herdr_json(args: list[str], host: str = LOCAL, timeout: float = 4) -> dict | None:
-    p = run(["herdr", *args], host, timeout)
+    p = run(["herdr", *args], host, timeout)  # legacy-herdr
     if not p or p.returncode != 0:
         return None
     try:
@@ -260,8 +265,194 @@ def herdr_json(args: list[str], host: str = LOCAL, timeout: float = 4) -> dict |
         return None
 
 
+# ── runtime: la Herdr app (hc + herdr-app) y, de respaldo, el TUI viejo ─────────────────────────────────────────────
+def runtime_env() -> str | None:
+    """El runtime del terminal donde corre ESTE proceso (un agente). Gana el más interno (skill herdr §0 del toolkit):
+    el TUI puede correr dentro de un terminal hc, así que su pane trae las dos familias de variables."""
+    if os.environ.get("HERDR_PANE_ID"):  # legacy-herdr
+        return "tui"
+    if os.environ.get("HC_TERMINAL_ID") and os.environ.get("HC_TERMINAL_SOCKET") and shutil.which("hc"):
+        return "hc"
+    return None
+
+
+def mi_terminal() -> str | None:
+    rt = runtime_env()
+    if rt == "tui":
+        return os.environ.get("HERDR_PANE_ID")  # legacy-herdr
+    return os.environ.get("HC_TERMINAL_ID") if rt == "hc" else None
+
+
+def es_hc(pane: str | None) -> bool:
+    return bool(pane and HC_ID.match(pane))
+
+
+def hc_json(args: list[str], timeout: float = 4) -> dict | None:
+    p = run(["hc", *args, "--json"], timeout=timeout)
+    if not p or p.returncode != 0:
+        return None
+    try:
+        out = json.loads(p.stdout)
+    except ValueError:
+        return None
+    return out if isinstance(out, dict) else None
+
+
+def app_json(args: list[str], timeout: float = 4) -> dict | None:
+    """`herdr-app ls|status|do …` (la ventana). Nunca `herdr-app` a secas: abre o levanta la ventana."""
+    p = run(["herdr-app", *args], timeout=timeout)
+    if not p or p.returncode != 0:
+        return None
+    try:
+        out = json.loads(p.stdout)
+    except ValueError:
+        return None
+    return out if isinstance(out, dict) and "error" not in out else None
+
+
+def sesion_de_pid(pid) -> str | None:
+    """Claude Code escribe ~/.claude/sessions/<pid>.json con su sessionId (medido 2026-11-13: `t1r` → ea351c32)."""
+    try:
+        return json.loads((CLAUDE_SESSIONS / f"{int(pid)}.json").read_text()).get("sessionId")
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def resume_de(argv: list) -> str | None:
+    return argv[argv.index("--resume") + 1] if "--resume" in argv[:-1] else None
+
+
+def hc_agente(g: dict) -> dict:
+    """Un terminal de `hc get` con la forma de un agente de myturn (la misma que daba el TUI)."""
+    fg, st, lab = g.get("foreground") or {}, g.get("status") or {}, g.get("labels") or {}
+    s = sesion_de_pid(fg.get("pid")) if fg.get("pid") else None
+    s = s or resume_de(fg.get("argv") or []) or resume_de(g.get("argv") or [])
+    return {"agent": "claude", "rt": "hc", "pane_id": g.get("address"), "agent_status": st.get("state"),
+            "agent_session": {"value": s} if s else None, "cwd": fg.get("cwd") or g.get("cwd"),
+            "terminal_title": g.get("title"), "state_change_seq": f"{g.get('turn')}:{g.get('status_ms')}",
+            "space": lab.get("herdr.space"), "tab": lab.get("herdr.tab"), "focused": False}
+
+
+def hc_agents() -> list[dict] | None:
+    """Los Claude vivos del core de hc de esta caja; None si el core no responde."""
+    res = hc_json(["ls"])
+    if res is None:
+        return None
+    out = []
+    for t in res.get("terminals", []):
+        if t.get("agent") == "claude-code" and t.get("state") == "live" and t.get("address"):
+            g = hc_json(["get", t["address"]])
+            if g:
+                out.append(hc_agente(g))
+    return out
+
+
+RT_OK: dict[str, bool] = {}  # qué runtime respondió en la última lectura local (el despertador reabre en hc si sí)
+
+
+def pid_de_sesion_vivo(d: dict) -> bool:
+    """El pid de un ~/.claude/sessions/<pid>.json sigue siendo ESE Claude (no un pid reciclado): el proceso existe y
+    arrancó antes de `startedAt` (Claude lo escribe al iniciar), con 10 min de margen."""
+    try:
+        pid, started = int(d["pid"]), float(d.get("startedAt") or 0) / 1000
+    except (KeyError, TypeError, ValueError):
+        return False
+    p = run(["ps", "-o", "lstart=", "-p", str(pid)], timeout=2)
+    if not p or p.returncode != 0 or not p.stdout.strip():
+        return False
+    try:
+        inicio = time.mktime(time.strptime(" ".join(p.stdout.split()), "%a %b %d %H:%M:%S %Y"))
+    except ValueError:
+        return True  # vivo y no sé leer su hora: mejor no abrir un segundo proceso
+    return not started or -5 <= started - inicio <= 600
+
+
+def sesion_viva(session: str) -> bool:
+    """¿Ya corre un Claude con esta sesión en esta caja, en cualquier runtime? No depende de que hc o el TUI
+    respondan: nunca dos procesos sobre la misma sesión (dotfiles#9)."""
+    for f in sorted(CLAUDE_SESSIONS.glob("*.json")) if CLAUDE_SESSIONS.is_dir() else []:
+        try:
+            d = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(d, dict) and d.get("sessionId") == session and pid_de_sesion_vivo(d):
+            return True
+    p = run(["pgrep", "-f", f"claude --resume {session}"], timeout=3)
+    return bool(p and p.returncode == 0)
+
+
+def login_shell() -> str:
+    try:
+        import pwd
+        sh = pwd.getpwuid(os.getuid()).pw_shell
+    except (ImportError, KeyError):
+        sh = ""
+    return sh if sh and Path(sh).exists() else "/bin/zsh" if Path("/bin/zsh").exists() else "/bin/sh"
+
+
+def nombre_cliente(t: dict) -> str:
+    """El espacio del cliente: el título de la espera sin «espera: », hasta el primer « · » («TSC · Alex» → «TSC»)."""
+    return t["title"].removeprefix("espera: ").split(" · ")[0].strip()[:40] or "myturn"
+
+
+def espacio_del_tui(link: dict) -> str | None:
+    """El nombre del workspace del TUI de un enlace viejo («wER:p3» → «prospectos»): su espacio en la app se llama
+    igual cuando se migró (skill herdr §3). None si el TUI no responde o el enlace es de la app."""
+    pane = link.get("pane") or ""
+    if not pane or es_hc(pane) or ":" not in pane:
+        return None
+    res = herdr_json(["workspace", "list"], timeout=3)  # legacy-herdr (solo lectura)
+    ws = pane.split(":")[0]
+    return next((w.get("label") for w in (res or {}).get("workspaces", []) if w.get("workspace_id") == ws), None)
+
+
+def hc_reabrir(t: dict, env: dict[str, str] | None = None, dry: bool = False) -> tuple[str, str, str] | None:
+    """Reabre la sesión de la tarea como terminal hc en la Herdr app, SIN mover el foco (medido 2026-11-13: un
+    terminal con labels herdr.space/tab aparece como pestaña nueva y status no cambia; tab.new/space.new en cambio se
+    muestran). Espacio: el del enlace si sigue; si no, el que se llama como el workspace del TUI del enlace viejo; si
+    no, el que se llama como el cliente; si no, uno nuevo con el nombre del cliente.
+    `hc run` no pasa el entorno del que llama: las variables van en el argv. Devuelve (terminal, espacio, pestaña)."""
+    link = t["link"]
+    cwd = link.get("cwd") or t.get("cwd") or str(HOME)
+    cliente = nombre_cliente(t)
+    spaces = [x for x in (app_json(["ls"]) or {}).get("spaces", []) if not x.get("machine")]
+    def por_nombre(nombre: str | None) -> dict | None:
+        return next((x for x in spaces if nombre and (x.get("name") or "").casefold() == nombre.casefold()), None)
+    sp = next((x for x in spaces if link.get("space") and x.get("id") == link["space"]), None) or por_nombre(
+        espacio_del_tui(link)) or por_nombre(cliente)
+    sp_id, tb_id = (sp["id"] if sp else "sp" + secrets.token_hex(16)), "tb" + secrets.token_hex(16)
+    sh = login_shell()
+    argv = [sh, "-lic", '"$@"; exec "$0" -li', sh, *(["env", *(f"{k}={v}" for k, v in env.items())] if env else []),
+            "claude", "--resume", link["session"]]
+    cmd = ["hc", "run", "--bg", "--keep", "--no-parent", "--no-notify", "--json", "--cwd", cwd,
+           "--label", f"herdr.space={sp_id}", "--label", f"herdr.tab={tb_id}", "--", *argv]
+    label = f"💬 {t['title'].removeprefix('espera: ')}"[:24]
+    renames = [["herdr-app", "do", "tab.rename", "--id", tb_id, "--name", label]]
+    if not sp:
+        renames.append(["herdr-app", "do", "space.rename", "--id", sp_id, "--name", cliente])
+    if dry:
+        for c in (cmd, *renames):
+            print("$ " + shlex.join(c), flush=True)
+        return "tdry1", sp_id, tb_id
+    p = run(cmd, timeout=15)
+    try:
+        addr = json.loads(p.stdout).get("address") if p and p.returncode == 0 else None
+    except ValueError:
+        addr = None
+    if not addr:
+        return None
+    for _ in range(20):  # el app adopta el terminal en unos ms: renombrar antes falla
+        tabs = {tb.get("id") for x in (app_json(["ls"]) or {}).get("spaces", []) for tb in x.get("tabs", [])}
+        if tb_id in tabs:
+            break
+        time.sleep(0.15)
+    for c in renames:
+        run(c, timeout=4)
+    return addr, sp_id, tb_id
+
+
 def herdr_agents(host: str, fresh: bool = False) -> list[dict] | None:
-    """Agentes de Claude en herdr de esa caja; None si no se pudo leer.
+    """Agentes de Claude de esa caja (app y TUI viejo); None si no se pudo leer ninguno.
 
     Lo remoto (ssh, hasta 6 s si la red tarda) sale del caché y, si pasó de 60 s, se renueva en segundo plano: un
     clic en el panel nunca espera a la red. Un caché de más de 10 min no se cree (la otra caja no responde).
@@ -276,13 +467,31 @@ def herdr_agents(host: str, fresh: bool = False) -> list[dict] | None:
             if age > 60 and every(f"agents-{host}", 20):
                 spawn("_agents", host)
             return agents if age < 600 else None
-    res = herdr_json(["agent", "list"], host, timeout=4 if host == LOCAL else 6)
-    if res is None:
-        return None
-    agents = [a for a in res.get("agents", []) if a.get("agent") == "claude"]
-    if host != LOCAL:
+    if host == LOCAL:  # los de la app y, mientras exista, los del TUI: una falla del TUI es una lista vacía
+        app, tui = hc_agents(), tui_agents(LOCAL)
+        RT_OK.update(hc=app is not None, tui=tui is not None)
+        if app is None and tui is None:
+            return None
+        frente = ventana_al_frente()
+        foco = (app_json(["status"]) or {}).get("agent") if app and frente == "hc" else None
+        for a in app or []:
+            a["focused"] = a["pane_id"] == foco
+        for a in tui or []:
+            a["focused"] = bool(a.get("focused")) and frente == "tui"
+        vistas = {session_of(a) for a in app or [] if session_of(a)}
+        return (app or []) + [a for a in tui or [] if session_of(a) not in vistas]
+    agents = tui_agents(host)
+    if agents is not None:
         write_atomic(cache, json.dumps(agents))
     return agents
+
+
+def tui_agents(host: str) -> list[dict] | None:
+    """Los Claude del TUI viejo de esa caja (las remotas siguen ahí hasta H8)."""
+    res = herdr_json(["agent", "list"], host, timeout=4 if host == LOCAL else 6)  # legacy-herdr
+    if res is None:
+        return None
+    return [a | {"rt": "tui"} for a in res.get("agents", []) if a.get("agent") == "claude"]
 
 
 def session_of(a: dict) -> str | None:
@@ -293,15 +502,15 @@ GLYPH = re.compile(r"^[^\w¿¡\"'(\[]+\s*")
 
 
 def clean_title(s: str | None) -> str:
-    """Claude Code pone su estado como primer glifo (✳ idle, ◐ trabajando…); herdr no lo quita."""
+    """Claude Code pone su estado como primer glifo (✳ idle, ◐ trabajando…); el runtime no lo quita."""
     t = GLYPH.sub("", (s or "").strip()).strip()
     return "" if t.lower() in {"claude", "claude code", HOME.name} else t
 
 
 def herdr_machines() -> list[dict]:
-    """Las máquinas habilitadas del herdr de la Mac, en el orden de su sidebar (Local va antes). `selected` es la
-    que muestra la ventana: herdr la guarda cada vez que cambias de máquina."""
-    p = run(["herdr", "machine", "list", "--json"], timeout=3)
+    """Las máquinas habilitadas del TUI de la Mac, en el orden de su sidebar (Local va antes). `selected` es la
+    que muestra la ventana: el TUI la guarda cada vez que cambias de máquina."""
+    p = run(["herdr", "machine", "list", "--json"], timeout=3)  # legacy-herdr
     try:
         return [m for m in json.loads(p.stdout) if m.get("enabled")] if p and p.returncode == 0 else []
     except ValueError:
@@ -312,12 +521,34 @@ def showing(machines: list[dict]) -> str:
     return next((m["label"] for m in machines if m.get("selected")), LOCAL)
 
 
-def herdr_frontmost() -> str | None:
-    """La caja que ves si la ventana enfocada es la de herdr: Local o la máquina elegida en su sidebar."""
+def ventana_al_frente() -> str | None:
+    """«hc» si la ventana enfocada es la del app, «tui» si es la del TUI viejo, None si es otra."""
     if LOCAL != "mac" or not shutil.which("aerospace"):
         return None
-    p = run(["aerospace", "list-windows", "--focused", "--format", "%{window-title}"], timeout=2)
-    return showing(herdr_machines()) if HERDR_WINDOW.match(p.stdout.strip() if p else "") else None
+    p = run(["aerospace", "list-windows", "--focused", "--format", "%{app-name}|%{window-title}"], timeout=2)
+    app, _, title = (p.stdout.strip() if p else "").partition("|")
+    return "hc" if app == APP_NAME else "tui" if HERDR_WINDOW.match(title.strip()) else None
+
+
+def herdr_frontmost() -> str | None:
+    """La caja que ves: Local si la ventana enfocada es la del app; si es la del TUI, la máquina de su sidebar."""
+    frente = ventana_al_frente()
+    return LOCAL if frente == "hc" else showing(herdr_machines()) if frente == "tui" else None
+
+
+def focus_app() -> bool:
+    """Trae la ventana del app al frente (AeroSpace; si no, `open -a`)."""
+    if LOCAL != "mac":
+        return False
+    p = run(["aerospace", "list-windows", "--all", "--format", "%{window-id}|%{app-name}"]) \
+        if shutil.which("aerospace") else None
+    for line in (p.stdout if p else "").splitlines():
+        wid, _, app = line.partition("|")
+        if app.strip() == APP_NAME:
+            run(["aerospace", "focus", "--window-id", wid.strip()])
+            return True
+    p = run(["open", "-a", APP_NAME])
+    return bool(p and p.returncode == 0)
 
 
 def focus_window() -> bool:
@@ -333,7 +564,7 @@ def focus_window() -> bool:
 
 
 def navigator_downs(panes: list[tuple[str, str]], host: str, pane: str, federated: bool) -> int | None:
-    """Cuántas filas bajar en el navegador de herdr tras buscar el id de `pane`, o None si no está.
+    """Cuántas filas bajar en el navegador del TUI tras buscar el id de `pane`, o None si no está.
 
     Calca su filtro: substring en todas las máquinas, en el orden del sidebar; cada máquina con aciertos pone su
     fila (si hay más de una) y cada workspace la suya, y queda elegido el primer pane que calce. `panes` va en ese
@@ -355,7 +586,7 @@ def navigator_downs(panes: list[tuple[str, str]], host: str, pane: str, federate
 
 
 def show(host: str, pane: str) -> None:
-    """Pone el pane en pantalla. `agent focus` ya lo enfocó en su caja; si la ventana muestra otra máquina, herdr no
+    """Pone el pane en pantalla. `agent focus` ya lo enfocó en su caja; si la ventana muestra otra máquina, el TUI no
     tiene CLI para cambiarla: Hammerspoon teclea su navegador (prefix+g, /id, ↓…, Enter)."""
     if not focus_window():
         return
@@ -367,7 +598,8 @@ def show(host: str, pane: str) -> None:
         return
     panes = []
     for h in order[: order.index(host) + 1]:
-        res = herdr_json(["pane", "list"] if h == LOCAL else ["--machine", h, "pane", "list"], timeout=6)
+        args = ["pane", "list"] if h == LOCAL else ["--machine", h, "pane", "list"]
+        res = herdr_json(args, timeout=6)  # legacy-herdr
         if res is None:  # una máquina caída que el sidebar todavía lista descuadraría las filas
             return
         panes += [(h, p["pane_id"]) for p in res.get("panes", [])]
@@ -752,23 +984,39 @@ def compute(notify_new: bool = False) -> dict:
 
 # ── acciones ──────────────────────────────────────────────────────────────────────────────────────
 def go(t: dict) -> str:
+    if os.environ.get("COFOUNDY_DESPERTADA"):  # una despertada no abre ni enfoca otras sesiones (guard-despertada D6)
+        return "Una sesión despertada no abre otras sesiones: déjale la tarea a André"
     link = t.get("link")
     if not link:
         return "Esta tarea no tiene agente: cópiala y pégasela a un Claude"
     agents = herdr_agents(link["host"], fresh=True) or []
     ag = next((a for a in agents if session_of(a) == link["session"]), None)
+    if ag and ag.get("rt") == "hc":  # viva en la app: enfocarla, nunca un segundo proceso
+        app_json(["do", "agent.focus", "--terminal", ag["pane_id"]])
+        focus_app()
+        mark_seen(link["session"])
+        return f"→ {t['title']}"
     if ag:
-        run(["herdr", "agent", "focus", ag["pane_id"]], link["host"])
+        run(["herdr", "agent", "focus", ag["pane_id"]], link["host"])  # legacy-herdr
         show(link["host"], ag["pane_id"])
         mark_seen(link["session"])
         return f"→ {t['title']}"
+    if link["host"] == LOCAL and sesion_viva(link["session"]):
+        return f"La sesión de {t['title']} sigue abierta en otra ventana: no abro otra encima"
+    if link["host"] == LOCAL and RT_OK.get("hc"):  # cerrada: se reabre en la app y ahí sí se enfoca (la pediste)
+        r = hc_reabrir(t)
+        if not r:
+            return f"No pude reabrirla en la app ({t['title']})"
+        app_json(["do", "agent.focus", "--terminal", r[0]])
+        focus_app()
+        return f"↻ Reabriendo el agente de {t['title']}"
     cwd = link.get("cwd") or t.get("cwd") or str(HOME)
-    res = herdr_json(["tab", "create", "--cwd", cwd, "--label", t["title"][:24], "--focus"],
+    res = herdr_json(["tab", "create", "--cwd", cwd, "--label", t["title"][:24], "--focus"],  # legacy-herdr
                      link["host"], timeout=8)
     pane = ((res or {}).get("root_pane") or {}).get("pane_id")
     if not pane:
-        return f"No pude abrir una pestaña en herdr ({link['host']})"
-    run(["herdr", "pane", "run", pane, f"claude --resume {link['session']}"], link["host"], timeout=8)
+        return f"No pude abrir una pestaña en el TUI ({link['host']})"
+    run(["herdr", "pane", "run", pane, f"claude --resume {link['session']}"], link["host"], timeout=8)  # legacy-herdr
     show(link["host"], pane)
     return f"↻ Reabriendo el agente de {t['title']}"
 
@@ -782,19 +1030,37 @@ def jump() -> str:
     return msg
 
 
+def aqui() -> dict | None:
+    """El terminal de ESTE proceso con la forma de un agente, según el runtime más interno (sin exigir sesión)."""
+    rt = runtime_env()
+    if rt == "hc":
+        g = hc_json(["get", os.environ["HC_TERMINAL_ID"]])
+        return hc_agente(g) if g else None
+    if rt == "tui":
+        cur = (herdr_json(["pane", "current"], timeout=2) or {}).get("pane")  # legacy-herdr
+        return cur | {"rt": "tui"} if cur else None
+    return None
+
+
 def here() -> dict | None:
-    """El pane de herdr de ESTE proceso (cuando lo corre un agente)."""
-    if not os.environ.get("HERDR_PANE_ID"):
-        return None
-    cur = (herdr_json(["pane", "current"]) or {}).get("pane")
+    """El Claude de ESTE proceso (cuando lo corre un agente): su terminal de la app o su pane del TUI."""
+    cur = aqui()
     return cur if cur and session_of(cur) else None
+
+
+def link_de(cur: dict, host: str = LOCAL) -> dict:
+    """El enlace tarea→sesión. Uno de la app suma rt/space/tab: el despertador reabre en ese espacio."""
+    link = {"host": host, "session": session_of(cur), "pane": cur.get("pane_id"), "cwd": cur.get("cwd")}
+    if cur.get("rt") == "hc":
+        link |= {"rt": "hc", "space": cur.get("space"), "tab": cur.get("tab")}
+    return {k: v for k, v in link.items() if v is not None}
 
 
 def bind(tasks: dict, t: dict, host: str, cur: dict) -> None:
     """Desde ahora el estado de la tarea es el de ese agente. El cwd va en el enlace: `go` reabre ahí la sesión
     cerrada (`claude --resume` solo la encuentra desde su carpeta)."""
     s = session_of(cur)
-    emit("link", t["id"], link={"host": host, "session": s, "pane": cur.get("pane_id"), "cwd": cur.get("cwd")})
+    emit("link", t["id"], link=link_de(cur, host))
     for other in tasks.values():  # la sesión que el hook registró queda fusionada en la tarea
         if other["id"] != t["id"] and other["status"] == "open" and other.get("source") == "agent" \
                 and (other.get("link") or {}).get("session") == s:
@@ -807,7 +1073,7 @@ def link_here(tid: str) -> str:
     """Un agente se enlaza a una tarea."""
     tasks, cur = fold(), here()
     if not cur:
-        sys.exit("myturn: link solo funciona dentro de un pane de herdr con Claude")
+        sys.exit("myturn: link solo funciona dentro de un terminal de la Herdr app (o un pane del TUI) con Claude")
     t = find(tasks, tid)
     bind(tasks, t, LOCAL, cur)
     return f"Enlazado: esta sesión trabaja en «{t['title']}» ({t['id']}). André verá cuándo terminas."
@@ -817,7 +1083,7 @@ def link_pane(tid: str, pane: str, host: str) -> str:
     """Enlazar desde afuera el Claude que ya corre en un pane (p. ej. al mapear sesiones abiertas con tareas)."""
     agents = herdr_agents(host, fresh=True)
     if agents is None:
-        sys.exit(f"myturn: no veo el herdr de {host}")
+        sys.exit(f"myturn: no veo los agentes de {host}")
     cur = next((a for a in agents if a.get("pane_id") == pane and session_of(a)), None)
     if not cur:
         sys.exit(f"myturn: no hay un Claude en {pane} ({host})")
@@ -844,24 +1110,25 @@ def target(ref: str | None) -> dict:
         return t
     tid = new_id()
     emit("add", tid, title=clean_title(cur.get("terminal_title")) or "agente", source="agent", cwd=cur.get("cwd"),
-         link={"host": LOCAL, "session": session_of(cur), "pane": cur.get("pane_id")})
+         link=link_de(cur))
     return fold()[tid]
 
 
 def track(payload: dict) -> None:
     """Hook UserPromptSubmit: registra la sesión la primera vez, para poder enlazarla. Silencioso."""
-    sid, pane = payload.get("session_id"), os.environ.get("HERDR_PANE_ID")
+    sid, pane = payload.get("session_id"), mi_terminal()
     if not sid or not pane:
         return
     if sid in by_session(fold()):
         return
-    cur = herdr_json(["pane", "current"], timeout=2) or {}
-    if session_of(cur.get("pane") or {}) != sid:  # p. ej. un `claude -p` que corre dentro de un pane
+    cur = aqui() or {}
+    if session_of(cur) != sid:  # p. ej. un `claude -p` que corre dentro de un pane
         return
     prompt = (payload.get("prompt") or "").strip().splitlines()
-    title = clean_title((cur.get("pane") or {}).get("terminal_title")) or (prompt[0][:70] if prompt else "agente")
-    emit("add", new_id(), title=title, source="agent", cwd=payload.get("cwd"),
-         link={"host": LOCAL, "session": sid, "pane": pane})
+    title = clean_title(cur.get("terminal_title")) or (prompt[0][:70] if prompt else "agente")
+    link = link_de(cur)
+    link.pop("cwd", None)  # como antes: el cwd del hook va en la tarea
+    emit("add", new_id(), title=title, source="agent", cwd=payload.get("cwd"), link=link)
     sync_bg()
 
 
@@ -872,7 +1139,7 @@ def import_sessions() -> int:
         if s and s not in tracked:
             emit("add", new_id(), title=clean_title(a.get("terminal_title")) or Path(a.get("cwd", "~")).name,
                  source="agent", cwd=a.get("cwd"), by="import",
-                 link={"host": LOCAL, "session": s, "pane": a.get("pane_id")})
+                 link={k: v for k, v in link_de(a).items() if k != "cwd"})
             n += 1
     if n:
         sync_bg()
@@ -1331,8 +1598,8 @@ def panel() -> dict:
 # SSOT del diseño: core/docs/research/2026-11-06_sesiones-dormidas/ (opciones v4, corrida). v0: André, Mac, WhatsApp.
 #   myturn dormir --wsp JID      (lo corre el agente) registra la espera: este chat despierta ESTA sesión
 #   myturn despertador           (launchd, apagado por defecto) sigue ~/.wacli/events.jsonl: cierra la sesión con
-#                                espera tras 10 min idle (cuenta regresiva en el título del panel) y la reabre en herdr,
-#                                sin foco, cuando escribe alguien que no es del equipo
+#                                espera tras 10 min idle (cuenta regresiva en el panel o la pestaña) y la reabre en la
+#                                app Herdr (o el TUI si su core no responde), sin foco, cuando escribe alguien de afuera
 # La espera es una tarea `source: espera` (sin fecha propia: el reloj del toque sigue en Fovente o brain). Lo
 # transitorio del despertador (offset, pendientes, contadores) vive en el caché, fuera del log de git.
 WACLI_EVENTS = Path(os.environ.get("MYTURN_WACLI_EVENTS", HOME / ".wacli/events.jsonl"))
@@ -1354,7 +1621,7 @@ URGENCIAS = ("web o servicio caído", "pago o cobro", "reunión de hoy o mañana
              "pide que lo llamen ya", "salud o seguridad")
 NO_URGENTE = "ninguna"
 DESP_LABEL = "dev.andre.myturn-despertador"
-FUENTE = "despertador"   # --source de herdr report-metadata
+FUENTE = "despertador"   # --source del report-metadata del TUI
 # Coresponde (Tracta): el WhatsApp del negocio. Un daemon no habla MCP, así que lee el REST del backend con una API key
 # de la cuenta (conversations:read + messages:read), la misma INBOXAI_API_KEY de portafolios (evals/run_production.py,
 # dev/scripts/direccion-check.py). `conversations_wait` no tiene equivalente REST: se consulta cada CORESPONDE_S.
@@ -1515,7 +1782,7 @@ def dormir(jid: str | None, titulo: str | None, horario: str | None = None, core
             sys.exit(f"myturn: --horario ilegible: {e}")
     cur = here()
     if not cur:
-        sys.exit("myturn: dormir solo funciona dentro de un pane de herdr con Claude")
+        sys.exit("myturn: dormir solo funciona dentro de un terminal de la Herdr app (o un pane del TUI) con Claude")
     chat = coresponde or jid
     horario = horario or (None if coresponde else horario_del_chat(jid)) or (hb.HORARIO_DEFAULT if hb else None)
     if coresponde:
@@ -1525,7 +1792,7 @@ def dormir(jid: str | None, titulo: str | None, horario: str | None = None, core
         wake = {"wsp": jid}
     wake |= {"horario": horario} if horario else {}
     tasks, s = fold(), session_of(cur)
-    link = {"host": LOCAL, "session": s, "pane": cur.get("pane_id"), "cwd": cur.get("cwd")}
+    link = link_de(cur)
     expires = iso(now() + timedelta(days=ESPERA_DIAS))
     own = None
     for t in esperas(tasks):
@@ -1559,7 +1826,7 @@ def dormir(jid: str | None, titulo: str | None, horario: str | None = None, core
             cr += " OJO: falta INBOXAI_API_KEY (env o ~/.claude/settings.json): el despertador no puede leer el chat."
     return (f"{msg} ({tid}): {chat} despierta esta sesión hasta {expires[:10]}. Si nadie te escribe en 10 min, el "
             "despertador cierra este panel (antes corre closeout: deja el recibo de /cierre). Cuando el cliente "
-            f"escriba, vuelve a abrirse en herdr, sin foco.{fuera}{cr}")
+            f"escriba, vuelve a abrirse en la Herdr app, en el espacio del cliente y sin foco.{fuera}{cr}")
 
 
 def leer_eventos(st: dict) -> list[dict]:
@@ -1778,19 +2045,30 @@ def puntero(jid: str, n: int, hora: str, desde: str | None = None, horario: str 
 
 
 class Herdr:
-    """Las acciones del despertador sobre herdr. En seco imprime el comando y no lo corre (lo que lee, sí)."""
+    """Las acciones del despertador. Cada una va al runtime del panel: un terminal de la app (t…) por hc/herdr-app, un
+    pane del TUI viejo (wX:pN) por su CLI (legacy-herdr). Reabrir es en la app si su core responde. En seco imprime los
+    comandos y no los corre (lo que lee, sí)."""
 
     def __init__(self, dry: bool):
         self.dry, self.n = dry, 0
+        self.tabs: dict[str, str] = {}     # terminal de la app → su pestaña (de la última lectura)
+        self.nombres: dict[str, str] = {}  # pestaña → su nombre antes de la cuenta regresiva (vive en el estado)
+
+    def tick(self, st: dict, agents: list[dict]) -> None:
+        self.nombres = st.setdefault("nombres", {})
+        self.tabs = {a["pane_id"]: a["tab"] for a in agents if a.get("rt") == "hc" and a.get("tab")}
+
+    def cmd(self, argv: list[str], timeout: float = 8) -> subprocess.CompletedProcess | None:
+        if self.dry:
+            print("$ " + shlex.join(argv), flush=True)
+            return None
+        return run(argv, timeout=timeout)
 
     def act(self, *args: str, timeout: float = 8) -> subprocess.CompletedProcess | None:
-        if self.dry:
-            print("$ " + shlex.join(["herdr", *args]), flush=True)
-            return None
-        return run(["herdr", *args], timeout=timeout)
+        return self.cmd(["herdr", *args], timeout)  # legacy-herdr
 
     def mac(self, msg: str) -> None:
-        """Notificación de macOS (urgencias fuera de horario), aparte del aviso de herdr."""
+        """Notificación de macOS (urgencias fuera de horario, y todo aviso de un panel de la app)."""
         if self.dry:
             print(f"$ notify {msg!r}", flush=True)
             return
@@ -1801,13 +2079,57 @@ class Herdr:
             self.act(*args)
             self.n += 1
             return f"dry:p{self.n}"
-        res = herdr_json(list(args), timeout=8)
+        res = herdr_json(list(args), timeout=8)  # legacy-herdr
         return ((res or {}).get("root_pane") or {}).get("pane_id")
 
+    def puntero(self, pane: str, texto: str, estado: str | None = None) -> bool:
+        """True si llegó. hc espera a que André termine un borrador en ese terminal (≤ 60 s): de ahí el timeout; si
+        vence o falla, el pendiente se queda para el próximo tick (nunca se da por entregado)."""
+        si = ["--if", "idle"] if estado == "idle" else []  # si pasó a trabajar entre la lectura y el envío, no teclea
+        p = self.cmd(["hc", "send", *si, pane, texto], timeout=75) if es_hc(pane) else \
+            self.act("agent", "prompt", pane, texto)
+        return self.dry or bool(p and p.returncode == 0)
 
-def resumiendo(session: str) -> bool:
-    p = run(["pgrep", "-f", f"claude --resume {session}"], timeout=3)
-    return bool(p and p.returncode == 0)
+    def titulo(self, pane: str, label: str | None = None) -> None:
+        """La cuenta regresiva. En el TUI, el título del panel; la app no tiene título por CLI, así que se renombra la
+        pestaña y su nombre original vuelve al limpiar."""
+        if not es_hc(pane):
+            self.act("pane", "report-metadata", pane, "--source", FUENTE,
+                     *(["--title", label] if label else ["--clear-title"]))
+            return
+        tab = self.tabs.get(pane)
+        if not tab:
+            return
+        if label is None:
+            if tab in self.nombres:
+                self.cmd(["herdr-app", "do", "tab.rename", "--id", tab, "--name", self.nombres.pop(tab)])
+            return
+        if tab not in self.nombres:
+            actual = next((tb.get("name") for x in (app_json(["ls"]) or {}).get("spaces", [])
+                           for tb in x.get("tabs", []) if tb.get("id") == tab), None)
+            if actual is None:
+                return
+            self.nombres[tab] = actual
+        self.cmd(["herdr-app", "do", "tab.rename", "--id", tab, "--name", label])
+
+    def aviso(self, pane: str | None, titulo: str, cuerpo: str) -> None:
+        """Un panel de la app avisa por macOS (el app suma su toast cuando el agente termina); uno del TUI, ahí."""
+        if pane is None or es_hc(pane):
+            self.mac(f"{titulo} · {cuerpo}")
+        else:
+            self.act("notification", "show", titulo, "--body", cuerpo, "--sound", "request")
+
+    def cerrar(self, pane: str) -> None:
+        if not es_hc(pane):
+            self.act("pane", "close", pane)
+            return
+        self.nombres.pop(self.tabs.get(pane, ""), None)  # la pestaña se va con su terminal
+        self.cmd(["hc", "kill", pane])
+        for _ in range(1 if self.dry else 15):  # `rm` solo saca un terminal ya terminado
+            p = self.cmd(["hc", "rm", pane])
+            if self.dry or (p and p.returncode == 0):
+                break
+            time.sleep(0.2)
 
 
 def closeout_check(session: str) -> tuple[bool, str]:
@@ -1824,33 +2146,40 @@ def closeout_check(session: str) -> tuple[bool, str]:
     return p.returncode == 0, (falta or (lines[0] if lines else f"exit {p.returncode}"))[:60]
 
 
-def entregar(h: Herdr, pane: str, t: dict, p: dict) -> None:
+def entregar(h: Herdr, pane: str, t: dict, p: dict, estado: str | None = None) -> bool:
     jid = chat_de(t)
     hz = horario_espera(t)
     hor = hz.texto if hz else None
-    h.act("agent", "prompt", pane, puntero(jid, p["n"], p["hora"], dia_hora(p["desde"]) if p.get("desde") else None,
-                                         hor, p.get("urgente"), t.get("wake")))
-    h.act("pane", "report-metadata", pane, "--source", FUENTE, "--clear-title")
-    h.act("notification", "show", f"💬 {t['title'][:60]}", "--body",
-          f"despertó con {p['n']} mensaje{'s' * (p['n'] != 1)} · ⌥G para ir", "--sound", "request")
+    if not h.puntero(pane, puntero(jid, p["n"], p["hora"], dia_hora(p["desde"]) if p.get("desde") else None,
+                                   hor, p.get("urgente"), t.get("wake")), estado):
+        return False  # no llegó (borrador de André que no terminó, terminal caído): el pendiente se queda
+    h.titulo(pane)
+    h.aviso(pane, f"💬 {t['title'][:60]}", f"despertó con {p['n']} mensaje{'s' * (p['n'] != 1)} · ⌥G para ir")
+    return True
 
 
-def abrir(h: Herdr, t: dict) -> str | None:
-    """Reabre la sesión en una pestaña nueva de su workspace, sin foco y marcada como despertada."""
+def abrir(h: Herdr, t: dict) -> tuple[str, dict] | None:
+    """Reabre la sesión sin foco y marcada como despertada: en la Herdr app si su core responde (espacio del cliente,
+    pestaña nueva), si no en una pestaña nueva del TUI viejo. Devuelve (panel, enlace actualizado)."""
     link = t["link"]
-    ws = (link.get("pane") or "").split(":")[0]
-    label = f"💬 {t['title'].removeprefix('espera: ')}"[:24]
     w = t.get("wake") or {}
-    exc = ["--env", f"COFOUNDY_DESPERTADA_EXCEPCION={w['excepcion']}", "--env",
-           f"COFOUNDY_DESPERTADA_CHAT={w['coresponde']}"] if w.get("coresponde") and w.get("excepcion") else []
+    env = {"COFOUNDY_DESPERTADA": "1"}
+    if w.get("coresponde") and w.get("excepcion"):
+        env |= {"COFOUNDY_DESPERTADA_EXCEPCION": w["excepcion"], "COFOUNDY_DESPERTADA_CHAT": w["coresponde"]}
+    if RT_OK.get("hc"):
+        r = hc_reabrir(t, env, dry=h.dry)
+        return (r[0], link | {"pane": r[0], "rt": "hc", "space": r[1], "tab": r[2]}) if r else None
+    ws = "" if es_hc(link.get("pane")) else (link.get("pane") or "").split(":")[0]
+    label = f"💬 {t['title'].removeprefix('espera: ')}"[:24]
     tail = ["--cwd", link.get("cwd") or t.get("cwd") or str(HOME), "--label", label,
-            "--env", "COFOUNDY_DESPERTADA=1", *exc, "--no-focus"]
+            *(x for k, v in env.items() for x in ("--env", f"{k}={v}")), "--no-focus"]
     pane = h.tab("tab", "create", *(["--workspace", ws] if ws else []), *tail)
-    if not pane and ws:  # el workspace ya no existe: donde herdr diga
+    if not pane and ws:  # el workspace ya no existe: donde el TUI diga
         pane = h.tab("tab", "create", *tail)
-    if pane:
-        h.act("pane", "run", pane, f"claude --resume {link['session']}")
-    return pane
+    if not pane:
+        return None
+    h.act("pane", "run", pane, f"claude --resume {link['session']}")
+    return pane, {k: v for k, v in link.items() if k not in ("rt", "space", "tab")} | {"pane": pane}
 
 
 def ciclo(st: dict, h: Herdr) -> list[str]:
@@ -1939,8 +2268,9 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
         abriendo.pop(k, None)
     agents = herdr_agents(LOCAL, fresh=True)
     if agents is None:
-        log.append("herdr no responde")
+        log.append("ni la app (hc) ni el TUI responden")
         return log
+    h.tick(st, agents)
     by_s = {session_of(a): a for a in agents if session_of(a)}
     by_pane = {a.get("pane_id"): a for a in agents}
     front = herdr_frontmost() == LOCAL
@@ -1956,26 +2286,28 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
         a = by_s.get(s)
         if a:
             if a.get("focused") and front:  # André la está mirando: basta el aviso
-                h.act("notification", "show", f"💬 {t['title'][:60]}", "--body", "llegó un mensaje",
-                      "--sound", "request")
+                h.aviso(a["pane_id"], f"💬 {t['title'][:60]}", "llegó un mensaje")
                 pend.pop(tid)
                 log.append(f"{tid}: a la vista, solo aviso")
             elif a.get("agent_status") in ("idle", "done"):
-                entregar(h, a["pane_id"], t, p)
+                if not entregar(h, a["pane_id"], t, p, a.get("agent_status")):
+                    log.append(f"{tid}: el puntero no llegó a {a['pane_id']}; reintento")
+                    continue
                 pend.pop(tid)
                 idle.pop(a["pane_id"], None)
                 entregados.add(tid)
                 log.append(f"{tid}: puntero a {a['pane_id']}")
             continue  # working/blocked: espera a que quede idle
         rafaga = not p.get("urgente") and (t0 - parse(p["first"])).total_seconds() < DEBOUNCE_S  # urgente: ya
-        if p.get("fallo") or rafaga or resumiendo(s):
+        if p.get("fallo") or rafaga or sesion_viva(s):
             continue  # fallo: ya se abrió una vez y no quedó idle; el puntero espera a que aparezca viva
-        pane = abrir(h, t)
-        if not pane:
+        r = abrir(h, t)
+        if not r:
             log.append(f"{tid}: no pude abrir una pestaña")
             continue
+        pane = r[0]
         if not h.dry:
-            emit("link", tid, link={**t["link"], "pane": pane})
+            emit("link", tid, link=r[1])
         abriendo[tid] = {"pane": pane, "at": iso(t0), **pend.pop(tid)}
         log.append(f"{tid}: despertando en {pane}")
 
@@ -1983,16 +2315,19 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
         t = vivas[tid]
         a = by_pane.get(ab["pane"]) or by_s.get(t["link"]["session"])
         if a and a.get("agent_status") in ("idle", "done"):
-            more = pend.pop(tid, None)
+            more = pend.get(tid)
             n = ab["n"] + (more["n"] if more else 0)
-            entregar(h, a["pane_id"], t, {**ab, "n": n, "hora": (more or ab)["hora"],
-                                          "urgente": ab.get("urgente") or (more or {}).get("urgente")})
+            if not entregar(h, a["pane_id"], t, {**ab, "n": n, "hora": (more or ab)["hora"],
+                                                 "urgente": ab.get("urgente") or (more or {}).get("urgente")},
+                            a.get("agent_status")):
+                log.append(f"{tid}: el puntero no llegó a {a['pane_id']}; reintento")
+                continue
+            pend.pop(tid, None)
             abriendo.pop(tid)
             entregados.add(tid)
             log.append(f"{tid}: despierta, puntero a {a['pane_id']}")
         elif (t0 - parse(ab["at"])).total_seconds() > ABRIR_S:
-            h.act("notification", "show", f"⚠️ no despertó: {t['title'][:50]}", "--body",
-                  f"myturn go {tid} para abrirla a mano", "--sound", "request")
+            h.aviso(ab["pane"], f"⚠️ no despertó: {t['title'][:50]}", f"myturn go {tid} para abrirla a mano")
             more = pend.get(tid) or {}
             pend[tid] = {"first": ab["at"], "n": ab["n"] + more.get("n", 0), "hora": more.get("hora", ab["hora"]),
                          "fallo": True}
@@ -2011,35 +2346,35 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
         rec = idle.get(pane)
         if status not in ("idle", "done"):
             if rec and rec.get("title"):
-                h.act("pane", "report-metadata", pane, "--source", FUENTE, "--clear-title")
+                h.titulo(pane)
             idle.pop(pane, None)
             continue
         if not rec or rec.get("seq") != seq:  # André escribió (o el agente volvió a trabajar): de cero
             if rec and rec.get("title"):
-                h.act("pane", "report-metadata", pane, "--source", FUENTE, "--clear-title")
+                h.titulo(pane)
             rec = idle[pane] = {"since": iso(t0), "seq": seq}
         left = DUERME_S - (t0 - parse(rec["since"])).total_seconds()
         if left > 0:
             label = f"💤 se duerme en {int(left) // 60}:{int(left) % 60:02d}"
             if label != rec.get("title"):
-                h.act("pane", "report-metadata", pane, "--source", FUENTE, "--title", label)
+                h.titulo(pane, label)
                 rec["title"] = label
             continue
         if a.get("focused") and front:  # André tiene el panel delante (quizá escribiendo): espera a que salga
             if rec.get("title") != "💤 se duerme cuando salgas":
-                h.act("pane", "report-metadata", pane, "--source", FUENTE, "--title", "💤 se duerme cuando salgas")
+                h.titulo(pane, "💤 se duerme cuando salgas")
                 rec["title"] = "💤 se duerme cuando salgas"
             continue
         if rec.get("fallo_at") and (t0 - parse(rec["fallo_at"])).total_seconds() < REINTENTO_CIERRE_S:
             continue
         ok, motivo = closeout_check(t["link"]["session"])
         if ok:
-            h.act("pane", "close", pane)
+            h.cerrar(pane)
             idle.pop(pane)
             log.append(f"{tid}: dormida ({pane} cerrado)")
         else:
             label = f"💤 no se duerme: {motivo}"
-            h.act("pane", "report-metadata", pane, "--source", FUENTE, "--title", label)
+            h.titulo(pane, label)
             rec.update(title=label, fallo_at=iso(t0))
             log.append(f"{tid}: no se duerme ({motivo})")
     for pane in [p for p in idle if p not in vistos]:
@@ -2114,7 +2449,7 @@ def main(argv: list[str]) -> None:
         sub.add_parser(name).add_argument("id", nargs="?" if name == "done" else None)
     p = sub.add_parser("link")
     p.add_argument("id")
-    p.add_argument("--pane", help="desde afuera: el Claude de ese pane de herdr (si no, el de este proceso)")
+    p.add_argument("--pane", help="desde afuera: el Claude de ese terminal (t…) o pane del TUI")
     p.add_argument("--host", default=LOCAL, choices=sorted({LOCAL, *REMOTE_SSH}))
     p = sub.add_parser("ls")
     p.add_argument("--json", action="store_true")
@@ -2138,7 +2473,7 @@ def main(argv: list[str]) -> None:
     p = sub.add_parser("despertador")
     p.add_argument("accion", nargs="?", choices=["plist", "estado"])
     p.add_argument("--once", action="store_true", help="un solo tick y sale")
-    p.add_argument("--dry-run", action="store_true", help="imprime los comandos herdr en vez de correrlos")
+    p.add_argument("--dry-run", action="store_true", help="imprime los comandos en vez de correrlos")
     p.add_argument("--tick", type=float, default=TICK_S)
     a = ap.parse_args(argv)
     cmd = a.cmd or "jump"
