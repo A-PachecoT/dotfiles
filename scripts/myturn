@@ -30,7 +30,7 @@ La UI es el panel del widget (clic en la barra o ⌥T). Este CLI es lo que el pa
                                   Haiku) y lo demás lo junta para la apertura
   myturn dormir --coresponde CON_ID [--titulo T] [--horario H] [--etapa E]   igual, pero el chat es uno del
                                   WhatsApp del negocio en Coresponde (`con_…`): el despertador lo consulta por REST
-                                  cada minuto (INBOXAI_API_KEY) y solo despierta si la IA de ese hilo está apagada o
+                                  cada minuto (TRACTA_API_KEY) y solo despierta si la IA de ese hilo está apagada o
                                   escalado. Desde un checkout de Portafolios la sesión despertada puede contestar
                                   por messages_send a ESE chat (excepción nominal); todo lo demás, solo borradores
   myturn despertador [--once] [--dry-run] | plist | estado      el que duerme y despierta (launchd, apagado)
@@ -1623,8 +1623,9 @@ NO_URGENTE = "ninguna"
 DESP_LABEL = "dev.andre.myturn-despertador"
 FUENTE = "despertador"   # --source del report-metadata del TUI
 # Coresponde (Tracta): el WhatsApp del negocio. Un daemon no habla MCP, así que lee el REST del backend con una API key
-# de la cuenta (conversations:read + messages:read), la misma INBOXAI_API_KEY de portafolios (evals/run_production.py,
+# de la cuenta con «Conversaciones → Leer», la misma TRACTA_API_KEY de portafolios (evals/run_production.py,
 # dev/scripts/direccion-check.py). `conversations_wait` no tiene equivalente REST: se consulta cada CORESPONDE_S.
+# Transición InboxAI → Tracta (hasta 2027-02-11): si falta `TRACTA_API_X` se lee `INBOXAI_API_X` (`env_tracta`).
 CORESPONDE_URL = "https://backend-production-171e.up.railway.app/api/v1"
 CORESPONDE_S = 60        # cada cuánto se consulta cada chat esperado (despierta en ≤ 60 s + DEBOUNCE_S)
 CLAUDE_SETTINGS = Path(os.environ.get("MYTURN_CLAUDE_SETTINGS", HOME / ".claude/settings.json"))
@@ -1823,7 +1824,7 @@ def dormir(jid: str | None, titulo: str | None, horario: str | None = None, core
               + (f" Al despertar podrás contestar por messages_send SOLO en {coresponde} (excepción {wake['excepcion']}"
                  f", {POLITICA[wake['excepcion']]})." if wake.get("excepcion") else " Al despertar: solo borradores."))
         if not coresponde_cfg()[1]:
-            cr += " OJO: falta INBOXAI_API_KEY (env o ~/.claude/settings.json): el despertador no puede leer el chat."
+            cr += " OJO: falta TRACTA_API_KEY (env o ~/.claude/settings.json): el despertador no puede leer el chat."
     return (f"{msg} ({tid}): {chat} despierta esta sesión hasta {expires[:10]}. Si nadie te escribe en 10 min, el "
             "despertador cierra este panel (antes corre closeout: deja el recibo de /cierre). Cuando el cliente "
             f"escriba, vuelve a abrirse en la Herdr app, en el espacio del cliente y sin foco.{fuera}{cr}")
@@ -1904,22 +1905,27 @@ class CorespondeError(Exception):
     pass
 
 
+def env_tracta(env: dict, nombre: str) -> str:
+    """`TRACTA_<nombre>` y, si falta, `INBOXAI_<nombre>` (transición hasta 2027-02-11)."""
+    return (env.get(f"TRACTA_{nombre}") or "").strip() or (env.get(f"INBOXAI_{nombre}") or "").strip()
+
+
 def coresponde_cfg() -> tuple[str, str | None]:
     """(url, key) del REST de Coresponde. La key sale del env o, si el daemon de launchd no la tiene, del bloque `env`
     de ~/.claude/settings.json (donde ensure-keys.sh cachea las credenciales): nunca va escrita en el plist."""
     env = dict(os.environ)
-    if not env.get("INBOXAI_API_KEY"):
+    if not env_tracta(env, "API_KEY"):
         try:
             env = {**(json.loads(CLAUDE_SETTINGS.read_text()).get("env") or {}), **env}
         except (OSError, ValueError, AttributeError):
             pass
-    return (env.get("INBOXAI_API_URL") or CORESPONDE_URL).rstrip("/"), env.get("INBOXAI_API_KEY") or None
+    return (env_tracta(env, "API_URL") or CORESPONDE_URL).rstrip("/"), env_tracta(env, "API_KEY") or None
 
 
 def coresponde_get(path: str, params: dict | None = None) -> dict:
     url, key = coresponde_cfg()
     if not key:
-        raise CorespondeError("falta INBOXAI_API_KEY (env o ~/.claude/settings.json)")
+        raise CorespondeError("falta TRACTA_API_KEY (env o ~/.claude/settings.json)")
     q = f"?{urllib.parse.urlencode(params)}" if params else ""
     req = urllib.request.Request(f"{url}{path}{q}", headers={"X-API-Key": key, "Accept": "application/json",
                                                              "User-Agent": "myturn-despertador"})
@@ -1927,7 +1933,8 @@ def coresponde_get(path: str, params: dict | None = None) -> dict:
         with urllib.request.urlopen(req, timeout=15) as r:
             return json.loads(r.read())
     except urllib.error.HTTPError as e:
-        raise CorespondeError(f"HTTP {e.code} en {path}") from None
+        falta = " (la key necesita el alcance «Conversaciones → Leer»)" if e.code == 403 else ""
+        raise CorespondeError(f"HTTP {e.code} en {path}{falta}") from None
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
         raise CorespondeError(f"{type(e).__name__} en {path}") from None
 
