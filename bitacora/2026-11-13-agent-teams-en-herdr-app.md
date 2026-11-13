@@ -11,3 +11,8 @@
 - `herdr-app shot` da el último frame dibujado: si la ventana no está a la vista, sale una captura vieja.
 
 **Verificá:** `uv run --with pytest pytest scripts/tests/test_hc_tmux.py` (11 casos, con un `herdr-app`/`hc` falsos) y el log por líder en `~/.local/state/hc-tmux/<terminal>-<epoch>.log`. Corrida real: 3 equipos (2 y 3 teammates, haiku) se abrieron, respondieron y se cerraron como paneles; estado final `{'%1': right %0, '%2': down %1, '%3': down %1}`.
+
+## Después: upstream y el «working» eterno
+
+- Pedido nativo a herdr (en vez de publicar `hc-tmux` como repo propio): herdrdev/herdr-core#272. El feedback in-app no sale desde un build de fuente.
+- **El líder queda «working» en Herdr mientras el equipo vive**, aunque todos estén idle. No es el shim: Claude Code emite el estado por OSC 7501 (`app=claude-code`) y cuenta los teammates de panel como trabajo; a los `in_process_teammate` idle sí los excluye. Probado: con el teammate vivo `hc get` → `working`; tras apagarlo → `done`. Reportado: anthropics/claude-code#109722. Workaround: que el líder apague el equipo al terminar.
