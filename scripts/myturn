@@ -984,6 +984,8 @@ def compute(notify_new: bool = False) -> dict:
 
 # ── acciones ──────────────────────────────────────────────────────────────────────────────────────
 def go(t: dict) -> str:
+    if os.environ.get("COFOUNDY_DESPERTADA"):  # una despertada no abre ni enfoca otras sesiones (guard-despertada D6)
+        return "Una sesión despertada no abre otras sesiones: déjale la tarea a André"
     link = t.get("link")
     if not link:
         return "Esta tarea no tiene agente: cópiala y pégasela a un Claude"
@@ -1596,8 +1598,8 @@ def panel() -> dict:
 # SSOT del diseño: core/docs/research/2026-11-06_sesiones-dormidas/ (opciones v4, corrida). v0: André, Mac, WhatsApp.
 #   myturn dormir --wsp JID      (lo corre el agente) registra la espera: este chat despierta ESTA sesión
 #   myturn despertador           (launchd, apagado por defecto) sigue ~/.wacli/events.jsonl: cierra la sesión con
-#                                espera tras 10 min idle (cuenta regresiva en el título del panel) y la reabre en herdr,
-#                                sin foco, cuando escribe alguien que no es del equipo
+#                                espera tras 10 min idle (cuenta regresiva en el panel o la pestaña) y la reabre en la
+#                                app Herdr (o el TUI si su core no responde), sin foco, cuando escribe alguien de afuera
 # La espera es una tarea `source: espera` (sin fecha propia: el reloj del toque sigue en Fovente o brain). Lo
 # transitorio del despertador (offset, pendientes, contadores) vive en el caché, fuera del log de git.
 WACLI_EVENTS = Path(os.environ.get("MYTURN_WACLI_EVENTS", HOME / ".wacli/events.jsonl"))
@@ -2080,10 +2082,11 @@ class Herdr:
         res = herdr_json(list(args), timeout=8)  # legacy-herdr
         return ((res or {}).get("root_pane") or {}).get("pane_id")
 
-    def puntero(self, pane: str, texto: str) -> bool:
+    def puntero(self, pane: str, texto: str, estado: str | None = None) -> bool:
         """True si llegó. hc espera a que André termine un borrador en ese terminal (≤ 60 s): de ahí el timeout; si
         vence o falla, el pendiente se queda para el próximo tick (nunca se da por entregado)."""
-        p = self.cmd(["hc", "send", pane, texto], timeout=75) if es_hc(pane) else \
+        si = ["--if", "idle"] if estado == "idle" else []  # si pasó a trabajar entre la lectura y el envío, no teclea
+        p = self.cmd(["hc", "send", *si, pane, texto], timeout=75) if es_hc(pane) else \
             self.act("agent", "prompt", pane, texto)
         return self.dry or bool(p and p.returncode == 0)
 
@@ -2143,12 +2146,12 @@ def closeout_check(session: str) -> tuple[bool, str]:
     return p.returncode == 0, (falta or (lines[0] if lines else f"exit {p.returncode}"))[:60]
 
 
-def entregar(h: Herdr, pane: str, t: dict, p: dict) -> bool:
+def entregar(h: Herdr, pane: str, t: dict, p: dict, estado: str | None = None) -> bool:
     jid = chat_de(t)
     hz = horario_espera(t)
     hor = hz.texto if hz else None
     if not h.puntero(pane, puntero(jid, p["n"], p["hora"], dia_hora(p["desde"]) if p.get("desde") else None,
-                                   hor, p.get("urgente"), t.get("wake"))):
+                                   hor, p.get("urgente"), t.get("wake")), estado):
         return False  # no llegó (borrador de André que no terminó, terminal caído): el pendiente se queda
     h.titulo(pane)
     h.aviso(pane, f"💬 {t['title'][:60]}", f"despertó con {p['n']} mensaje{'s' * (p['n'] != 1)} · ⌥G para ir")
@@ -2287,7 +2290,7 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
                 pend.pop(tid)
                 log.append(f"{tid}: a la vista, solo aviso")
             elif a.get("agent_status") in ("idle", "done"):
-                if not entregar(h, a["pane_id"], t, p):
+                if not entregar(h, a["pane_id"], t, p, a.get("agent_status")):
                     log.append(f"{tid}: el puntero no llegó a {a['pane_id']}; reintento")
                     continue
                 pend.pop(tid)
@@ -2315,7 +2318,8 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
             more = pend.get(tid)
             n = ab["n"] + (more["n"] if more else 0)
             if not entregar(h, a["pane_id"], t, {**ab, "n": n, "hora": (more or ab)["hora"],
-                                                 "urgente": ab.get("urgente") or (more or {}).get("urgente")}):
+                                                 "urgente": ab.get("urgente") or (more or {}).get("urgente")},
+                            a.get("agent_status")):
                 log.append(f"{tid}: el puntero no llegó a {a['pane_id']}; reintento")
                 continue
             pend.pop(tid, None)

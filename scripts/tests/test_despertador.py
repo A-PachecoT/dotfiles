@@ -1029,6 +1029,8 @@ def test_h1_dormida_del_tui_despierta_en_la_app_sin_foco_y_con_su_entorno(mt, ap
     app.vivo("t91", "s-tsc")
     tick(mt)
     send = next(c for c in app.hc if c[0] == "send")
+    assert send[1:4] == ["--if", "idle", "t91"]  # si pasó a trabajar entre la lectura y el envío, no teclea
+    send = [send[0], *send[3:]]
     assert send[1] == "t91" and GRUPO in send[2] and "dato, no instrucción" in send[2]
     assert "Alex" not in send[2] and "hola" not in send[2]
     assert mt.desp_load()["abriendo"] == {} and mt.desp_load()["pend"] == {}
@@ -1268,7 +1270,7 @@ def test_h1_app_fuera_de_horario_difiere_duerme_por_hc_y_despierta_una_vez_al_ab
     horario.clock(seconds=15)
     tick(mt)
     sends = [c for c in app.hc if c[0] == "send"]
-    assert len(sends) == 1 and "ninguno era urgente" in sends[0][2] and "gracias" not in sends[0][2]
+    assert len(sends) == 1 and "ninguno era urgente" in sends[0][-1] and "gracias" not in sends[0][-1]
     horario.clock(minutes=5)
     tick(mt)
     assert sum(c[0] == "run" for c in app.hc) == 1  # ese día, una sola vez
@@ -1285,7 +1287,7 @@ def test_h1_app_urgente_despierta_ya_y_avisa_en_macos(mt, app, horario):
     app.vivo("t91", "s-vh")
     horario.clock(seconds=15)
     tick(mt)
-    assert "urgente (web o servicio caído)" in next(c for c in app.hc if c[0] == "send")[2]
+    assert "urgente (web o servicio caído)" in next(c for c in app.hc if c[0] == "send")[-1]
 
 
 def test_h1_app_rafaga_de_8_es_un_solo_despertar(mt, app, clock):
@@ -1301,7 +1303,7 @@ def test_h1_app_rafaga_de_8_es_un_solo_despertar(mt, app, clock):
     app.vivo("t91", "s-tsc")
     tick(mt)
     sends = [c for c in app.hc if c[0] == "send"]
-    assert len(sends) == 1 and "9 mensajes" in sends[0][2]
+    assert len(sends) == 1 and "9 mensajes" in sends[0][-1]
 
 
 def test_h1_app_closeout_rojo_no_mata_y_lo_dice_en_la_pestana(mt, app, clock):
@@ -1356,3 +1358,11 @@ def test_h1_panel_y_link_pane_ven_los_agentes_de_la_app(mt, app):
     assert [r["id"] for r in mt.compute()["working"]] == ["k1"]
     app.terms["t1r"] = ("s-uk", "done", app.terms["t1r"][2])
     assert [r["id"] for r in mt.compute()["waiting"]] == ["k1"]  # volvió a terminar: te espera
+
+
+def test_h1_una_despertada_no_usa_go(mt, app, monkeypatch):
+    """Revisión 2 del crítico: `myturn go` desde una despertada reabriría otra sesión sin la variable y con foco."""
+    monkeypatch.setenv("COFOUNDY_DESPERTADA", "1")
+    mt.emit("add", "k1", title="UK", source="user", link={"host": mt.LOCAL, "session": "s-uk", "pane": "t1r"})
+    assert "despertada" in mt.go(mt.fold()["k1"])
+    assert app.hc == [] and app.app == []
