@@ -317,6 +317,12 @@ EOF
             ln -sfn "${skill_path%/}" "$skills_dst/$skill_name"
             success "Linked skill: $skill_name"
         done
+        # A skill that left dotfiles (e.g. herdr → cofoundy-toolkit, 2026-11-13) leaves a dangling link.
+        for link in "$skills_dst"/*; do
+            [[ -L "$link" && ! -e "$link" && "$(readlink "$link")" == "$skills_src"/* ]] || continue
+            rm "$link"
+            success "Removed stale skill link: $(basename "$link")"
+        done
     fi
 
     info "Restart Claude Code to apply hooks"
