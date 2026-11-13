@@ -74,6 +74,8 @@ Siguiente foco: cerrar el trial de Herdr, mantener fixes cross-platform en `shar
 - **`After=default.target` en un servicio `WantedBy=default.target` lo pone detrás de la unidad más lenta del boot. Y `Restart=always` + «already running» es un loop silencioso: usar `ExecCondition`.** - source: [Arch colgado, herdr fuera de servicio](bitacora/2026-10-17-arch-colgado-herdr-fuera-de-servicio.md)
 - **¿Dónde vive el server de herdr? `cat /proc/$(pgrep -f '^/home/andre/.local/bin/[h]erdr server')/cgroup` tiene que decir `herdr.service` o `herdr-server.scope`, nunca `session-N.scope`.** - source: [Arch colgado, herdr fuera de servicio](bitacora/2026-10-17-arch-colgado-herdr-fuera-de-servicio.md)
 
+- **`herdr-app do pane.split` enfoca el panel nuevo si la pestaña está a la vista; un panel que no debe robar el foco lo devuelve con `pane.focus`.** - source: [agent teams en la Herdr app](bitacora/2026-11-13-agent-teams-en-herdr-app.md)
+- **El estado «working» de Claude en Herdr lo emite el propio Claude (OSC 7501): si miente, el fix es upstream, no un hook.** - source: [agent teams en la Herdr app](bitacora/2026-11-13-agent-teams-en-herdr-app.md)
 ---
 
 ## Entries
