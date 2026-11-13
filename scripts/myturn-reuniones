@@ -1,0 +1,256 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#   "google-api-python-client>=2.100.0",
+#   "google-auth-oauthlib>=1.0.0",
+#   "google-auth-httplib2>=0.2.0",
+#   "pyyaml>=6",
+# ]
+# ///
+"""Fuente de myturn «reuniones»: los 2 recordatorios de cada reunión con alguien de afuera de Cofoundy.
+
+Diseño: ~/cofoundy/core/docs/research/2026-11-12_calendarios/diseno.md §6.3 (aprobado por André, 2026-11-12).
+Contrato de una fuente de myturn (~/dotfiles/docs/myturn.md §Fuentes):
+  myturn-reuniones list            → JSON [{id, title, due, expires, agent}] de las próximas 72 h
+  myturn-reuniones done ID         → no-op (el estado vive en el calendario: si la reunión desaparece, la tarea se va)
+  myturn-reuniones en-seco --desde YYYY-MM-DD --hasta YYYY-MM-DD
+                                   → tabla legible: qué tareas crearía y qué ve de cada reunión (anfitrión, consentimiento)
+
+Por reunión (evento con un invitado de afuera de @cofoundy.dev y del equipo, en cualquier calendario que ve el token
+de gcal.py), dos tareas idempotentes por iCalUID + tipo:
+  · día anterior: el día hábil anterior a las 10:00 en la zona del cliente (brief `cliente.zona_horaria`), llevado
+    dentro del horario de atención (brief `comms.horario_atencion`, default L-V 09:00-18:00 America/Lima);
+  · 2 h antes del inicio.
+Al vencer, la sesión que la abre relee el evento (¿sigue? ¿misma hora?) y redacta por `comms_send`: André aprueba.
+Nada se envía desde aquí. Esta fuente NO está instalada en ~/.config/myturn/sources/ todavía (parte 2 del diseño:
+despertar por fecha + que /lead-prep y /prospectar dejen de crear sus propias confirmaciones).
+"""
+from __future__ import annotations
+
+import datetime as dt
+import glob
+import importlib.util
+import json
+import re
+import sys
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+HOME = Path.home()
+LIMA = ZoneInfo("America/Lima")
+GCAL = sorted(glob.glob(str(HOME / ".claude/plugins/cache/cofoundy/cofoundy-toolkit/*/skills/calendar/scripts/gcal.py")))
+GCAL = Path(GCAL[-1]) if GCAL else HOME / "cofoundy/plugins/cofoundy-toolkit/skills/calendar/scripts/gcal.py"
+TEAM_MD = HOME / "cofoundy/handbook/team.md"
+BRIEFS = HOME / "cofoundy/deals/clients"
+HORARIO_DEFAULT = "L-V 09:00-18:00 America/Lima"
+DIAS = {"L": 0, "M": 1, "X": 2, "J": 3, "V": 4, "S": 5, "D": 6}
+
+
+def gcal_service():
+    spec = importlib.util.spec_from_file_location("gcal", GCAL)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod._get_service()
+
+
+def team_emails() -> set[str]:
+    import yaml
+
+    block = TEAM_MD.read_text().split("```yaml", 1)[1].split("```", 1)[0]
+    out = {"cofoundy.dev@gmail.com"}
+    for m in (yaml.safe_load(block) or {}).get("members") or []:
+        for k in ("email", "email_workspace"):
+            if m.get(k):
+                out.add(m[k].lower())
+    return out
+
+
+GENERICOS = {"gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com", "live.com"}
+
+
+def _personas(node, out):
+    """Todo dict del brief con `email` (stakeholders, cliente, contactos anidados), con su nombre y consentimiento."""
+    if isinstance(node, dict):
+        if isinstance(node.get("email"), str) and "@" in node["email"]:
+            out.append((node["email"].strip().lower(), node.get("nombre") or "",
+                        (node.get("consentimiento") or {}).get("transcripcion")
+                        if isinstance(node.get("consentimiento"), dict) else None))
+        for v in node.values():
+            _personas(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _personas(v, out)
+
+
+def briefs() -> list[dict]:
+    """Un registro por cliente: correos, dominios y nombres que lo identifican. Solo lectura de deals."""
+    import yaml
+
+    out = []
+    for p in sorted(BRIEFS.glob("*/brief.yaml")):
+        try:
+            b = yaml.safe_load(p.read_text()) or {}
+        except Exception:
+            continue
+        cli = b.get("cliente") or {}
+        comms = b.get("comms") or {}
+        wsp = b.get("whatsapp") or []
+        personas = []
+        _personas(b, personas)
+        if isinstance(cli.get("contacto"), str) and "@" in cli["contacto"]:
+            personas.append((cli["contacto"].strip().lower(), cli.get("nombre") or "", None))
+        nombres = {p.parent.name.lower(), str((b.get("meta") or {}).get("cliente") or "").lower(),
+                   str(cli.get("empresa") or "").lower()} - {""}
+        out.append({
+            "cliente": p.parent.name, "tz": cli.get("zona_horaria") or "America/Lima",
+            "horario": comms.get("horario_atencion") or HORARIO_DEFAULT,
+            "jid": (wsp[0] or {}).get("jid") if wsp and isinstance(wsp[0], dict) else None,
+            "correos": {e: c for e, _, c in personas},
+            "dominios": {e.split("@")[1] for e, _, _ in personas} - GENERICOS,
+            "nombres": nombres,
+        })
+    return out
+
+
+def _norm(t: str) -> str:
+    import unicodedata
+
+    t = unicodedata.normalize("NFKD", t or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]", "", t)
+
+
+def cliente_de(ev: dict, externos: list[str], todos: list[dict]) -> tuple[dict | None, str]:
+    """El brief de la reunión y por qué: nombre del cliente en el título > correo exacto > dominio. Nada de apellidos:
+    en la corrida del 2026-11-12 el apellido cruzó a Josemi con JUMP_Arquitectura y a Ros Miranda con LulaMiranda, y
+    un cruce equivocado arrastra el consentimiento de otro cliente. Sin cruce = «sin brief», y la sesión pregunta."""
+    titulo = _norm(ev.get("summary") or "")
+    for b in todos:
+        if any(len(_norm(n)) >= 5 and _norm(n) in titulo for n in b["nombres"]):
+            return b, "nombre del cliente en el título"
+    for e in externos:
+        for b in todos:
+            if e in b["correos"]:
+                return b, f"correo {e}"
+    for e in externos:
+        hits = [b for b in todos if e.split("@")[1] in b["dominios"]]
+        if len(hits) == 1:
+            return hits[0], f"dominio {e.split('@')[1]}"
+    return None, "sin brief"
+
+
+def parse_horario(h: str):
+    m = re.match(r"([LMXJVSD])-([LMXJVSD])\s+(\d\d):(\d\d)-(\d\d):(\d\d)\s+(\S+)", h.strip())
+    if not m:
+        m = re.match(r"([LMXJVSD])-([LMXJVSD])\s+(\d\d):(\d\d)-(\d\d):(\d\d)\s+(\S+)", HORARIO_DEFAULT)
+    d0, d1, h0, m0, h1, m1, tz = m.groups()
+    return DIAS[d0], DIAS[d1], dt.time(int(h0), int(m0)), dt.time(int(h1), int(m1)), ZoneInfo(tz)
+
+
+def en_horario(t: dt.datetime, horario: str) -> dt.datetime:
+    """Lleva t al horario de atención: si cae fuera, a la apertura más cercana hacia atrás del mismo día o la siguiente."""
+    d0, d1, abre, cierra, tz = parse_horario(horario)
+    lt = t.astimezone(tz)
+    if d0 <= lt.weekday() <= d1 and abre <= lt.time() <= cierra:
+        return t
+    if d0 <= lt.weekday() <= d1 and lt.time() > cierra:
+        return lt.replace(hour=cierra.hour, minute=cierra.minute) - dt.timedelta(minutes=30)
+    return lt.replace(hour=abre.hour, minute=abre.minute)
+
+
+def dia_habil_anterior(d: dt.date) -> dt.date:
+    d -= dt.timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= dt.timedelta(days=1)
+    return d
+
+
+def recordatorios(ev: dict, info: dict) -> list[dict]:
+    start = dt.datetime.fromisoformat(ev["start"]["dateTime"])
+    tzc = ZoneInfo(info["tz"])
+    dia = dt.datetime.combine(dia_habil_anterior(start.astimezone(tzc).date()), dt.time(10, 0), tzc)
+    dia = en_horario(dia, info["horario"])
+    antes = start - dt.timedelta(hours=2)
+    lt = start.astimezone(tzc)
+    hora_cliente = f"{'lun mar mié jue vie sáb dom'.split()[lt.weekday()]} {lt:%d}-{'ene feb mar abr may jun jul ago sep oct nov dic'.split()[lt.month - 1]} {lt:%H:%M}"
+    link = ev.get("hangoutLink") or ev.get("location") or "(sin link)"
+    uid = ev.get("iCalUID") or ev["id"]
+    out = []
+    for tipo, t in (("dia-anterior", dia), ("2h-antes", antes)):
+        out.append({
+            "id": f"{uid}#{tipo}",
+            "title": f"Recordarle a {info['cliente']} la reunión ({tipo}): {hora_cliente} su hora · {link}",
+            "due": t.astimezone(LIMA).strftime("%Y-%m-%dT%H:%M"),
+            "expires": start.astimezone(LIMA).strftime("%Y-%m-%dT%H:%M"),
+            "agent": None,
+        })
+    return out
+
+
+def reuniones(desde: dt.datetime, hasta: dt.datetime) -> list[tuple[dict, dict, str]]:
+    svc = gcal_service()
+    equipo = team_emails()
+    todos = briefs()
+    seen, out = set(), []
+    for cal in svc.calendarList().list().execute().get("items", []):
+        try:
+            evs = svc.events().list(calendarId=cal["id"], timeMin=desde.isoformat(), timeMax=hasta.isoformat(),
+                                    singleEvents=True, orderBy="startTime").execute().get("items", [])
+        except Exception:
+            continue
+        for ev in evs:
+            uid = ev.get("iCalUID") or ev["id"]
+            if uid in seen or "dateTime" not in ev.get("start", {}) or ev.get("status") == "cancelled":
+                continue
+            externos = [a["email"].lower() for a in ev.get("attendees") or []
+                        if a.get("email") and not a.get("resource") and not a["email"].lower().endswith("@cofoundy.dev")
+                        and a["email"].lower() not in equipo and a.get("responseStatus") != "declined"]
+            if not externos and not (ev.get("summary") or "").startswith("📩"):  # la señal de cliente de gcal.py
+                continue
+            seen.add(uid)
+            b, por = cliente_de(ev, externos, todos)
+            consent = None
+            if b:
+                consent = next((b["correos"].get(e) for e in externos if b["correos"].get(e)), None) or (
+                    "no" if "no" in b["correos"].values() else None)
+                info = {**{k: b[k] for k in ("cliente", "tz", "horario", "jid")}, "consentimiento": consent, "por": por}
+            else:
+                info = {"cliente": externos[0] if externos else (ev.get("summary") or "?"), "tz": "America/Lima",
+                        "horario": HORARIO_DEFAULT, "jid": None, "consentimiento": None, "por": por}
+            out.append((ev, info, cal.get("summary") or cal["id"]))
+    return out
+
+
+def main(argv: list[str]) -> int:
+    cmd = argv[0] if argv else "list"
+    if cmd == "done":
+        return 0
+    ahora = dt.datetime.now(LIMA)
+    if cmd == "list":
+        tareas = []
+        for ev, info, _ in reuniones(ahora, ahora + dt.timedelta(hours=72)):
+            tareas += [t for t in recordatorios(ev, info) if t["due"] > ahora.strftime("%Y-%m-%dT%H:%M")]
+        print(json.dumps(tareas, ensure_ascii=False))
+        return 0
+    if cmd == "en-seco":
+        args = dict(zip(argv[1::2], argv[2::2]))
+        d0 = dt.datetime.fromisoformat(args.get("--desde", ahora.date().isoformat())).replace(tzinfo=LIMA)
+        d1 = dt.datetime.fromisoformat(args.get("--hasta", (ahora + dt.timedelta(days=7)).date().isoformat())).replace(
+            tzinfo=LIMA) + dt.timedelta(days=1)
+        for ev, info, cal in reuniones(d0, d1):
+            org = (ev.get("organizer") or {}).get("email", "")
+            anfitrion = "✓" if org.endswith("@cofoundy.dev") else f"✗ ({cal})"
+            consent = "✗ no a la transcripción: sin bot" if info.get("consentimiento") == "no" else "—"
+            print(f"{ev['start']['dateTime'][:16]}  {ev.get('summary', '(sin título)')[:60]}")
+            print(f"    cliente={info['cliente']} ({info.get('por')})  tz={info['tz']}  anfitrión={anfitrion}  consentimiento={consent}"
+                  f"  chat={'sí' if info.get('jid') else 'no'}")
+            for t in recordatorios(ev, info):
+                pasado = " (ya pasó)" if t["due"] <= ahora.strftime("%Y-%m-%dT%H:%M") else ""
+                print(f"    → tarea {t['due']}{pasado}: {t['title'][:110]}")
+        return 0
+    print(__doc__)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
