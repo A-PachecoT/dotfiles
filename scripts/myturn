@@ -2158,6 +2158,27 @@ def entregar(h: Herdr, pane: str, t: dict, p: dict, estado: str | None = None) -
     return True
 
 
+SHIM_DESPERTADA = Path(__file__).resolve().parent / "despertada" / "bin"
+
+
+def env_file_despertada(dry: bool = False) -> str:
+    """CLAUDE_ENV_FILE de una despertada: Claude Code lo corre antes de cada comando Bash (medido 2026-11-13; el
+    snapshot de shell lee ~/.zshrc y deja ~/.local/bin primero), así el shim de hc va primero. Archivo propio por
+    despertar y privado: los hooks ensure-keys escriben llaves en CLAUDE_ENV_FILE, nunca en un archivo versionado."""
+    d = Path(os.environ.get("MYTURN_DESPERTADA_STATE") or HOME / ".local/state/despertada")
+    f = d / f"env-{int(time.time())}-{os.getpid()}-{secrets.token_hex(3)}.sh"
+    if dry:
+        return str(f)
+    d.mkdir(parents=True, exist_ok=True)
+    for viejo in d.glob("env-*.sh"):  # una semana basta: una despertada no dura más
+        if time.time() - viejo.stat().st_mtime > 7 * 86400:
+            viejo.unlink(missing_ok=True)
+    fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(f'# despertada (H1 D6): el shim de hc primero en el PATH\nexport PATH="{SHIM_DESPERTADA}:$PATH"\n')
+    return str(f)
+
+
 def abrir(h: Herdr, t: dict) -> tuple[str, dict] | None:
     """Reabre la sesión sin foco y marcada como despertada: en la Herdr app si su core responde (espacio del cliente,
     pestaña nueva), si no en una pestaña nueva del TUI viejo. Devuelve (panel, enlace actualizado)."""
@@ -2166,6 +2187,7 @@ def abrir(h: Herdr, t: dict) -> tuple[str, dict] | None:
     env = {"COFOUNDY_DESPERTADA": "1"}
     if w.get("coresponde") and w.get("excepcion"):
         env |= {"COFOUNDY_DESPERTADA_EXCEPCION": w["excepcion"], "COFOUNDY_DESPERTADA_CHAT": w["coresponde"]}
+    env["CLAUDE_ENV_FILE"] = env_file_despertada(h.dry)
     if RT_OK.get("hc"):
         r = hc_reabrir(t, env, dry=h.dry)
         return (r[0], link | {"pane": r[0], "rt": "hc", "space": r[1], "tab": r[2]}) if r else None

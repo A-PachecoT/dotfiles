@@ -324,7 +324,8 @@ def test_dry_run_imprime_y_no_corre(mt, world, clock, capsys):
     clock(seconds=91)
     tick(mt, dry=True)
     out = capsys.readouterr().out
-    assert "$ herdr tab create --workspace wT" in out and "COFOUNDY_DESPERTADA=1 --no-focus" in out  # legacy-herdr
+    assert "$ herdr tab create --workspace wT" in out and "COFOUNDY_DESPERTADA=1 --env CLAUDE_ENV_FILE=" in out  # legacy-herdr
+    assert "--no-focus\n" in out
     assert "$ herdr pane run dry:p1 'claude --resume s-tsc'" in out  # legacy-herdr
     assert world.herdr == [] and not mt.desp_file(False).exists()
     assert mt.fold()["e1"]["link"]["pane"] == "wT:p3"  # en seco no toca el store
@@ -761,8 +762,8 @@ def test_coresponde_en_handoff_despierta_con_la_excepcion_y_un_puntero_sin_el_te
     tick(mt)
     create, run_ = world.herdr
     envs = [create[i + 1] for i, a in enumerate(create) if a == "--env"]
-    assert envs == ["COFOUNDY_DESPERTADA=1", "COFOUNDY_DESPERTADA_EXCEPCION=portafolios",
-                    f"COFOUNDY_DESPERTADA_CHAT={CON}"]
+    assert envs[:-1] == ["COFOUNDY_DESPERTADA=1", "COFOUNDY_DESPERTADA_EXCEPCION=portafolios",
+                         f"COFOUNDY_DESPERTADA_CHAT={CON}"] and envs[-1].startswith("CLAUDE_ENV_FILE=")
     assert "--no-focus" in create and run_ == ["pane", "run", "wT:n1", "claude --resume s-pame"]
     world.agents = [claude("s-pame", "idle", "wT:n1")]
     clock(seconds=15)
@@ -789,7 +790,8 @@ def test_coresponde_escalado_despierta_aunque_la_ia_figure_prendida(mt, world, c
     cr.entra(1, mt.now() - timedelta(minutes=2))
     tick(mt)
     create = next(c for c in world.herdr if c[:2] == ["tab", "create"])  # legacy-herdr
-    assert [create[i + 1] for i, a in enumerate(create) if a == "--env"] == ["COFOUNDY_DESPERTADA=1"]
+    envs = [create[i + 1] for i, a in enumerate(create) if a == "--env"]
+    assert envs[0] == "COFOUNDY_DESPERTADA=1" and len(envs) == 2 and envs[1].startswith("CLAUDE_ENV_FILE=")
 
 
 def test_coresponde_lo_contestado_lo_viejo_y_lo_ya_contado_no_despiertan(mt, world, clock, cr):
@@ -915,7 +917,7 @@ def test_cli_coresponde_once_dry_run_contra_un_api_falso(mt, tmp_path):
         run_ = next(ln for ln in out.splitlines() if ln.startswith("$ hc run "))
         assert "--bg --keep --no-parent" in run_ and "--label herdr.space=sp" in run_ and "--label herdr.tab=tb" in run_
         assert (f"env COFOUNDY_DESPERTADA=1 COFOUNDY_DESPERTADA_EXCEPCION=portafolios COFOUNDY_DESPERTADA_CHAT={CON} "
-                "claude --resume s-pame-prueba") in run_
+                "CLAUDE_ENV_FILE=") in run_ and run_.endswith(" claude --resume s-pame-prueba")
         assert "$ herdr-app do space.rename" in out and "--name Pame" in out  # espacio nuevo con el nombre del cliente
         assert "$ herdr " not in out and "agent.focus" not in out  # sin foco y nada al TUI
         estado["ai"] = True  # control negativo: la IA contesta ese hilo
@@ -1019,7 +1021,10 @@ def test_h1_dormida_del_tui_despierta_en_la_app_sin_foco_y_con_su_entorno(mt, ap
     tab = next(x.split("=", 1)[1] for x in run_ if x.startswith("herdr.tab="))
     argv = run_[run_.index("--") + 1:]
     assert argv[1:3] == ["-lic", '"$@"; exec "$0" -li']  # como el app: shell de login con el PATH de André
-    assert argv[4:] == ["env", "COFOUNDY_DESPERTADA=1", "claude", "--resume", "s-tsc"]
+    assert argv[4:6] == ["env", "COFOUNDY_DESPERTADA=1"] and argv[7:] == ["claude", "--resume", "s-tsc"]
+    envf = Path(argv[6].removeprefix("CLAUDE_ENV_FILE="))  # el shim de hc primero en cada Bash de Claude Code
+    assert argv[6].startswith("CLAUDE_ENV_FILE=") and envf.stat().st_mode & 0o777 == 0o600
+    assert f'export PATH="{SCRIPT.parent / "despertada" / "bin"}:$PATH"' in envf.read_text()
     assert ["do", "tab.rename", "--id", tab, "--name", "💬 TSC · Alex"] in app.app
     assert not any("focus" in c[1] for c in app.app)  # nada mueve el foco
     assert all(c[1:2] == ["list"] for c in app.tui)  # al TUI (que falla) solo se le pregunta
@@ -1130,7 +1135,7 @@ def test_h1_dry_run_imprime_el_hc_run(mt, app, clock, capsys):
     tick(mt, dry=True)
     out = capsys.readouterr().out
     assert "$ hc run --bg --keep --no-parent --no-notify --json --cwd /tmp/tsc --label herdr.space=spTSC" in out
-    assert "env COFOUNDY_DESPERTADA=1 claude --resume s-tsc" in out
+    assert "env COFOUNDY_DESPERTADA=1 CLAUDE_ENV_FILE=" in out and "claude --resume s-tsc" in out
     assert app.hc == [] and app.app == [] and mt.fold()["e1"]["link"]["pane"] == "wT:p3"
 
 

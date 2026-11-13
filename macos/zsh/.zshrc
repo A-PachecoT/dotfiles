@@ -190,3 +190,7 @@ export PATH="/Users/styreep/.antigravity-ide/antigravity-ide/bin:$PATH"
 
 # Added by Antigravity CLI installer
 export PATH="/Users/styreep/.local/bin:$PATH"
+
+# Sesión despertada (H1 D6, dotfiles docs/myturn.md): hc/herdr-app/herdr pasan por el shim que le pone la marca al
+# hijo y deja delegar un solo nivel. Va AL FINAL a propósito: nada después debe anteponerse a ~/.local/bin.
+if [[ "${COFOUNDY_DESPERTADA:-}" == 1 ]]; then export PATH="$HOME/dotfiles/scripts/despertada/bin:$PATH"; fi

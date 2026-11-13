@@ -1,0 +1,225 @@
+#!/usr/bin/env python3
+"""hc / herdr-app / herdr dentro de una sesión despertada (H1 D6, André 2026-11-13: «si ej el pm manda a dev agent»,
+y para el método «Cambiar el método (Recomendado)»).
+
+El despertador reabre la sesión con COFOUNDY_DESPERTADA=1 y la cola de ~/.zshrc pone este directorio primero en el
+PATH (también en sus hijos, que heredan la marca). Así CUALQUIER invocación —dentro de if/for/{ }, tras un
+comentario, bajo timeout/env/xargs/bash -c— pasa por aquí, sin leer el texto del comando:
+- lanzar (`hc run|exec`, `herdr-app do space.new|tab.new|pane.split|terminal.open`): le pone al hijo
+  `env COFOUNDY_DESPERTADA=1 COFOUNDY_DESPERTADA_NIVEL=1 COFOUNDY_DESPERTADA_PADRE=<este terminal>
+  CLAUDE_ENV_FILE=<propio>` al frente del argv. La excepción de envío (…_EXCEPCION/_CHAT, Portafolios) es nominal y NO viaja (ai-agent-autonomy.md).
+- un solo nivel: un hijo (NIVEL=1) no lanza a nadie.
+- escribir (`hc send|keys|interrupt|kill|rm|put`): a sí misma; la despertada a sus hijos (argv con PADRE=ella); un
+  hijo a su padre.
+- leer, libre; lo demás de hc/herdr-app y los verbos de lanzar/escribir del TUI viejo (`herdr`), negados.
+Sin COFOUNDY_DESPERTADA=1 es transparente.
+"""
+import json, os, shlex, shutil, subprocess, sys
+
+NOMBRE = os.path.basename(sys.argv[0])
+AQUI = os.path.dirname(os.path.realpath(__file__))
+ARGS = sys.argv[1:]
+
+
+def real(nombre):
+    path = [d for d in os.environ.get("PATH", "").split(os.pathsep)
+            if d and os.path.realpath(d) != AQUI]
+    r = shutil.which(nombre, path=os.pathsep.join(path))
+    if not r:
+        sys.stderr.write(f"despertada: no encuentro el {nombre} real en el PATH\n")
+        sys.exit(127)
+    return r
+
+
+def pasar(args=ARGS):
+    r = real(NOMBRE)
+    os.execv(r, [r, *args])
+
+
+def no(why):
+    sys.stderr.write(f"BLOQUEADO (sesión despertada): {NOMBRE} {' '.join(ARGS[:2])}: {why}\n"
+                     "Te reabrió el despertador sin André al lado: solo borradores; delegas un nivel, con la marca.\n")
+    sys.exit(3)
+
+
+if os.environ.get("COFOUNDY_DESPERTADA") != "1":
+    pasar()
+
+NIVEL = os.environ.get("COFOUNDY_DESPERTADA_NIVEL", "0")
+YO = os.environ.get("HC_TERMINAL_ID", "")
+PADRE = os.environ.get("COFOUNDY_DESPERTADA_PADRE", "")
+
+
+def env_file():
+    """El CLAUDE_ENV_FILE del hijo (como el que myturn le da a la despertada): Claude Code lo corre antes de cada Bash,
+    así el shim va primero también en el hijo. Propio y privado: los hooks ensure-keys escriben llaves ahí."""
+    import secrets, time
+    d = os.environ.get("MYTURN_DESPERTADA_STATE") or os.path.expanduser("~/.local/state/despertada")
+    os.makedirs(d, exist_ok=True)
+    f = os.path.join(d, f"env-{int(time.time())}-{os.getpid()}-{secrets.token_hex(3)}.sh")
+    fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(f'# despertada (H1 D6): el shim de hc primero en el PATH\nexport PATH="{AQUI}:$PATH"\n')
+    return f
+
+
+def marcas():
+    # El PATH también: el core no pasa el entorno, y un hijo que no es Claude (un script, `sh -c`) no lee ni
+    # CLAUDE_ENV_FILE ni ~/.zshrc; sin esto su `hc run` llegaría al hc real (medido 2026-11-13: el nieto arrancó).
+    path = os.pathsep.join([AQUI, *(d for d in os.environ.get("PATH", "").split(os.pathsep)
+                                    if d and os.path.realpath(d) != AQUI)])
+    return ["COFOUNDY_DESPERTADA=1", "COFOUNDY_DESPERTADA_NIVEL=1", f"COFOUNDY_DESPERTADA_PADRE={YO}",
+            f"CLAUDE_ENV_FILE={env_file()}", f"PATH={path}"]
+
+
+def puede_lanzar():
+    if NIVEL != "0":
+        no("un hijo de una despertada no lanza a otros agentes (un solo nivel); devuélvele el trabajo a tu padre "
+           f"con hc send {PADRE or '<padre>'}")
+    if not YO:
+        no("sin HC_TERMINAL_ID no sé de quién cuelga el hijo")
+
+
+def opciones(args, con_valor):
+    """(lista de banderas tal cual, posicionales). Las banderas van antes del primer posicional o de `--`."""
+    fl, k = [], 0
+    while k < len(args):
+        a = args[k]
+        if a == "--":
+            return fl, args[k + 1:]
+        if not a.startswith("-") or a == "-":
+            return fl, args[k:]
+        fl.append(a)
+        if a in con_valor:
+            k += 1
+            if k < len(args):
+                fl.append(args[k])
+        k += 1
+    return fl, []
+
+
+def con_marca(argv):
+    if len(argv) == 1 and any(c.isspace() for c in argv[0]):
+        argv = ["sh", "-c", argv[0]]  # una sola cadena: hc la corre por shell
+    return ["env", *marcas(), *argv]
+
+
+def hc_get(t):
+    try:
+        p = subprocess.run([real("hc"), "get", t, "--json"], capture_output=True, text=True, timeout=5)
+        return json.loads(p.stdout) if p.returncode == 0 else {}
+    except Exception:
+        return {}
+
+
+def asignaciones(argv):
+    argv = [str(a) for a in argv]
+    out = []
+    if "env" in argv[:5]:
+        for a in argv[argv.index("env") + 1:]:
+            if "=" not in a or a.startswith("-"):
+                break
+            out.append(a)
+    return out
+
+
+LEER_HC = {"ls", "get", "read", "wait", "templates", "schema", "events", "file", "help",
+           "-h", "--help", "-V", "--version", "--licenses"}
+ESCRIBIR = {"send", "keys", "interrupt", "kill", "rm", "put"}
+RUN_VAL = {"--name", "--cwd", "--on", "--label", "--parent", "--timeout", "--env"}
+
+if NOMBRE == "hc":
+    gfl, pos = opciones(ARGS, {"--on"})
+    verb = pos[0] if pos else ""
+    sub = pos[1:]
+    if not verb:
+        no("hc sin verbo abre el selector (attach): no desde una despertada")
+    if verb in LEER_HC or (verb == "machine" and sub[:1] == ["ls"]) or (verb == "server" and sub[:1] == ["status"]):
+        pasar()
+    if verb == "run":
+        puede_lanzar()
+        fl, argv = opciones(sub, RUN_VAL)
+        if not argv:
+            no("hc run sin comando")
+        if len(argv) <= 2 and "/" not in argv[0] and not any(c.isspace() for c in argv[0]) \
+                and not shutil.which(argv[0]):
+            try:
+                tpl = json.loads(subprocess.run([real("hc"), "templates", "--json"], capture_output=True,
+                                                text=True, timeout=5).stdout or "{}").get("templates") or []
+            except Exception:
+                tpl = []
+            if argv[0] in [t.get("name") if isinstance(t, dict) else t for t in tpl]:
+                no("una plantilla no lleva la marca: lanza el comando explícito")
+        pasar([*gfl, verb, *fl, "--", *con_marca(argv)])
+    if verb == "exec":
+        puede_lanzar()
+        fl, argv = opciones(sub, {"--on", "--cwd", "--env", "--timeout"})
+        envs = [x for m in marcas() for x in ("--env", m)]
+        pasar([*gfl, verb, *envs, *fl, "--", *argv])
+    if verb in ESCRIBIR:
+        fl, dest = opciones(sub, {"--if", "--timeout"})
+        if not dest:
+            no(f"hc {verb} sin destino (elegiría uno a mano)")
+        g = hc_get(dest[0])
+        addr = str(g.get("address") or "")
+        if not addr:
+            no(f"no encuentro el terminal {dest[0]}")
+        if addr == YO:
+            pasar()  # a sí misma: cerrarse, su /goal
+        if NIVEL == "0" and f"COFOUNDY_DESPERTADA_PADRE={YO}" in asignaciones(g.get("argv") or []):
+            pasar()  # su hijo
+        if NIVEL != "0" and addr == PADRE:
+            pasar()  # un hijo le devuelve el trabajo a su padre
+        no(f"{addr} no es tuyo: una despertada solo le escribe a sí misma, a sus hijos (y un hijo, a su padre)")
+    no("una sesión despertada solo lee, se cierra o delega un nivel con la marca")
+
+if NOMBRE == "herdr-app":
+    if not ARGS or ARGS[0] in {"ls", "status", "commands", "shot", "check", "--version", "--skill", "--help",
+                               "-h", "help"}:
+        pasar()
+    if ARGS[0] == "do" and len(ARGS) > 1:
+        accion, resto = ARGS[1], ARGS[2:]
+        if accion in ("tab.rename", "space.rename"):
+            pasar()
+        if accion in ("space.new", "tab.new", "pane.split", "terminal.open"):
+            puede_lanzar()
+            nuevo, hecho, k = [], False, 0
+            while k < len(resto):
+                a = resto[k]
+                if a == "--argv" or a.startswith("--argv="):
+                    raw = a.split("=", 1)[1] if "=" in a else (resto[k + 1] if k + 1 < len(resto) else "")
+                    k += 1 if "=" in a else 2
+                    try:
+                        argv = json.loads(raw)
+                    except ValueError:
+                        no("--argv no es una lista JSON")
+                    if not isinstance(argv, list) or not argv:
+                        no("--argv no es una lista JSON")
+                    nuevo += ["--argv", json.dumps(con_marca([str(x) for x in argv]))]
+                    hecho = True
+                    continue
+                if a.startswith("{"):
+                    try:
+                        o = json.loads(a)
+                    except ValueError:
+                        o = None
+                    if isinstance(o, dict) and isinstance(o.get("argv"), list) and o["argv"]:
+                        o["argv"] = con_marca([str(x) for x in o["argv"]])
+                        a, hecho = json.dumps(o), True
+                nuevo.append(a)
+                k += 1
+            if not hecho:
+                no(f"{accion} sin argv: lanza el agente explícito (--argv '[\"claude\",…]') para que lleve la marca")
+            pasar(["do", accion, *nuevo])
+        no(f"do {accion}: una sesión despertada no mueve ni toca la app de André")
+    no("una sesión despertada solo lee la app o lanza un hijo con la marca")
+
+if NOMBRE == "herdr":  # legacy-herdr: el TUI viejo no delega desde una despertada
+    fl, pos = opciones(ARGS, {"--machine", "--on"})
+    a, b = (pos + ["", ""])[:2]
+    TUI = {"pane": {"split", "run", "send-text", "send-keys"}, "agent": {"prompt", "send-keys", "start", "attach"},
+           "tab": {"create"}, "workspace": {"create"}, "worktree": {"create"}}
+    if a in ("api", "run") or b in TUI.get(a, ()):
+        no("el TUI viejo no delega desde una despertada: usa hc run (la marca se pone sola)")
+    pasar()
+pasar()
