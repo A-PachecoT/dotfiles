@@ -51,7 +51,7 @@ Un gate (`pytest`, `make check`, `gh pr checks`, build) se corre solo y se lee s
 - **Memoria y docs = punteros e invariantes, NUNCA estado de sistemas mutables** (PR abierto, versión N, flag, «pendiente»). Si el estado importa: fecha absoluta + receta (`verificá: <cmd>`). → `cantera/memory-doctor/rubric.md` · `core/docs/decision-log.md#2026-09-04-estado-mutable-en-docs`
 
 ## Comms & content
-- Cal.com: Cofoundy (DEFAULT) → https://cal.cofoundy.dev/team/cofoundy/consulta (link corto para clientes: cofoundy.ai/agenda) · André 25 min → https://cal.cofoundy.dev/andre/meet · 50 min → https://cal.cofoundy.dev/andre/long-meet
+- Link de agenda: nunca de memoria → `link.py` de `/calendar` (`--audiencia prospecto|lead|cliente`); prospecto = cofoundy.ai/agenda, cliente = mar/jue, lead según mi `calcom_modo` en `handbook/team.md` (lo cambio yo). QR = `/chat`.
 - Emails: NUNCA bloque de firma al final (Gmail ya la pone); terminar en la última oración con contenido.
 - WhatsApp: texto plano, sin markdown, con mi voz (corto, natural, como escribo yo); nunca adjuntes lo que ya está en el chat. → core/docs/decision-log.md#2026-10-20-adjunto-no-bajo
 - Shadergradient: params literales del URL que eligió el cliente, nunca inventados → `cofoundy-toolkit:hero-shader`. → CLAUDE-porques.md §Comms & content
