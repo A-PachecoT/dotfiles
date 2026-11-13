@@ -23,6 +23,13 @@ function cl {
     (
         unset SSH_CONNECTION SSH_CLIENT SSH_TTY
         export PATH="$shim_dir:$PATH"
+        # Herdr app: tmux falso para que los teammates de agent teams abran paneles a la derecha
+        # (scripts/hc-tmux/tmux). Solo en una terminal de herdr-core con la app, fuera del TUI y de tmux.
+        if [[ -n "${HC_TERMINAL_ID:-}" && -n "${HC_TERMINAL_SOCKET:-}" && -z "${HERDR_PANE_ID:-}" \
+              && -z "${TMUX:-}" ]] && command -v herdr-app >/dev/null; then
+            export PATH="$HOME/dotfiles/scripts/hc-tmux:$PATH" TMUX="hc-tmux,0,0" TMUX_PANE="%0" \
+                   HC_TMUX_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/hc-tmux/$HC_TERMINAL_ID-$(date +%s).json"
+        fi
         command claude --dangerously-skip-permissions --teammate-mode tmux "$@"
     )
 }

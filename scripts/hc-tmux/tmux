@@ -1,0 +1,434 @@
+#!/usr/bin/env python3
+"""tmux falso: los teammates de Claude Code (agent teams, teammateMode tmux) como paneles de la Herdr app.
+
+`cl` lo pone primero en el PATH, con TMUX/TMUX_PANE falsos, solo cuando claude corre en una terminal
+de herdr-core (`HC_TERMINAL_ID`) y existe `herdr-app`. Claude Code cree que está en tmux y abre cada
+teammate con split-window; aquí cada verbo se traduce:
+
+  split-window -h  → herdr-app do pane.split right (del líder)    · -v → down (de la columna de teammates)
+  respawn-pane     → arranca el teammate en ese panel (el split con `cat` es un placeholder de Claude)
+  send-keys        → hc send / hc keys      · capture-pane → hc read      · kill-pane → pane.close
+  list-panes, display-message → ids falsos %N/@0 desde el estado     · estilos/layout/resize → no-op
+
+Mapa de verbos medido por herdmates (caioniehues/herdmates docs/research/spike-tmux-verbs-2026-07-16).
+Estado: $HC_TMUX_STATE (default ~/.local/state/hc-tmux/<HC_TERMINAL_ID>.json). Log de cada llamada al lado.
+Un verbo desconocido sale 1 y queda en el log: nunca se finge un éxito que mueva algo.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import fcntl
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+VERSION = "tmux 3.5a"
+LEAD = "%0"
+WINDOW = "@0"
+SESSION = "hc"
+
+# Verbos que Claude usa para estilo, layout o tamaño: la Herdr app no los tiene, se aceptan sin efecto.
+NOOP = {
+    "set-option", "set", "set-window-option", "setw", "select-layout", "selectl", "resize-pane", "resizep",
+    "refresh-client", "refresh", "source-file", "source", "bind-key", "bind", "unbind-key", "unbind",
+    "set-hook", "set-environment", "setenv", "rename-window", "renamew", "rename-session",
+    "select-window", "selectw", "switch-client", "switchc", "set-buffer", "setb",
+}
+ALIASES = {
+    "splitw": "split-window", "respawnp": "respawn-pane", "send": "send-keys", "capturep": "capture-pane",
+    "killp": "kill-pane", "lsp": "list-panes", "display": "display-message", "selectp": "select-pane",
+    "show": "show-options", "show-option": "show-options", "showw": "show-window-options", "has": "has-session", "ls": "list-sessions",
+    "lsw": "list-windows",
+}
+# Opciones de tmux que toman valor, por verbo (las demás son booleanas).
+VALUED = {
+    "split-window": set("tlpFceL"), "respawn-pane": set("tce"), "send-keys": set("tNX"),
+    "capture-pane": set("tSEbN"), "kill-pane": set("t"), "list-panes": set("tFf"),
+    "display-message": set("tFcd"), "select-pane": set("tTP"), "show-options": set("t"),
+    "show-window-options": set("t"), "has-session": set("t"), "list-sessions": set("Ff"),
+    "list-windows": set("tFf"),
+}
+KEYS = {
+    "enter": "enter", "c-m": "enter", "kpenter": "enter", "escape": "esc", "c-[": "esc", "tab": "tab",
+    "bspace": "backspace", "space": "space", "up": "up", "down": "down", "left": "left", "right": "right",
+    "home": "home", "end": "end", "pageup": "pageup", "ppage": "pageup", "pagedown": "pagedown",
+    "npage": "pagedown", "dc": "delete", "ic": "insert", "btab": "shift+tab",
+}
+
+
+class TmuxError(Exception):
+    pass
+
+
+# ---------------------------------------------------------------- estado
+
+def state_path() -> Path:
+    if os.environ.get("HC_TMUX_STATE"):
+        return Path(os.environ["HC_TMUX_STATE"])
+    base = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "hc-tmux"
+    return base / f"{os.environ.get('HC_TERMINAL_ID') or 'sin-terminal'}.json"
+
+
+@contextlib.contextmanager
+def locked_state():
+    path = state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path.with_suffix(".lock"), "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            state = json.loads(path.read_text())
+        except (OSError, ValueError):
+            state = {}
+        state.setdefault("next", 1)
+        state.setdefault("panes", {})
+        yield state
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, indent=1))
+        tmp.replace(path)
+
+
+def log(argv: list[str], rc: int, note: str = "") -> None:
+    try:
+        path = state_path().with_suffix(".log")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a") as fh:
+            fh.write(json.dumps({"t": time.strftime("%H:%M:%S"), "argv": argv, "rc": rc, "note": note}) + "\n")
+    except OSError:
+        pass
+
+
+# ---------------------------------------------------------------- herdr-app / hc
+
+def run(cmd: list[str]) -> str:
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    if proc.returncode != 0:
+        raise TmuxError(f"{' '.join(cmd[:3])}: {(proc.stderr or proc.stdout).strip()[:300]}")
+    return proc.stdout
+
+
+def app_panes() -> dict[str, str]:
+    """pane → terminal de todo lo que muestra la Herdr app."""
+    data = json.loads(run(["herdr-app", "ls"]))
+    out = {}
+    for space in data.get("spaces", []):
+        for tab in space.get("tabs", []):
+            for term in tab.get("terminals", []):
+                if term.get("pane"):
+                    out[term["pane"]] = term.get("terminal")
+    return out
+
+
+def lead_pane(panes: dict[str, str]) -> str:
+    me = os.environ.get("HC_TERMINAL_ID")
+    for pane, term in panes.items():
+        if term == me:
+            return pane
+    raise TmuxError(f"el líder ({me}) no tiene panel en la Herdr app")
+
+
+def focused() -> str | None:
+    try:
+        return json.loads(run(["herdr-app", "status"])).get("focused_pane")
+    except (TmuxError, ValueError):
+        return None
+
+
+def split(direction: str, pane: str, argv: list[str]) -> dict:
+    """Panel nuevo sin robar el foco: Claude pide -d (detached); si la app lo enfoca, se devuelve."""
+    before = focused()
+    made = json.loads(run(["herdr-app", "do", "pane.split", "--direction", direction, "--pane", pane,
+                           "--argv", json.dumps(argv)]))
+    if before and before != made.get("pane") and focused() == made.get("pane"):
+        with contextlib.suppress(TmuxError):
+            run(["herdr-app", "do", "pane.focus", "--pane", before])
+    return made
+
+
+# ---------------------------------------------------------------- argumentos
+
+def parse(verb: str, args: list[str]) -> tuple[dict, list[str]]:
+    """Opciones estilo getopt de tmux: -dhP, -t X, -tX, -e K=V repetible. Devuelve (opts, posicionales)."""
+    valued = VALUED.get(verb, set())
+    opts: dict = {}
+    rest: list[str] = []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--":
+            rest.extend(args[i + 1:])
+            break
+        if not a.startswith("-") or a == "-" or rest:
+            rest.append(a)
+            i += 1
+            continue
+        j = 1
+        while j < len(a):
+            c = a[j]
+            if c in valued:
+                val = a[j + 1:] or (args[i + 1] if i + 1 < len(args) else "")
+                if not a[j + 1:]:
+                    i += 1
+                if c == "e":
+                    opts.setdefault("e", []).append(val)
+                else:
+                    opts[c] = val
+                break
+            opts[c] = True
+            j += 1
+        i += 1
+    return opts, rest
+
+
+def command_argv(words: list[str], cwd: str | None, env: list[str]) -> list[str] | None:
+    """Comando de tmux → argv. Una sola palabra va por sh -c, como hace tmux."""
+    if not words:
+        return None
+    script = words[0] if len(words) == 1 else shlex.join(words)
+    if env:
+        script = f"env {' '.join(shlex.quote(e) for e in env)} sh -c {shlex.quote(script)}"
+    if cwd:
+        script = f"cd {shlex.quote(cwd)} && {script}"
+    return ["/bin/sh", "-c", script]
+
+
+def target_id(opts: dict) -> str:
+    t = opts.get("t") or os.environ.get("TMUX_PANE") or LEAD
+    m = re.search(r"%\d+", t)
+    return m.group(0) if m else LEAD
+
+
+def fmt(template: str, pid: str, entry: dict | None) -> str:
+    entry = entry or {}
+    values = {
+        "pane_id": pid, "window_id": WINDOW, "session_id": "$0", "session_name": SESSION,
+        "window_index": "0", "window_name": SESSION, "pane_index": pid.lstrip("%"),
+        "pane_title": entry.get("title", ""), "pane_active": "1" if pid == LEAD else "0",
+        "pane_dead": "0", "client_termtype": os.environ.get("TERM", "xterm-256color"),
+        "window_panes": "", "pane_width": "100", "pane_height": "50", "window_width": "200",
+        "window_height": "50", "client_width": "200", "client_height": "50",
+        "pane_current_command": "claude" if pid == LEAD else "", "version": VERSION.split()[1],
+    }
+    short = {"S": "session_name", "I": "window_index", "P": "pane_index", "D": "pane_id", "W": "window_name",
+             "T": "pane_title"}
+    template = re.sub(r"#([SIPDWT])", lambda m: "#{" + short[m.group(1)] + "}", template)
+    return re.sub(r"#\{([a-z_-]+)\}", lambda m: values.get(m.group(1), ""), template)
+
+
+# ---------------------------------------------------------------- verbos
+
+def live_ids(state: dict) -> list[str]:
+    """%N vivos (los pendientes cuentan); poda los que la persona cerró a mano."""
+    panes = app_panes()
+    alive = []
+    for pid, entry in list(state["panes"].items()):
+        if entry.get("pane") and entry["pane"] not in panes:
+            del state["panes"][pid]
+        else:
+            alive.append(pid)
+    return [LEAD] + sorted(alive, key=lambda p: int(p[1:]))
+
+
+def materialize(state: dict, pid: str, argv: list[str]) -> None:
+    entry = state["panes"][pid]
+    panes = app_panes()
+    base = state["panes"].get(entry.get("target", LEAD), {}).get("pane")
+    direction = entry.get("direction", "right")
+    if not base or base not in panes:  # su vecino ya se cerró: va al final de la columna, o junto al líder
+        column = [e["pane"] for k, e in state["panes"].items() if k != pid and e.get("pane") in panes]
+        base, direction = (column[-1], "down") if column else (lead_pane(panes), "right")
+    made = split(direction, base, argv)
+    entry.update(pane=made["pane"], terminal=made["terminal"])
+    entry.pop("pending", None)
+
+
+def do_split(opts, rest) -> str:
+    with locked_state() as state:
+        pid = f"%{state['next']}"
+        state["next"] += 1
+        target = target_id(opts)
+        # main-vertical de tmux: el líder a la izquierda y los teammates en UNA columna a la derecha.
+        # Claude pide -h también entre teammates y luego re-ordena con select-layout, que aquí no existe.
+        entry = {"direction": "right" if target == LEAD else "down", "target": target,
+                 "cwd": opts.get("c"), "env": opts.get("e", [])}
+        state["panes"][pid] = entry
+        argv = command_argv(rest, entry["cwd"], entry["env"])
+        if rest == ["cat"]:
+            entry["pending"] = True  # placeholder de Claude: respawn-pane trae el comando real
+        else:
+            try:
+                materialize(state, pid, argv or [os.environ.get("SHELL", "/bin/zsh"), "-l"])
+            except Exception:
+                del state["panes"][pid]
+                raise
+        return fmt(opts["F"], pid, entry) + "\n" if opts.get("P") and opts.get("F") else (
+            pid + "\n" if opts.get("P") else "")
+
+
+def do_respawn(opts, rest) -> str:
+    pid = target_id(opts)
+    if pid == LEAD:
+        raise TmuxError("respawn-pane sobre el líder no se traduce")
+    with locked_state() as state:
+        entry = state["panes"].get(pid)
+        if entry is None:
+            raise TmuxError(f"can't find pane: {pid}")
+        argv = command_argv(rest, opts.get("c") or entry.get("cwd"), entry.get("env", []) + opts.get("e", []))
+        if not argv:
+            raise TmuxError("respawn-pane sin comando")
+        old = None if entry.get("pending") else entry.get("pane")
+        if old and old in app_panes():  # ya corría algo: el nuevo nace debajo y el viejo se cierra
+            made = split("down", old, argv)
+            entry.update(pane=made["pane"], terminal=made["terminal"])
+            run(["herdr-app", "do", "pane.close", "--pane", old])
+        else:
+            materialize(state, pid, argv)
+    return ""
+
+
+def terminal_of(pid: str) -> str:
+    if pid == LEAD:
+        return os.environ["HC_TERMINAL_ID"]
+    with locked_state() as state:
+        entry = state["panes"].get(pid)
+    if not entry or not entry.get("terminal"):
+        raise TmuxError(f"can't find pane: {pid}")
+    return entry["terminal"]
+
+
+def do_send_keys(opts, rest) -> str:
+    term = terminal_of(target_id(opts))
+    if not rest:
+        return ""
+    literal = bool(opts.get("l"))
+    words = list(rest)
+    enter = not literal and words and KEYS.get(words[-1].lower()) == "enter"
+    body = words[:-1] if enter else words
+    if body and (literal or all(KEYS.get(w.lower()) is None and not re.fullmatch(r"[CM]-.", w) for w in body)):
+        text = "".join(body) if literal else " ".join(body)
+        if enter:
+            run(["hc", "send", term, text])
+            return ""
+        keys = ["space" if ch == " " else ch for ch in text]
+    else:
+        keys = []
+        for w in body:
+            name = KEYS.get(w.lower())
+            if name:
+                keys.append(name)
+            elif re.fullmatch(r"[CM]-.", w):
+                keys.append(("ctrl+" if w[0] == "C" else "alt+") + w[2].lower())
+            else:
+                keys.extend("space" if ch == " " else ch for ch in w)
+        if enter:
+            keys.append("enter")
+    if keys:
+        run(["hc", "keys", term, *keys])
+    return ""
+
+
+def do_capture(opts, rest) -> str:
+    term = terminal_of(target_id(opts))
+    start = str(opts.get("S", "0"))
+    lines = abs(int(start)) if start.lstrip("-").isdigit() else (10000 if start == "-" else 0)
+    return run(["hc", "read", "--lines", str(lines), term])
+
+
+def do_kill(opts, rest) -> str:
+    pid = target_id(opts)
+    if pid == LEAD:
+        raise TmuxError("kill-pane sobre el líder no se traduce")
+    with locked_state() as state:
+        entry = state["panes"].pop(pid, None)
+    if entry and entry.get("pane"):
+        with contextlib.suppress(TmuxError):  # ya cerrado a mano: igual que tmux, no es error para Claude
+            run(["herdr-app", "do", "pane.close", "--pane", entry["pane"]])
+    return ""
+
+
+def do_list_panes(opts, rest) -> str:
+    template = opts.get("F") or "#{pane_id}"
+    with locked_state() as state:
+        ids = live_ids(state)
+        return "".join(fmt(template, pid, state["panes"].get(pid)) + "\n" for pid in ids)
+
+
+def do_display(opts, rest) -> str:
+    template = opts.get("F") or (rest[0] if rest else "")
+    if not opts.get("p"):
+        return ""
+    pid = target_id(opts)
+    with locked_state() as state:
+        return fmt(template, pid, state["panes"].get(pid)) + "\n"
+
+
+def do_select_pane(opts, rest) -> str:
+    if opts.get("T"):
+        pid = target_id(opts)
+        with locked_state() as state:
+            if pid in state["panes"]:
+                state["panes"][pid]["title"] = opts["T"]
+    return ""  # nunca roba el foco
+
+
+def do_show(opts, rest) -> str:
+    name = rest[0] if rest else ""
+    value = {"mouse": "off", "focus-events": "off", "base-index": "0", "pane-base-index": "0"}.get(name, "")
+    if not value:
+        return ""
+    return (value if opts.get("v") else f"{name} {value}") + "\n"
+
+
+VERBS = {
+    "split-window": do_split, "respawn-pane": do_respawn, "send-keys": do_send_keys,
+    "capture-pane": do_capture, "kill-pane": do_kill, "list-panes": do_list_panes,
+    "display-message": do_display, "select-pane": do_select_pane, "show-options": do_show,
+    "show-window-options": do_show,
+    "has-session": lambda o, r: "",
+    "list-sessions": lambda o, r: fmt(o.get("F") or "#{session_name}: 1 windows", LEAD, None) + "\n",
+    "list-windows": lambda o, r: fmt(o.get("F") or "0: #{window_name}", LEAD, None) + "\n",
+}
+
+
+def main(argv: list[str]) -> int:
+    args = list(argv)
+    # Opciones globales de tmux antes del verbo (-S socket, -L nombre, -f config, -u, -2...).
+    while args and args[0].startswith("-") and args[0] not in ("-V",):
+        flag = args.pop(0)
+        if flag in ("-S", "-L", "-f", "-c", "-T") and args:
+            args.pop(0)
+    if not args:
+        print("hc-tmux: falta el verbo", file=sys.stderr)
+        log(argv, 1, "sin verbo")
+        return 1
+    if args[0] == "-V":
+        print(VERSION)
+        return 0
+    verb = ALIASES.get(args[0], args[0])
+    if verb in NOOP:
+        log(argv, 0, "no-op")
+        return 0
+    handler = VERBS.get(verb)
+    if handler is None:
+        print(f"hc-tmux: verbo no soportado: {args[0]}", file=sys.stderr)
+        log(argv, 1, "no soportado")
+        return 1
+    try:
+        opts, rest = parse(verb, args[1:])
+        out = handler(opts, rest)
+    except (TmuxError, subprocess.TimeoutExpired, KeyError, ValueError) as exc:
+        print(f"hc-tmux: {exc}", file=sys.stderr)
+        log(argv, 1, str(exc))
+        return 1
+    sys.stdout.write(out)
+    log(argv, 0)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
