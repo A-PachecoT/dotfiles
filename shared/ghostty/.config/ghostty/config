@@ -98,7 +98,8 @@ keybind = cmd+ctrl+k=resize_split:up,20
 keybind = cmd+ctrl+j=resize_split:down,20
 
 # tmux window management (Cmd sends Ctrl+b + key)
-keybind = cmd+c=text:\x02c
+# cmd+c vuelve a copiar (default de Ghostty); el tab nuevo de herdr pasa a cmd+t, que ya no abre un tab de Ghostty (André 2026-11-12)
+keybind = cmd+t=text:\x02c
 keybind = cmd+w=text:\x02w
 # Herdr: cmd+shift+w cierra el proyecto/tab entero (envía prefix+shift+w)
 keybind = cmd+shift+w=text:\x02W
