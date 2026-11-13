@@ -190,6 +190,10 @@ def command_argv(words: list[str], cwd: str | None, env: list[str]) -> list[str]
     if not words:
         return None
     script = words[0] if len(words) == 1 else shlex.join(words)
+    if os.environ.get("COFOUNDY_DESPERTADA") == "1":
+        # El teammate de una sesión despertada hereda su marca (H1 D6): la app no le pasa el entorno del líder.
+        # La excepción de envío (…_EXCEPCION/_CHAT) es nominal y no viaja.
+        env = ["COFOUNDY_DESPERTADA=1"] + [e for e in env if not e.startswith("COFOUNDY_DESPERTADA")]
     if env:
         script = f"env {' '.join(shlex.quote(e) for e in env)} sh -c {shlex.quote(script)}"
     if cwd:

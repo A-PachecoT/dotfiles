@@ -175,6 +175,15 @@ def test_cwd_y_env_del_split_viajan_al_respawn(env):
     assert script == "cd '/r p' && env X=1 sh -c claude"
 
 
+def test_teammate_de_una_despertada_hereda_la_marca(env):
+    e, _ = env
+    e.update(COFOUNDY_DESPERTADA="1", COFOUNDY_DESPERTADA_EXCEPCION="portafolios", COFOUNDY_DESPERTADA_CHAT="con_x")
+    p1 = tmux(env, "split-window", "-h", "-P", "--", "cat").stdout.strip()
+    tmux(env, "respawn-pane", "-k", "-t", p1, "--", "claude")
+    script = world(env)["splits"][0]["argv"][2]
+    assert script == "env COFOUNDY_DESPERTADA=1 sh -c claude"
+
+
 def test_respawn_sobre_panel_vivo_lo_reemplaza(env):
     p1 = tmux(env, "split-window", "-h", "-P", "--", "sleep 99").stdout.strip()
     first = world(env)["splits"][0]["pane"]
