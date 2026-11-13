@@ -703,7 +703,8 @@ class Coresponde:
 def cr(mt, monkeypatch):
     c = Coresponde()
     monkeypatch.setattr(mt, "coresponde_get", c.get)
-    monkeypatch.setenv("INBOXAI_API_KEY", "fov_prueba")
+    monkeypatch.setenv("TRACTA_API_KEY", "fov_prueba")
+    monkeypatch.delenv("INBOXAI_API_KEY", raising=False)
     return c
 
 
@@ -738,14 +739,27 @@ def test_dormir_coresponde_registra_la_excepcion_por_cwd_y_estado_la_muestra(mt,
 
 
 def test_dormir_coresponde_avisa_si_falta_la_key(mt, world, clock, monkeypatch, tmp_path):
-    monkeypatch.delenv("INBOXAI_API_KEY", raising=False)
+    for k in ("TRACTA_API_KEY", "INBOXAI_API_KEY", "TRACTA_API_URL", "INBOXAI_API_URL"):
+        monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(mt, "CLAUDE_SETTINGS", tmp_path / "no-hay.json")
     mt.write_atomic(mt.desp_file(False), json.dumps({"latido": mt.iso(mt.now())}))
     monkeypatch.setattr(mt, "here", lambda: {"agent_session": {"value": "s"}, "pane_id": "wP:p1", "cwd": PORTA})
-    assert "falta INBOXAI_API_KEY" in mt.dormir(None, None, None, CON)
-    (tmp_path / "s.json").write_text(json.dumps({"env": {"INBOXAI_API_KEY": "fov_de_settings"}}))
+    assert "falta TRACTA_API_KEY" in mt.dormir(None, None, None, CON)
+    (tmp_path / "s.json").write_text(json.dumps({"env": {"TRACTA_API_KEY": "fov_de_settings"}}))
     monkeypatch.setattr(mt, "CLAUDE_SETTINGS", tmp_path / "s.json")
     assert mt.coresponde_cfg() == (mt.CORESPONDE_URL, "fov_de_settings")  # el daemon de launchd la lee de ahí
+
+
+def test_coresponde_cfg_lee_tracta_y_cae_a_inboxai_hasta_2027_02_11(mt, monkeypatch, tmp_path):
+    for k in ("TRACTA_API_KEY", "INBOXAI_API_KEY", "TRACTA_API_URL", "INBOXAI_API_URL"):
+        monkeypatch.delenv(k, raising=False)
+    (tmp_path / "s.json").write_text(json.dumps({"env": {"INBOXAI_API_KEY": "vieja", "INBOXAI_API_URL": "http://v/"}}))
+    monkeypatch.setattr(mt, "CLAUDE_SETTINGS", tmp_path / "s.json")
+    assert mt.coresponde_cfg() == ("http://v", "vieja")  # solo el nombre viejo: fallback
+    monkeypatch.setenv("TRACTA_API_KEY", "nueva")
+    monkeypatch.setenv("INBOXAI_API_KEY", "vieja-env")
+    monkeypatch.setenv("TRACTA_API_URL", "http://n/")
+    assert mt.coresponde_cfg() == ("http://n", "nueva")  # el nombre nuevo gana
 
 
 def test_coresponde_en_handoff_despierta_con_la_excepcion_y_un_puntero_sin_el_texto(mt, world, clock, cr):
@@ -889,9 +903,10 @@ def test_cli_coresponde_once_dry_run_contra_un_api_falso(mt, tmp_path):
 
     def corre(cache, bindir=bindir):
         env = {**os.environ, "MYTURN_CACHE": str(tmp_path / cache), "MYTURN_HABILES": str(tmp_path / "no-hay.py"),
-               "INBOXAI_API_KEY": "fov_prueba", "INBOXAI_API_URL": f"http://127.0.0.1:{srv.server_port}/api/v1",
+               "TRACTA_API_KEY": "fov_prueba", "TRACTA_API_URL": f"http://127.0.0.1:{srv.server_port}/api/v1",
                "MYTURN_PATH": f"{bindir}:/usr/bin:/bin", "MYTURN_CLAUDE_SESSIONS": str(tmp_path / "sessions")}
-        for k in ("HERDR_PANE_ID", "HC_TERMINAL_ID", "HC_TERMINAL_SOCKET"):  # sin terminal; legacy-herdr
+        for k in ("HERDR_PANE_ID", "HC_TERMINAL_ID", "HC_TERMINAL_SOCKET",  # sin terminal; legacy-herdr
+                  "INBOXAI_API_KEY", "INBOXAI_API_URL"):
             env.pop(k, None)
         p = subprocess.run([str(SCRIPT), "despertador", "--once", "--dry-run"], env=env, capture_output=True,
                            text=True, timeout=60)

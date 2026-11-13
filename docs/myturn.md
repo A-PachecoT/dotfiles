@@ -215,7 +215,7 @@ dueño y `end_date` = caducidad; `brain tarea add`), y myturn lo trae como una f
 | Hammerspoon | `hammerspoon://myturn-goto?q=<pane>&downs=N`: teclea el navegador de herdr para cambiar de máquina |
 | Claude Code | hook `UserPromptSubmit` (session_id + `HC_TERMINAL_ID`, o `HERDR_PANE_ID` en el TUI); `~/.claude/sessions/<pid>.json` (sesión de un terminal, y «¿ya corre?» antes de reabrir); `claude -p --json-schema` para la IA |
 | Obsidian (BrainFlow) | `Tareas.md` espejo + consulta ```tasks``` en el daily note + importación de `- [ ]` del To-do; `daily_prep.py` y morning-brief (Hermes) parcheados |
-| Coresponde (Tracta, WhatsApp del negocio) | REST del backend con `X-API-Key` = `INBOXAI_API_KEY` (env o el `env` de `~/.claude/settings.json`; key de cuenta de `ten_cofoundy` con `conversations:read` + `messages:read`), `INBOXAI_API_URL` opcional: `GET /conversations/{id}` y `GET /conversations/{id}/messages?limit=20`. `conversations_wait` es solo MCP (sin equivalente REST) y un daemon no es cliente MCP: se consulta cada 60 s |
+| Coresponde (Tracta, WhatsApp del negocio) | REST del backend con `X-API-Key` = `TRACTA_API_KEY` (env o el `env` de `~/.claude/settings.json`; key de cuenta de `ten_cofoundy` con «Conversaciones → Leer» además de «Deals y tareas → Leer»; hasta el 2027-02-11 cae a `INBOXAI_API_KEY`), `TRACTA_API_URL` opcional (fallback `INBOXAI_API_URL`): `GET /conversations/{id}` y `GET /conversations/{id}/messages?limit=20`. `conversations_wait` es solo MCP (sin equivalente REST) y un daemon no es cliente MCP: se consulta cada 60 s |
 | Vikunja, calendario, celular | fuera de alcance por ahora |
 
 ### Dormir: una sesión que espera a un cliente no ocupa nada
