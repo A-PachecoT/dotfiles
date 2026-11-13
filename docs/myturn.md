@@ -209,10 +209,11 @@ dueño y `end_date` = caducidad; `brain tarea add`), y myturn lo trae como una f
 
 | Con qué | Cómo |
 |---|---|
-| herdr | `agent list` (estado, `focused`, `terminal_title`, `state_change_seq`), `agent focus`, `tab create` (`--no-focus --env` en el despertador), `pane run`, `pane current`, `agent prompt`, `pane report-metadata`, `pane close`, `notification show`; `machine list --json` (la máquina `selected` es la que muestra `h`) y `--machine <label> pane list` |
-| AeroSpace | `list-windows` / `focus --window-id` sobre la ventana de `h` (título `herdr-mac` o `herdr · …`) |
+| Herdr app (desde 2026-11-13, H1) | `hc ls --json` + `hc get <t>` (estado, `turn:status_ms` como secuencia, labels `herdr.space/tab`; la sesión sale de `~/.claude/sessions/<foreground.pid>.json`), `hc send` (puntero), `hc run --bg --keep --no-parent --label herdr.space=… --label herdr.tab=…` (reabrir sin foco, el entorno va en el argv porque `hc run` no lo pasa), `hc kill`+`rm` (dormir); `herdr-app ls|status`, `do tab.rename` (cuenta regresiva y nombre de la pestaña), `do space.rename`, `do agent.focus` (`go`). El runtime de un agente lo da su entorno (skill `herdr` §0: el más interno gana); el despertador y el panel leen los dos y reabren en la app si su core responde |
+| TUI viejo (respaldo `legacy-herdr` hasta H8) | `agent list`, `agent focus`, `tab create` (`--no-focus --env`), `pane run`, `pane current`, `agent prompt`, `pane report-metadata`, `pane close`, `notification show`, `workspace list` (el nombre del workspace de un enlace viejo = el espacio de la app); `machine list --json` y `--machine <label> pane list` para las otras cajas |
+| AeroSpace | `list-windows` / `focus --window-id` sobre la ventana de la app (`app-name` Herdr) o la de `h` (título `herdr-mac` o `herdr · …`) |
 | Hammerspoon | `hammerspoon://myturn-goto?q=<pane>&downs=N`: teclea el navegador de herdr para cambiar de máquina |
-| Claude Code | hook `UserPromptSubmit` (session_id + `HERDR_PANE_ID`); `claude -p --json-schema` para la IA |
+| Claude Code | hook `UserPromptSubmit` (session_id + `HC_TERMINAL_ID`, o `HERDR_PANE_ID` en el TUI); `~/.claude/sessions/<pid>.json` (sesión de un terminal, y «¿ya corre?» antes de reabrir); `claude -p --json-schema` para la IA |
 | Obsidian (BrainFlow) | `Tareas.md` espejo + consulta ```tasks``` en el daily note + importación de `- [ ]` del To-do; `daily_prep.py` y morning-brief (Hermes) parcheados |
 | Coresponde (Tracta, WhatsApp del negocio) | REST del backend con `X-API-Key` = `INBOXAI_API_KEY` (env o el `env` de `~/.claude/settings.json`; key de cuenta de `ten_cofoundy` con `conversations:read` + `messages:read`), `INBOXAI_API_URL` opcional: `GET /conversations/{id}` y `GET /conversations/{id}/messages?limit=20`. `conversations_wait` es solo MCP (sin equivalente REST) y un daemon no es cliente MCP: se consulta cada 60 s |
 | Vikunja, calendario, celular | fuera de alcance por ahora |
@@ -235,12 +236,13 @@ Desde 2026-11-12 (dotfiles#5) también el WhatsApp del negocio: `dormir --coresp
 | Coresponde | `myturn dormir --coresponde <con_…> [--etapa "E4 · Territorios"]`: el chat es una conversación del WhatsApp del negocio (`wake.coresponde`; horario = `--horario` o `HORARIO_DEFAULT`, no hay brief que lo vincule). El despertador consulta cada 60 s (`CORESPONDE_S`) `GET /conversations/{id}`: si la IA del hilo contesta (`ai_enabled` y no `escalated`, el criterio de `conversations_wait`) no despierta ni lee mensajes; si espera a una persona, lee la última página y cuenta cada entrante con contenido, no interno ni de sistema, posterior al último saliente que salió de verdad (`queued/sent/delivered/read`; un borrador no contesta) y a `dormir` − 3 min, una sola vez (ids vistos). La ráfaga de 90 s se mide desde la hora del mensaje: despierta en ≤ ~2 min. Horario y triage, iguales que en WhatsApp. Un error del API (sin key, 403, caído) se loguea al aparecer y al irse. Nunca toma ni apaga la IA del hilo. Puntero: el `con_…`, `messages_list` del MCP coresponde y la etapa, nunca el texto |
 | Excepción Portafolios | si `dormir --coresponde` corre desde un checkout de `products/portafolios` (o su worktree de herdr), la espera guarda `wake.excepcion: portafolios` y la reapertura suma `--env COFOUNDY_DESPERTADA_EXCEPCION=portafolios --env COFOUNDY_DESPERTADA_CHAT=<con_…>` (`COFOUNDY_DESPERTADA=1` sigue: /mail y comms_send no cambian). `guard-despertada.sh` deja pasar **solo** `messages_send`/`templates_send` del MCP de Coresponde/Tracta con `conversation_id` = ese chat; lo demás sigue bloqueado. La sesión envía según `products/portafolios/docs/politica-mensajes.md` (obvio → envía; sensible → borrador). Excepción nominal de `handbook/governance/ai-agent-autonomy.md`; se decide por el cwd, nunca por un flag |
 | Volver a dormir | sigue esperando → `myturn dormir` otra vez (renueva); ya no → `myturn done <id>` |
+| En la Herdr app (H1, 2026-11-13) | Lo de arriba describe los verbos del TUI; en la app son estos. **Reabrir** es siempre en la app si su core responde, aunque la espera se haya registrado en el TUI: `hc run --bg --keep --no-parent` con `herdr.space` = el espacio del enlace (`link.space`, lo guarda `dormir` dentro de la app), si no el que se llama como el workspace del TUI del enlace viejo (`wER` → «prospectos»), si no el que se llama como el cliente (título hasta el primer ` · `), si no uno nuevo con ese nombre; pestaña nueva `💬 <título>`. No mueve el foco (medido: `herdr-app status` igual antes y después; `tab.new`/`space.new` sí lo mueven y por eso no se usan). Argv: `<shell> -lic '"$@"; exec "$0" -li' <shell> env COFOUNDY_DESPERTADA=1 [EXCEPCION/CHAT] claude --resume <s>`. **Nunca dos procesos:** antes de reabrir, ni la app ni el TUI la tienen viva y ningún `~/.claude/sessions/<pid>.json` con ese `sessionId` tiene un pid vivo (y no reciclado). **Puntero:** `hc send`; si no llega (un borrador de André en ese terminal, terminal caído) el pendiente se queda. **Cuenta regresiva:** la app no tiene título de panel por CLI: se renombra la pestaña y su nombre vuelve al limpiar. **Dormir:** `hc kill` + `hc rm`. **Avisos:** de macOS (la app suma su toast cuando el agente termina). Viva en el TUI → como siempre, por el TUI. `guard-despertada.sh` además bloquea que una despertada lance o le escriba a otros agentes (`hc run|send|exec…`, `herdr-app do tab.new…`, `pane run`/`agent prompt` del TUI): lo que arrancan no hereda `COFOUNDY_DESPERTADA`. Diseño: `core/docs/research/2026-11-12_herdr-hub-operaciones/migracion/h1-despertador/` |
 
 **Prenderlo (André; nada lo carga solo):**
 `myturn despertador plist > ~/Library/LaunchAgents/dev.andre.myturn-despertador.plist && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.andre.myturn-despertador.plist`.
 Apagar: `launchctl bootout gui/$(id -u)/dev.andre.myturn-despertador`. Estado: `myturn despertador estado` (latido,
 offset, esperas con su chat, el último error de Coresponde, pendientes, cuentas regresivas). Log: `~/Library/Logs/myturn-despertador.log`. Probar en seco sin tocar nada:
-`MYTURN_CACHE=$(mktemp -d) myturn despertador --once --dry-run` (imprime los comandos herdr que correría).
+`MYTURN_CACHE=$(mktemp -d) myturn despertador --once --dry-run` (imprime los comandos `hc`/`herdr-app`, o los del TUI si el core de hc no responde, que correría).
 Lo transitorio (offset, pendientes, contadores, el triage por mensaje y el texto de lo recibido en los últimos 5 min) vive en `~/.cache/myturn/despertador.json`, nunca en el log de git. Ver lo diferido: `myturn despertador estado` (`pend.<id>.abre`).
 
 ## Mantener myturn
@@ -343,6 +345,16 @@ tarea.
   el CLI `--once --dry-run` contra un REST falso imprime el `herdr` y con la IA activa nada). Ground truth del API:
   `cofoundy/tracta` `api/routes/conversations.py` + `messages.py` + `services/api_key_scopes.py`; la `TRACTA_API_KEY`
   (solo deals) da 403 en `/conversations` (medido 2026-11-12). Sin correr en vivo: falta la key con conversaciones.
+
+- 2026-11-13, H1 (myturn + despertador a la Herdr app, dotfiles#9): 22 tests nuevos (una app falsa con `hc` y
+  `herdr-app` y un herdr viejo que FALLA y anota cada llamada): la dormida del TUI despierta en la app sin foco, con su
+  entorno en el argv, en el espacio de su workspace o del cliente; nunca dos `--resume` aunque ningún runtime la vea
+  (y un pid reciclado no cuenta); cuenta regresiva en la pestaña con su nombre de vuelta; `closeout` rojo no mata;
+  puntero que no llega se reintenta; horario, triage, urgencia, ráfaga y «no quedó idle» en la app; `link`, `dormir`,
+  `track` solo con `HC_*`; el más interno gana; `go` enfoca la viva y reabre la cerrada; el CLI `--once --dry-run`
+  imprime el `hc run`. Medido en la app real: label → pestaña sin foco; `tab.rename`/`space.rename` sin foco;
+  `hc run` no pasa el entorno; dentro de un Claude en `hc`, `hc get $HC_TERMINAL_ID` da el pid de Claude.
+  Sin correr en vivo: falta que André reinicie el despertador.
 
 ## Roadmap
 

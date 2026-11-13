@@ -17,7 +17,9 @@ def mt(tmp_path, monkeypatch):
     monkeypatch.setenv("MYTURN_HOME", str(tmp_path / "tasks"))
     monkeypatch.setenv("MYTURN_CACHE", str(tmp_path / "cache"))
     monkeypatch.setenv("MYTURN_NO_SYNC", "1")
-    monkeypatch.delenv("HERDR_PANE_ID", raising=False)
+    monkeypatch.delenv("HERDR_PANE_ID", raising=False)  # legacy-herdr
+    monkeypatch.delenv("HC_TERMINAL_ID", raising=False)
+    monkeypatch.setenv("MYTURN_CLAUDE_SESSIONS", str(tmp_path / "sessions"))
     loader = importlib.machinery.SourceFileLoader("myturn", str(SCRIPT))
     spec = importlib.util.spec_from_loader("myturn", loader)
     mod = importlib.util.module_from_spec(spec)
@@ -98,7 +100,7 @@ def test_bar_label(mt):
 def test_link_here_binds_session_and_merges_hook_task(mt, monkeypatch):
     mt.emit("add", "task", title="Cotización Ecoverde")
     mt.emit("add", "hook", title="sesión", source="agent", link=link(mt, "s9"))
-    monkeypatch.setenv("HERDR_PANE_ID", "w:p9")
+    monkeypatch.setenv("HERDR_PANE_ID", "w:p9")  # legacy-herdr
     monkeypatch.setattr(mt, "herdr_json", lambda *a, **k: {"pane": {"agent_session": {"value": "s9"},
                                                                        "pane_id": "w:p9"}})
     monkeypatch.setattr(mt, "refresh", lambda: {})
@@ -132,7 +134,7 @@ def test_claude_prompt_tells_the_agent_how_to_link(mt):
 
 
 def test_track_hook_registers_once_and_skips_foreign_sessions(mt, monkeypatch):
-    monkeypatch.setenv("HERDR_PANE_ID", "w:p9")
+    monkeypatch.setenv("HERDR_PANE_ID", "w:p9")  # legacy-herdr
     pane = {"pane": {"agent_session": {"value": "s9"}, "terminal_title": "◐ Arma la cotización"}}
     monkeypatch.setattr(mt, "herdr_json", lambda *a, **k: pane)
     mt.track({"session_id": "s9", "prompt": "arma la cotización de ecoverde", "cwd": "/tmp"})
@@ -454,18 +456,20 @@ def test_navigator_downs_mirrors_herdrs_cross_machine_filter(mt):
 
 def test_frontmost_is_the_machine_the_herdr_window_shows(mt, monkeypatch):
     if mt.LOCAL != "mac":
-        pytest.skip("la ventana de herdr con máquinas vive en la Mac")
-    title = {"t": "herdr · archlinux · redesign-ui"}
+        pytest.skip("la ventana de herdr con máquinas vive en la Mac")  # legacy-herdr
+    title = {"t": "Ghostty|herdr · archlinux · redesign-ui"}
     machines = [{"label": "arch", "enabled": True, "selected": True}, {"label": "hq", "enabled": True}]
     monkeypatch.setattr(mt.shutil, "which", lambda _: "/opt/homebrew/bin/aerospace")
     monkeypatch.setattr(mt, "herdr_machines", lambda: machines)
     monkeypatch.setattr(mt, "run", lambda cmd, *a, **k: type("P", (), {"stdout": title["t"], "returncode": 0}))
     assert mt.herdr_frontmost() == "arch"
     machines[0]["selected"] = False
-    title["t"] = "herdr-mac"  # la que abre dev-startup.sh tiene el título fijo
+    title["t"] = "Ghostty|herdr-mac"  # la que abre dev-startup.sh tiene el título fijo  # legacy-herdr
     assert mt.herdr_frontmost() == "mac"
-    title["t"] = "notes"
+    title["t"] = "Ghostty|notes"
     assert mt.herdr_frontmost() is None
+    title["t"] = "Herdr|Herdr"  # la ventana de la Herdr app: siempre Local
+    assert mt.herdr_frontmost() == "mac" and mt.ventana_al_frente() == "hc"
 
 
 def test_garden_expires_what_lost_its_moment_unless_a_live_agent_holds_it(mt, clock, monkeypatch):
@@ -479,7 +483,7 @@ def test_garden_expires_what_lost_its_moment_unless_a_live_agent_holds_it(mt, cl
 
 def test_add_records_origin_and_stats_counts_by_it(mt, monkeypatch, capsys):
     monkeypatch.setenv("CLAUDECODE", "1")
-    monkeypatch.setenv("HERDR_PANE_ID", "w:p9")
+    monkeypatch.setenv("HERDR_PANE_ID", "w:p9")  # legacy-herdr
     mt.main(["add", "Llamar a Yuri", "--expira", "mañana", "--origen", "debrief"])
     tid = next(iter(mt.fold()))
     t = mt.fold()[tid]
