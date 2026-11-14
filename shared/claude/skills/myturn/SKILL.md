@@ -12,6 +12,8 @@ description: >
 
 SSOT: `~/dotfiles/docs/myturn.md`. André opera todo desde el widget de la barra; el CLI es para ti.
 
+**Automatismos:** `dotfiles:despertador` (el despertador: duerme y reabre paneles; LaunchAgent siempre activo) — si «no despierta», su ficha: `uv run ~/cofoundy/plugins/cofoundy-toolkit/skills/audit-systems/scripts/audit_systems.py --automatismo dotfiles:despertador`.
+
 | Situación | Corre |
 |---|---|
 | André te pega «Ayúdame con esta tarea: «X». Antes de empezar, corre `myturn link tXXXX`…» | `myturn link tXXXX` **antes de empezar** — enlaza ESTA sesión a la tarea; desde ahí André ve en la barra cuándo terminas o le preguntas algo |

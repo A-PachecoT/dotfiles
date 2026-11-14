@@ -1,0 +1,49 @@
+# Lo que corre solo y es de este repo (dotfiles). Lo lee /audit-systems de cofoundy-toolkit desde
+# origin/main (registro de registros). Schema: cofoundy-toolkit skills/audit-systems/SKILL.md
+# § Declarar un automatismo. Solo labels, rutas y comandos de operar: nunca args ni env de un plist.
+automatismos:
+  - id: dotfiles:despertador
+    alias: [despertador, despertador de myturn, myturn despertador]
+    que_hace: "Duerme los paneles de agentes que esperan a un cliente y los reabre cuando el cliente escribe (WhatsApp o Coresponde)"
+    cuando: "siempre activo (KeepAlive)"
+    runtime: launchd
+    caja: mac-andre
+    label: dev.andre.myturn-despertador
+    codigo: scripts/myturn
+    instala: "myturn despertador plist > ~/Library/LaunchAgents/dev.andre.myturn-despertador.plist && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.andre.myturn-despertador.plist"
+    doc: docs/myturn.md
+    operar:
+      estado: "myturn despertador estado"
+      logs: ~/Library/Logs/myturn-despertador.log
+      probar: "MYTURN_CACHE=$(mktemp -d) myturn despertador --once --dry-run"
+      apagar: "launchctl bootout gui/$(id -u)/dev.andre.myturn-despertador"
+
+  - id: dotfiles:docker-hygiene
+    alias: [docker hygiene, higiene de docker, higiene de disco]
+    que_hace: "Borra en cofoundy-hq los volúmenes huérfanos de CI, las imágenes colgantes y la caché de build para que el disco no se llene"
+    cuando: "cada 30 min (15 min tras el arranque)"
+    runtime: hq-systemd
+    caja: hq
+    label: docker-hygiene.timer
+    codigo: server/hygiene/docker-hygiene.sh
+    corre: /usr/local/sbin/docker-hygiene.sh
+    instala: "cd ~/dotfiles/server/hygiene && sudo ./install.sh"
+    doc: ~/cofoundy/handbook/infrastructure/cofoundy-hq.md
+    operar:
+      estado: "ssh hq 'systemctl status docker-hygiene.timer'"
+      logs: "ssh hq 'journalctl -u docker-hygiene -n 20 -o cat'"
+
+  - id: dotfiles:runner-hygiene
+    alias: [runner hygiene, higiene de runners]
+    que_hace: "Vacía en cofoundy-hq el _work de los runners de CI ociosos, poda sus cachés y levanta los runners caídos"
+    cuando: "cada 30 min (20 min tras el arranque)"
+    runtime: hq-systemd
+    caja: hq
+    label: runner-hygiene.timer
+    codigo: server/hygiene/runner-hygiene.sh
+    corre: /usr/local/sbin/runner-hygiene.sh
+    instala: "cd ~/dotfiles/server/hygiene && sudo ./install.sh"
+    doc: ~/cofoundy/handbook/infrastructure/cofoundy-hq.md
+    operar:
+      estado: "ssh hq 'systemctl status runner-hygiene.timer'"
+      logs: "ssh hq 'journalctl -u runner-hygiene -n 20 -o cat'"

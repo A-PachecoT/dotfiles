@@ -220,6 +220,8 @@ dueño y `end_date` = caducidad; `brain tarea add`), y myturn lo trae como una f
 
 ### Dormir: una sesión que espera a un cliente no ocupa nada
 
+**Automatismos:** `dotfiles:despertador` (LaunchAgent `dev.andre.myturn-despertador`, siempre activo) — ficha con estado, logs y cómo operarlo: `uv run ~/cofoundy/plugins/cofoundy-toolkit/skills/audit-systems/scripts/audit_systems.py --automatismo dotfiles:despertador`. En cofoundy-hq, `dotfiles:docker-hygiene` y `dotfiles:runner-hygiene` (`server/hygiene/`).
+
 André, 2026-11-06: «quiero q no consuma recursos o lo minimo, PERO que aun asi puedan despertar cuando el evento en
 cuestion suceda» · «tiene q ser el herdr xq si no como interactuo???». Diseño, críticas y corrida:
 `~/cofoundy/core/docs/research/2026-11-06_sesiones-dormidas/`. **v0: André, Mac, solo WhatsApp, sin despertar por fecha.**
