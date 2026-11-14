@@ -132,7 +132,7 @@ def wrap(cmd):
         f"-p CPUWeight=20 -p IOWeight=20 -- {shlex.quote(shell)} -c {inner}; "
         f"__rc=$?; [ $__rc -eq 137 ] && echo '⚠ {MARK}: la corrida pasó {MEM_MAX} y la mató su techo "
         f"(caja compartida con otros agentes). Corre solo tus tests (pytest tests/<tu área>) o con menos workers.' >&2; "
-        f"exit $__rc"
+        f"( exit $__rc )"  # propaga el código sin cerrar el shell del harness
     )
 
 

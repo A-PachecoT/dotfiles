@@ -44,7 +44,7 @@ def test_wraps_heavy_in_scope():
     assert "systemd-run --user --scope" in new
     assert "MemoryMax=8G" in new and "CPUWeight=20" in new
     assert "'uv run pytest -n 4'" in new
-    assert new.rstrip().endswith("exit $__rc")
+    assert new.rstrip().endswith("( exit $__rc )")
 
 
 def test_does_not_wrap_light_or_already_wrapped():
