@@ -31,3 +31,12 @@ El herdr TUI viejo (`herdr server`, 32 días arriba) tiene 8.8G en swap: no qued
 - El techo tiene que estar en la corrida, no en la sesión: un cap al slice entero frena a herdr junto con el culpable,
   y oomd elige el cgroup con más swap (el herdr viejo), no al que la está causando.
 - Sesiones de Claude ya abiertas puede que no recarguen hooks: al agente culpable se le avisó por `hc send`.
+
+## Paso 3 — herdr TUI viejo reciclado (11:18)
+- Tenía 4 Claude vivos aunque ociosos (deals, el-deily, orchestrator, dagyard): «migré todo» no era cierto.
+  SIGTERM a los 4 → `hc run --bg --no-parent --name <x> --cwd <dir> -- claude … --resume <sid>` en la Herdr app
+  (t1d/t1f/t1g/t1h, con su historial). Sid por PID: `~/.claude/sessions/<pid>.json`.
+- `systemctl --user stop herdr-server.scope herdr-pane-*.scope` → swap 19G → 10G.
+- Trampa: el herdr del Mac (`remote-client-bridge`) re-spawnea `herdr server` al instante en el scope de la
+  sesión ssh, y `herdr.service` se salta por su ExecCondition. Matar + `systemctl --user start herdr.service`
+  en el mismo comando lo deja en `app.slice/herdr.service` (26 MB, 0 swap).
