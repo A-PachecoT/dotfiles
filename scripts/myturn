@@ -28,6 +28,10 @@ La UI es el panel del widget (clic en la barra o ⌥T). Este CLI es lo que el pa
                                   cliente escribe. Fuera del horario de atención (H; default: el del brief del chat
                                   vía `wsp horario`, o HORARIO_DEFAULT) solo despierta por urgencia (triage con
                                   Haiku) y lo demás lo junta para la apertura
+  myturn dormir --entidad X [--auto] [--titulo T] [--horario H]   igual, pero para TODO el cliente X (carpeta, nombre
+                                  o JID de uno de sus chats): cada chat de `wsp canales X` lo despierta. --auto (lo
+                                  usa comms_send): sin cliente abierto no hace nada y no le quita el cliente a la
+                                  sesión que ya lo escucha
   myturn dormir --coresponde CON_ID [--titulo T] [--horario H] [--etapa E]   igual, pero el chat es uno del
                                   WhatsApp del negocio en Coresponde (`con_…`): el despertador lo consulta por REST
                                   cada minuto (TRACTA_API_KEY) y solo despierta si la IA de ese hilo está apagada o
@@ -330,7 +334,8 @@ def hc_agente(g: dict) -> dict:
     return {"agent": "claude", "rt": "hc", "pane_id": g.get("address"), "agent_status": st.get("state"),
             "agent_session": {"value": s} if s else None, "cwd": fg.get("cwd") or g.get("cwd"),
             "terminal_title": g.get("title"), "state_change_seq": f"{g.get('turn')}:{g.get('status_ms')}",
-            "space": lab.get("herdr.space"), "tab": lab.get("herdr.tab"), "focused": False}
+            "space": lab.get("herdr.space"), "tab": lab.get("herdr.tab"), "focused": False,
+            "tab_name": (lab.get("where") or "").partition(" / ")[2] or None}
 
 
 def hc_agents() -> list[dict] | None:
@@ -1765,6 +1770,125 @@ def excepcion_de(cwd: str | None) -> str | None:
     return next((k for k, rx in EXCEPCIONES.items() if rx.search(p + "/")), None)
 
 
+def canales(target: str) -> dict | None:
+    """Los canales del cliente de un chat o entidad (`wsp canales`, líder del cliente H1): {entidad, nombre,
+    abierto, chats[{jid, nombre}], correos, dominios} · {entidad: None} sin cliente · {ambiguo: […]} · None si wsp falla."""
+    wsp = Path(os.environ["MYTURN_WSP"]) if os.environ.get("MYTURN_WSP") else _toolkit_file(
+        "skills/whatsapp/scripts/wsp.py")
+    p = run(["uv", "run", "--quiet", "--script", str(wsp), "canales", target], timeout=60) if wsp else None
+    try:
+        return json.loads(p.stdout) if p and p.returncode in (0, 3) else None
+    except (ValueError, TypeError):
+        return None
+
+
+def nombre_espera(t: dict) -> str:
+    """El nombre de la pestaña de una sesión que escucha a un cliente: «💬 Fluye · Diego»."""
+    return f"💬 {t['title'].removeprefix('espera: ')}"[:24]
+
+
+def renombrar_pestana(cur: dict, titulo: str) -> None:
+    """La pestaña de la Herdr app de la sesión que escucha se llama como el cliente («💬 Fluye Bottle · Diego»), igual
+    que cuando el despertador la reabre: se ve qué panel es dueño de qué cliente. En el TUI no hace nada."""
+    if cur.get("rt") == "hc" and cur.get("tab"):
+        run(["herdr-app", "do", "tab.rename", "--id", cur["tab"], "--name", nombre_espera({"title": titulo})], timeout=4)
+
+
+def _registrar(cur: dict, chat: str, wake: dict, titulo: str | None, si_libre: bool) -> tuple[str, str]:
+    """Registra (o renueva) que `chat` despierta a la sesión de `cur`. Una sola sesión escucha cada chat: a mano
+    (si_libre=False) la nueva reemplaza a la vieja; en automático (comms_send, si_libre=True) la que ya escucha se
+    queda con el cliente, porque es la que hizo la prep y el debrief. → ("registrada"|"renovada"|"ocupada", id|título)"""
+    tasks, s = fold(), session_of(cur)
+    expires = iso(now() + timedelta(days=ESPERA_DIAS))
+    own, otras = None, []
+    for t in esperas(tasks):
+        if chat_de(t) != chat:
+            continue
+        if (t.get("link") or {}).get("session") == s:
+            own = t
+        else:
+            otras.append(t)
+    if otras and si_libre and not own:
+        t = otras[0]
+        return "ocupada", f"{t['title'].removeprefix('espera: ')} (sesión {((t.get('link') or {}).get('session') or '?')[:8]})"
+    for t in otras:  # agent-ux-principles.md:30
+        emit("archive", t["id"], reason=f"reemplazada por la sesión {(s or '?')[:8]}", by="dormir")
+    if own:
+        emit("update", own["id"], set={"expires": expires, "wake": wake})
+        emit("link", own["id"], link=link_de(cur))
+        return "renovada", own["id"]
+    tid = new_id()
+    emit("add", tid, title=f"espera: {(titulo or chat)[:100]}", source=ESPERA, wake=wake,
+         expires=expires, link=link_de(cur), origin=origin("dormir"))
+    return "registrada", tid
+
+
+def _cola(horario: str | None) -> str:
+    if not despertador_vivo():
+        return (" Pero el despertador NO está corriendo: esta sesión no se va a dormir ni a despertar sola. "
+                "Prenderlo es de André: myturn despertador plist (ver docs/myturn.md §Dormir).")
+    fuera = (f" Dentro de su horario ({horario}) despierta con cada mensaje; fuera, solo por urgencia, y lo demás "
+             "llega junto a la apertura." if horario else "")
+    return (" Si nadie te escribe en 10 min, el despertador cierra este panel (antes corre closeout: deja el recibo de "
+            "/cierre). Cuando el cliente escriba, vuelve a abrirse en la Herdr app, en el espacio del cliente y sin "
+            f"foco.{fuera}")
+
+
+def dormir_entidad(target: str, titulo: str | None, horario: str | None = None, auto: bool = False) -> str:
+    """(Lo corre el agente, o comms_send con auto=True) escucha a TODO el cliente: cada chat que `wsp canales`
+    devuelve para `target` (la entidad, o el JID al que se le escribió) despierta a esta sesión. auto: sin cliente
+    abierto no hace nada, y un chat que ya escucha otra sesión se le deja. Correo: fase 2 (líder del cliente H3)."""
+    cur = here()
+    if not cur:
+        if auto:
+            return ""
+        sys.exit("myturn: dormir solo funciona dentro de un terminal de la Herdr app (o un pane del TUI) con Claude")
+    res = canales(target)
+    if res is None:
+        msg = f"no pude leer los canales de «{target}» (wsp canales falló)"
+        return f"Escucha: {msg}." if auto else sys.exit(f"myturn: {msg}")
+    if res.get("ambiguo"):
+        msg = f"«{target}» es de más de un cliente abierto ({', '.join(res['ambiguo'])})"
+        return f"Escucha: {msg}; corre myturn dormir --entidad <cliente>." if auto else sys.exit(f"myturn: {msg}")
+    if not res.get("entidad"):
+        return "" if auto else sys.exit(f"myturn: «{target}» no es de ningún cliente (wsp canales)")
+    if not res.get("abierto"):
+        return "" if auto else f"{res['nombre']} está {res.get('estado')}: no se arma escucha."
+    chats = [c for c in res.get("chats") or [] if JID.match(c.get("jid") or "")]
+    if JID.match(target) and target not in {c["jid"] for c in chats}:
+        chats.insert(0, {"jid": target, "nombre": ""})
+    if not chats:
+        msg = f"{res['nombre']} no tiene ningún chat de WhatsApp conocido (whatsapp:, cliente.contacto, stakeholders[])"
+        return f"Escucha: {msg}." if auto else sys.exit(f"myturn: {msg}")
+    hb = habiles()
+    if horario and hb:
+        try:
+            hb.parse_horario(horario)
+        except ValueError as e:
+            sys.exit(f"myturn: --horario ilegible: {e}")
+    horario = horario or horario_del_chat(chats[0]["jid"]) or (hb.HORARIO_DEFAULT if hb else None)
+    principal = next((c for c in chats if c["jid"] == target), chats[0])
+    titulo = titulo or " · ".join(x for x in (res["nombre"], (principal.get("nombre") or "").split(" ")[0]) if x)
+    hechas, ocupadas = [], []
+    for c in chats:
+        wake = {"wsp": c["jid"], "entidad": res["entidad"], **({"horario": horario} if horario else {})}
+        estado, ref = _registrar(cur, c["jid"], wake, titulo, si_libre=auto)
+        (ocupadas if estado == "ocupada" else hechas).append((c, estado, ref))
+    sync_bg()
+    partes = []
+    if hechas:
+        renombrar_pestana(cur, titulo)
+        quienes = ", ".join(c.get("nombre") or c["jid"] for c, _, _ in hechas)
+        partes.append(f"Escucha armada: {res['nombre']} despierta esta sesión hasta "
+                      f"{iso(now() + timedelta(days=ESPERA_DIAS))[:10]} ({len(hechas)} chat(s): {quienes}).")
+    for c, _, ref in ocupadas:
+        partes.append(f"{c.get('nombre') or c['jid']} ya lo escucha {ref}: se le deja (myturn dormir --entidad "
+                      f"{res['nombre']} para quedártelo).")
+    if res.get("correos"):
+        partes.append(f"Correo ({', '.join(res['correos'][:3])}): todavía no despierta a nadie (fase 2).")
+    return " ".join(partes) + (_cola(horario) if hechas else "")
+
+
 def dormir(jid: str | None, titulo: str | None, horario: str | None = None, coresponde: str | None = None,
            etapa: str | None = None) -> str:
     """(Lo corre el agente) registra que el chat `jid` (o la conversación `coresponde` del WhatsApp del negocio)
@@ -1792,27 +1916,11 @@ def dormir(jid: str | None, titulo: str | None, horario: str | None = None, core
     else:
         wake = {"wsp": jid}
     wake |= {"horario": horario} if horario else {}
-    tasks, s = fold(), session_of(cur)
-    link = link_de(cur)
-    expires = iso(now() + timedelta(days=ESPERA_DIAS))
-    own = None
-    for t in esperas(tasks):
-        if chat_de(t) != chat:
-            continue
-        if (t.get("link") or {}).get("session") == s:
-            own = t
-        else:  # una sola sesión escucha un chat: la nueva reemplaza a la vieja (agent-ux-principles.md:30)
-            emit("archive", t["id"], reason=f"reemplazada por la sesión {s[:8]}", by="dormir")
-    if own:
-        emit("update", own["id"], set={"expires": expires, "wake": wake})
-        emit("link", own["id"], link=link)
-        tid, msg = own["id"], "espera renovada"
-    else:
-        tid = new_id()
-        emit("add", tid, title=f"espera: {(titulo or chat)[:100]}", source=ESPERA, wake=wake,
-             expires=expires, link=link, origin=origin("dormir"))
-        msg = "espera registrada"
+    estado, tid = _registrar(cur, chat, wake, titulo, si_libre=False)
+    msg = f"espera {estado}"
     sync_bg()
+    renombrar_pestana(cur, titulo or chat)
+    expires = iso(now() + timedelta(days=ESPERA_DIAS))
     if not despertador_vivo():
         return (f"{msg} ({tid}), pero el despertador NO está corriendo: esta sesión no se va a dormir ni a despertar "
                 f"sola. Prenderlo es de André: myturn despertador plist (ver docs/myturn.md §Dormir).")
@@ -2097,9 +2205,10 @@ class Herdr:
             self.act("agent", "prompt", pane, texto)
         return self.dry or bool(p and p.returncode == 0)
 
-    def titulo(self, pane: str, label: str | None = None) -> None:
+    def titulo(self, pane: str, label: str | None = None, restaurar: str | None = None) -> None:
         """La cuenta regresiva. En el TUI, el título del panel; la app no tiene título por CLI, así que se renombra la
-        pestaña y su nombre original vuelve al limpiar."""
+        pestaña y su nombre original vuelve al limpiar. Sin nombre recordado vuelve a `restaurar` (el del cliente):
+        una pestaña nunca se queda con un «💤 se duerme en…» viejo mientras la sesión trabaja."""
         if not es_hc(pane):
             self.act("pane", "report-metadata", pane, "--source", FUENTE,
                      *(["--title", label] if label else ["--clear-title"]))
@@ -2108,8 +2217,9 @@ class Herdr:
         if not tab:
             return
         if label is None:
-            if tab in self.nombres:
-                self.cmd(["herdr-app", "do", "tab.rename", "--id", tab, "--name", self.nombres.pop(tab)])
+            nombre = self.nombres.pop(tab, None) or restaurar
+            if nombre:
+                self.cmd(["herdr-app", "do", "tab.rename", "--id", tab, "--name", nombre])
             return
         if tab not in self.nombres:
             actual = next((tb.get("name") for x in (app_json(["ls"]) or {}).get("spaces", [])
@@ -2351,14 +2461,15 @@ def ciclo(st: dict, h: Herdr) -> list[str]:
         pane, status, seq = a["pane_id"], a.get("agent_status"), a.get("state_change_seq")
         vistos.add(pane)
         rec = idle.get(pane)
+        pegado = (a.get("tab_name") or "").startswith("💤")  # un letrero que quedó de otro tick (o de otro camino)
         if status not in ("idle", "done"):
-            if rec and rec.get("title"):
-                h.titulo(pane)
+            if (rec and rec.get("title")) or pegado:
+                h.titulo(pane, None, nombre_espera(t))
             idle.pop(pane, None)
             continue
         if not rec or rec.get("seq") != seq:  # André escribió (o el agente volvió a trabajar): de cero
-            if rec and rec.get("title"):
-                h.titulo(pane)
+            if (rec and rec.get("title")) or pegado:
+                h.titulo(pane, None, nombre_espera(t))
             rec = idle[pane] = {"since": iso(t0), "seq": seq}
         left = DUERME_S - (t0 - parse(rec["since"])).total_seconds()
         if left > 0:
@@ -2473,6 +2584,10 @@ def main(argv: list[str]) -> None:
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--wsp", help="JID del chat cuyo mensaje despierta a esta sesión")
     g.add_argument("--coresponde", help="conversación de Coresponde (con_…, el WhatsApp del negocio) que la despierta")
+    g.add_argument("--entidad", help="el cliente (carpeta, nombre o JID de uno de sus chats): escucha TODOS sus chats "
+                   "(wsp canales: whatsapp:, cliente.contacto, stakeholders[])")
+    p.add_argument("--auto", action="store_true", help="(con --entidad, lo usa comms_send) sin cliente abierto no hace "
+                   "nada y un chat que ya escucha otra sesión se le deja")
     p.add_argument("--etapa", help="(con --coresponde) la etapa del encargo que espera, para el puntero")
     p.add_argument("--titulo", help="cómo se llama la espera en myturn (p. ej. «TSC · Alex»)")
     p.add_argument("--horario", help="horario de atención («L-V 09:00-20:00 America/Lima»); default: el "
@@ -2532,6 +2647,9 @@ def main(argv: list[str]) -> None:
     if cmd == "link":
         return print(link_pane(a.id, a.pane, a.host) if a.pane else link_here(a.id))
     if cmd == "dormir":
+        if a.entidad:
+            out = dormir_entidad(a.entidad, a.titulo, a.horario, a.auto)
+            return print(out) if out else None
         return print(dormir(a.wsp, a.titulo, a.horario, a.coresponde, a.etapa))
     if cmd == "despertador":
         if a.accion == "plist":

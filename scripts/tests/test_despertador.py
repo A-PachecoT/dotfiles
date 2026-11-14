@@ -956,6 +956,7 @@ class App(World):
         self.tui_ws: dict[str, str] = {}  # workspaces del TUI que responde (vacío: el TUI falla)
         self.sessions = sessions
         self.n = 0
+        self.where: dict[str, str] = {}  # dirección → label «where» («espacio / pestaña») que pone la app
 
     def run(self, cmd, host=None, timeout=4):
         def ok(out=""):
@@ -978,7 +979,8 @@ class App(World):
                 return ok(json.dumps({"address": a, "turn": 1, "status_ms": 5, "title": "✳ TSC",
                                       "status": {"app": "claude-code", "state": st},
                                       "foreground": {"argv": ["claude"], "cwd": "/tmp/tsc", "pid": pid},
-                                      "labels": {"herdr.space": "spTSC", "herdr.tab": f"tb{a}"}}))
+                                      "labels": {"herdr.space": "spTSC", "herdr.tab": f"tb{a}",
+                                                 **({"where": self.where[a]} if a in self.where else {})}}))
             self.hc.append(cmd[1:])
             if cmd[1] == "run":
                 self.n += 1
@@ -1381,3 +1383,69 @@ def test_h1_una_despertada_no_usa_go(mt, app, monkeypatch):
     mt.emit("add", "k1", title="UK", source="user", link={"host": mt.LOCAL, "session": "s-uk", "pane": "t1r"})
     assert "despertada" in mt.go(mt.fold()["k1"])
     assert app.hc == [] and app.app == []
+
+
+# ── dormir por cliente (líder del cliente H3 · cofoundy-toolkit#174) ────────────────────────────────────────
+KIM = "51988777666@s.whatsapp.net"
+CANALES = {"entidad": "deals/clients/Fluye", "nombre": "Fluye", "estado": "cotizacion", "abierto": True,
+           "chats": [{"jid": CLIENTE, "nombre": "Diego"}, {"jid": KIM, "nombre": "Kim"}],
+           "correos": ["kim@fluye.com"], "dominios": ["fluye.com"]}
+
+
+def canales_falso(world, res, renames):
+    def run(cmd, host=None, timeout=4):
+        if cmd[0] == "uv" and "canales" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, json.dumps(res), "")
+        if cmd[0] == "uv" and "horario" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, "", "")
+        if cmd[:3] == ["herdr-app", "do", "tab.rename"]:
+            renames.append(cmd[-1])
+        return world.run(cmd, host, timeout)
+    return run
+
+
+def test_dormir_entidad_escucha_a_todo_el_cliente_y_renombra_la_pestana(mt, world, monkeypatch):
+    """FluyeBottle 2026-11-13: se le escribió a Diego y nadie quedó escuchando; ahora el envío arma la escucha de
+    TODO el cliente (Diego y Kimberly) y la pestaña dice de quién es."""
+    renames = []
+    monkeypatch.setattr(mt, "run", canales_falso(world, CANALES, renames))
+    monkeypatch.setattr(mt, "here", lambda: {"agent_session": {"value": "s-fluye"}, "pane_id": "t3t", "cwd": "/tmp",
+                                             "rt": "hc", "space": "sp1", "tab": "tb1"})
+    out = mt.dormir_entidad(CLIENTE, None, auto=True)
+    es = mt.esperas(mt.fold())
+    assert {mt.chat_de(t) for t in es} == {CLIENTE, KIM}
+    assert all(t["wake"]["entidad"] == "deals/clients/Fluye" for t in es)
+    assert renames == ["💬 Fluye · Diego"] and "Escucha armada" in out and "fase 2" in out
+
+
+def test_dormir_entidad_auto_no_le_quita_el_cliente_a_quien_ya_escucha(mt, world, monkeypatch):
+    renames = []
+    monkeypatch.setattr(mt, "run", canales_falso(world, CANALES, renames))
+    here_as(mt, monkeypatch, "s-debrief")
+    mt.dormir_entidad("Fluye", "Fluye · debrief")
+    here_as(mt, monkeypatch, "s-rapida")
+    out = mt.dormir_entidad(CLIENTE, None, auto=True)
+    es = mt.esperas(mt.fold())
+    assert len(es) == 2 and {t["link"]["session"] for t in es} == {"s-debrief"}
+    assert "ya lo escucha Fluye · debrief" in out and "Escucha armada" not in out
+    mt.dormir_entidad("Fluye", None)  # a mano sí se lo queda
+    assert {t["link"]["session"] for t in mt.esperas(mt.fold())} == {"s-rapida"}
+
+
+def test_dormir_entidad_auto_sin_cliente_abierto_no_hace_nada(mt, world, monkeypatch):
+    here_as(mt, monkeypatch, "s-x")
+    for res in ({"entidad": None}, CANALES | {"abierto": False, "estado": "cerrado_perdido"}):
+        monkeypatch.setattr(mt, "run", canales_falso(world, res, []))
+        assert mt.dormir_entidad(CLIENTE, None, auto=True) == ""
+    assert mt.esperas(mt.fold()) == []
+
+
+def test_h1_letrero_pegado_vuelve_al_nombre_del_cliente_mientras_trabaja(mt, app, clock):
+    """2026-11-13 (André): la pestaña decía «💤 se duerme en 8:42» con la sesión trabajando y el nombre original
+    perdido. Trabajando + pestaña con 💤 → vuelve a «💬 <cliente>», recuerde o no el nombre de antes."""
+    espera(mt, pane="t7")
+    app.vivo("t7", "s-tsc")
+    app.terms["t7"] = ("s-tsc", "working", app.terms["t7"][2])
+    app.where["t7"] = "TSC / 💤 se duerme en 8:42"
+    tick(mt)
+    assert app.app[-1] == ["do", "tab.rename", "--id", "tbt7", "--name", "💬 TSC · Alex"]
