@@ -2228,8 +2228,12 @@ class Herdr:
                            for tb in x.get("tabs", []) if tb.get("id") == tab), None)
             if actual is None:
                 return
-            self.nombres[tab] = actual
-        self.cmd(["herdr-app", "do", "tab.rename", "--id", tab, "--name", label])
+            # un letrero viejo nunca se guarda como nombre: «X · 💤 …» guarda «X»; «💤 …» solo, nada
+            self.nombres[tab] = "" if actual.startswith("💤") else actual.split(" · 💤")[0]
+        # el nombre va delante (2026-11-16, André: «el nombre de la ventana se pierde»); el letrero, corto
+        base = self.nombres.get(tab) or restaurar
+        corto = label.replace("💤 se duerme en ", "💤 ")
+        self.cmd(["herdr-app", "do", "tab.rename", "--id", tab, "--name", f"{base} · {corto}" if base else label])
 
     def aviso(self, pane: str | None, titulo: str, cuerpo: str) -> None:
         """Un panel de la app avisa por macOS (el app suma su toast cuando el agente termina); uno del TUI, ahí."""

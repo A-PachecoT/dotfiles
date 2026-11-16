@@ -601,7 +601,7 @@ def test_fuera_de_horario_no_urgente_difiere_duerme_y_despierta_una_vez_al_abrir
     txt = prompts[0][3]
     assert "2 mensajes" in txt and "desde el mié 11-11 21:30" in txt and "hasta las 22:30" in txt
     assert f"fuera del horario de atención ({HORARIO_VH})" in txt and "ninguno era urgente" in txt
-    assert "gracias" not in txt and "fotos" not in txt  # nada del cliente en el puntero
+    assert "gracias, mañana" not in txt and "fotos" not in txt  # nada del cliente en el puntero
     assert horario.mac == []
     horario.clock(minutes=5)
     tick(mt)
@@ -1109,7 +1109,7 @@ def test_h1_cuenta_regresiva_en_la_pestana_y_cierre_por_hc(mt, app, clock):
     espera(mt, pane="t7")
     app.vivo("t7", "s-tsc")
     tick(mt)
-    assert app.app[-1] == ["do", "tab.rename", "--id", "tbt7", "--name", "💤 se duerme en 10:00"]
+    assert app.app[-1] == ["do", "tab.rename", "--id", "tbt7", "--name", "pm · 💤 10:00"]  # el nombre se queda delante
     assert mt.desp_load()["nombres"] == {"tbt7": "pm"}  # el nombre original, para devolverlo
     clock(minutes=4)
     app.terms["t7"] = ("s-tsc", "working", app.terms["t7"][2])
@@ -1135,7 +1135,7 @@ def test_h1_a_la_vista_en_la_app_solo_avisa_y_no_cierra(mt, app, clock, monkeypa
     assert not any(c[0] == "send" for c in app.hc)
     clock(minutes=11)
     tick(mt)
-    assert ["kill", "t7"] not in app.hc and app.app[-1][-1] == "💤 se duerme cuando salgas"
+    assert ["kill", "t7"] not in app.hc and app.app[-1][-1] == "pm · 💤 se duerme cuando salgas"
 
 
 def test_h1_dry_run_imprime_el_hc_run(mt, app, clock, capsys):
@@ -1287,7 +1287,7 @@ def test_h1_app_fuera_de_horario_difiere_duerme_por_hc_y_despierta_una_vez_al_ab
     horario.clock(seconds=15)
     tick(mt)
     sends = [c for c in app.hc if c[0] == "send"]
-    assert len(sends) == 1 and "ninguno era urgente" in sends[0][-1] and "gracias" not in sends[0][-1]
+    assert len(sends) == 1 and "ninguno era urgente" in sends[0][-1] and "gracias, mañana" not in sends[0][-1]
     horario.clock(minutes=5)
     tick(mt)
     assert sum(c[0] == "run" for c in app.hc) == 1  # ese día, una sola vez
@@ -1331,7 +1331,7 @@ def test_h1_app_closeout_rojo_no_mata_y_lo_dice_en_la_pestana(mt, app, clock):
     clock(minutes=10, seconds=1)
     tick(mt)
     assert ["kill", "t7"] not in app.hc
-    assert app.app[-1][:4] == ["do", "tab.rename", "--id", "tbt7"] and app.app[-1][-1].startswith("💤 no se duerme")
+    assert app.app[-1][:4] == ["do", "tab.rename", "--id", "tbt7"] and app.app[-1][-1].startswith("pm · 💤 no se duerme")
 
 
 def test_h1_app_resume_que_no_queda_idle_avisa_y_no_reabre_en_bucle(mt, app, clock):
@@ -1449,3 +1449,13 @@ def test_h1_letrero_pegado_vuelve_al_nombre_del_cliente_mientras_trabaja(mt, app
     app.where["t7"] = "TSC / 💤 se duerme en 8:42"
     tick(mt)
     assert app.app[-1] == ["do", "tab.rename", "--id", "tbt7", "--name", "💬 TSC · Alex"]
+
+
+def test_cuenta_regresiva_no_guarda_su_letrero_como_nombre(mt, app, clock):
+    """2026-11-16 (André): «el nombre de la ventana se pierde». Una pestaña que ya muestra «X · 💤 …» guarda «X»."""
+    espera(mt, pane="t7")
+    app.vivo("t7", "s-tsc")
+    next(t for t in app.spaces[0]["tabs"] if t["id"] == "tbt7")["name"] = "Indusegur · 💤 7:00"
+    tick(mt)
+    assert mt.desp_load()["nombres"] == {"tbt7": "Indusegur"}
+    assert app.app[-1][-1] == "Indusegur · 💤 10:00"
