@@ -17,6 +17,7 @@ def mt(tmp_path, monkeypatch):
     monkeypatch.setenv("MYTURN_HOME", str(tmp_path / "tasks"))
     monkeypatch.setenv("MYTURN_CACHE", str(tmp_path / "cache"))
     monkeypatch.setenv("MYTURN_NO_SYNC", "1")
+    monkeypatch.setenv("MYTURN_SESIONES", "")  # sin el módulo del toolkit: nunca el almacén real
     monkeypatch.delenv("HERDR_PANE_ID", raising=False)  # legacy-herdr
     monkeypatch.delenv("HC_TERMINAL_ID", raising=False)
     monkeypatch.setenv("MYTURN_CLAUDE_SESSIONS", str(tmp_path / "sessions"))
@@ -551,3 +552,39 @@ def test_hostname_de_brain_se_lee_como_la_caja(mt):
 def test_caja_desconocida_no_tumba_run(mt):
     # antes: KeyError en REMOTE_SSH[host] y `myturn ls` (y el panel) caían enteros
     assert mt.run(["true"], "caja-que-no-existe") is None
+
+
+# ── pasarela a las sesiones del toolkit (cofoundy-toolkit#188) ────────────────────────────────────────────────────────
+def test_esperas_viejas_no_son_de_myturn(mt):
+    mt.emit("add", "e1", title="espera: X", source=mt.ESPERA, wake={"wsp": "1@g.us"}, link={"host": "mac", "session": "s"})
+    mt.emit("add", "c1", title="comprar pan", source="capture")
+    assert set(mt.fold()) == {"c1"}
+
+
+def test_dormir_y_despertador_corren_el_modulo(mt, monkeypatch, tmp_path):
+    ses = tmp_path / "sesiones.py"
+    ses.write_text("")
+    monkeypatch.setenv("MYTURN_SESIONES", str(ses))
+    llamadas = []
+    monkeypatch.setattr(mt.os, "execv", lambda exe, argv: llamadas.append(argv) or (_ for _ in ()).throw(SystemExit(0)))
+    for argv in (["dormir", "--entidad", "Indusegur"], ["despertador", "estado"]):
+        try:
+            mt.main(argv)
+        except SystemExit:
+            pass
+    assert [a[-len(x):] for a, x in zip(llamadas, (["dormir", "--entidad", "Indusegur"], ["despertador", "estado"]))] == [
+        ["dormir", "--entidad", "Indusegur"], ["despertador", "estado"]]
+    assert all(str(ses) in a for a in llamadas)
+
+
+def test_go_de_una_espera_lo_retoma_el_toolkit(mt, monkeypatch, tmp_path):
+    ses = tmp_path / "sesiones.py"
+    ses.write_text("")
+    monkeypatch.setenv("MYTURN_SESIONES", str(ses))
+    llamadas = []
+    monkeypatch.setattr(mt.os, "execv", lambda exe, argv: llamadas.append(argv) or (_ for _ in ()).throw(SystemExit(0)))
+    try:
+        mt.main(["go", "tb2d9cf"])
+    except SystemExit:
+        pass
+    assert llamadas and llamadas[0][-2:] == ["go", "tb2d9cf"]

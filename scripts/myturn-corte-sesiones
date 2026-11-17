@@ -1,0 +1,213 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# ///
+"""Corte de las sesiones por cliente de myturn al cofoundy-toolkit (cofoundy-toolkit#188), sin perder esperas.
+
+Las esperas (`source: espera` en ~/tasks/events.jsonl) pasan a ~/tasks/esperas.jsonl, que escribe el módulo
+`herdr-app/sesiones/sesiones.py` del toolkit; el despertador `dev.andre.myturn-despertador` se apaga y se prende el del
+toolkit. events.jsonl NO se toca (myturn nuevo ignora sus esperas): deshacer = volver al plist viejo.
+
+    myturn-corte-sesiones ensayo        en seco sobre COPIAS (~/tasks y el estado del despertador): mismas esperas antes y después
+    myturn-corte-sesiones preparar      config ~/.config/cofoundy/sesiones.json + merge=union de esperas.jsonl + marca H10
+    myturn-corte-sesiones aplicar       preparar + apagar el viejo + copiar esperas y estado + prender el nuevo + comparar
+                                        + reinstalar el panel Clientes (Mac)
+    myturn-corte-sesiones deshacer      apaga el del toolkit y vuelve a cargar el plist viejo (respaldado al aplicar)
+
+Orden (diseño H7 §4): toolkit mergeado y `update-plugin.sh` → `preparar` en la Mac y en el Arch → merge del PR de
+dotfiles (myturn pasarela) → `aplicar` en la Mac. En el Arch no hay despertador: `preparar` basta.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import platform
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+HOME = Path.home()
+TASKS = Path(os.environ.get("MYTURN_HOME", HOME / "tasks"))
+CACHE_VIEJO = HOME / ".cache/myturn"
+CONFIG = HOME / ".config/cofoundy/sesiones.json"
+CACHE_NUEVO = HOME / ".cache/cofoundy/sesiones"
+LABEL_VIEJO = "dev.andre.myturn-despertador"
+PLIST_VIEJO = HOME / "Library/LaunchAgents" / f"{LABEL_VIEJO}.plist"
+RESPALDO = HOME / ".config/cofoundy" / f"{LABEL_VIEJO}.plist.antes-del-corte"
+MYTURN = HOME / "dotfiles/scripts/myturn"
+MAC = platform.system() == "Darwin"
+HOST = "mac" if MAC else "arch"
+
+
+def toolkit(rel: str) -> Path:
+    if os.environ.get("CORTE_TOOLKIT"):  # ensayo antes del merge: un checkout del toolkit con el módulo
+        return Path(os.environ["CORTE_TOOLKIT"]) / rel
+    def ver(p: Path) -> tuple:
+        return tuple(int(x) if x.isdigit() else 0 for x in p.name.split("."))
+    cache = HOME / ".claude/plugins/cache/cofoundy/cofoundy-toolkit"
+    for d in sorted((p for p in cache.glob("*") if p.is_dir()), key=ver, reverse=True) if cache.is_dir() else []:
+        if (d / rel).is_file():
+            return d / rel
+    src = HOME / "cofoundy/plugins/cofoundy-toolkit" / rel
+    if src.is_file():
+        return src
+    sys.exit(f"corte: no encuentro {rel} del cofoundy-toolkit (¿mergeado y update-plugin.sh?)")
+
+
+def ses(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(["uv", "run", "--quiet", "--script", str(toolkit("herdr-app/sesiones/sesiones.py")), *args],
+                          capture_output=True, text=True, timeout=120, env={**os.environ, **(env or {})})
+
+
+def lineas(p: Path) -> list[dict]:
+    return [json.loads(x) for x in p.read_text().splitlines() if x.strip()] if p.is_file() else []
+
+
+def ids_espera(eventos: list[dict]) -> set[str]:
+    return {e["id"] for e in eventos if e.get("op") == "add" and e.get("source") == "espera"}
+
+
+def copiar_esperas(origen: Path, destino: Path) -> int:
+    """Los eventos de cada espera de events.jsonl a esperas.jsonl, una vez (idempotente por línea)."""
+    ev = lineas(origen)
+    ids = ids_espera(ev)
+    ya = {json.dumps(e, sort_keys=True) for e in lineas(destino)}
+    nuevos = [e for e in ev if e.get("id") in ids and json.dumps(e, sort_keys=True) not in ya]
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with open(destino, "a") as f:
+        for e in nuevos:
+            f.write(json.dumps(e, ensure_ascii=False) + "\n")
+    return len(nuevos)
+
+
+def copiar_estado(origen: Path, destino: Path) -> None:
+    """El estado del despertador viejo (offset de wacli, pendientes, idle, nombres…): mismo formato en el módulo."""
+    if origen.is_file() and not destino.is_file():
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(origen, destino)
+
+
+def abiertas(estado: dict) -> set[str]:
+    return {e["id"] for e in estado.get("esperas", [])}
+
+
+def estado_viejo() -> dict:
+    p = subprocess.run([str(MYTURN), "despertador", "estado"], capture_output=True, text=True, timeout=60)
+    return json.loads(p.stdout)
+
+
+def comparar(antes: dict, despues: dict) -> list[str]:
+    fallas = []
+    if abiertas(antes) - abiertas(despues):
+        fallas.append(f"faltan esperas: {sorted(abiertas(antes) - abiertas(despues))}")
+    pa, pd = antes.get("pos") or {}, despues.get("pos") or {}
+    if pa and (pd.get("inode") != pa.get("inode") or pd.get("offset", 0) < pa.get("offset", 0)):
+        fallas.append(f"pos de wacli retrocedió: {pa} → {pd}")
+    return fallas
+
+
+def preparar() -> list[str]:
+    hecho = []
+    cfg = {"home": str(TASKS), "host": HOST, "sync": [str(MYTURN), "_sync"]}
+    if MAC:
+        cfg["reemplaza"] = LABEL_VIEJO
+    if not CONFIG.is_file() or json.loads(CONFIG.read_text()) != cfg:
+        CONFIG.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG.write_text(json.dumps(cfg, indent=1) + "\n")
+        hecho.append(f"config {CONFIG}")
+    ga = TASKS / ".gitattributes"
+    if "esperas.jsonl merge=union" not in (ga.read_text() if ga.is_file() else ""):
+        with open(ga, "a") as f:
+            f.write("esperas.jsonl merge=union\n")
+        hecho.append(f"{ga}: esperas.jsonl merge=union")
+    marca = CACHE_NUEVO / "h10-avisado"
+    if not marca.exists():  # esta máquina ya escuchaba el negocio con myturn: no es la «primera vez» de H10
+        marca.parent.mkdir(parents=True, exist_ok=True)
+        marca.write_text("migrado de myturn\n")
+        hecho.append("marca H10")
+    return hecho
+
+
+def ensayo() -> int:
+    antes = estado_viejo()
+    with tempfile.TemporaryDirectory(prefix="corte-") as d:
+        t, c = Path(d) / "tasks", Path(d) / "cache"
+        n = copiar_esperas(TASKS / "events.jsonl", t / "esperas.jsonl")
+        copiar_estado(CACHE_VIEJO / "despertador.json", c / "despertador.json")
+        p = ses("estado", env={"SESIONES_HOME": str(t), "SESIONES_CACHE": str(c), "SESIONES_HOST": HOST,
+                                "SESIONES_NO_SYNC": "1", "SESIONES_CONFIG": str(Path(d) / "no.json")})
+        despues = json.loads(p.stdout)
+    fallas = comparar(antes, despues)
+    print(json.dumps({"eventos_copiados": n, "antes": len(abiertas(antes)), "despues": len(abiertas(despues)),
+                      "pos_antes": antes.get("pos"), "pos_despues": despues.get("pos"), "fallas": fallas},
+                     ensure_ascii=False, indent=1))
+    return 1 if fallas else 0
+
+
+def aplicar() -> int:
+    if MYTURN.is_file() and "pasarela" not in MYTURN.read_text():
+        sys.exit("corte: ~/dotfiles/scripts/myturn todavía es el viejo: mergea y pullea el PR de dotfiles primero")
+    antes = json.loads((CACHE_NUEVO / "estado-antes.json").read_text()) if (CACHE_NUEVO / "estado-antes.json").is_file() \
+        else None
+    print("\n".join(preparar()) or "preparado")
+    if MAC:
+        if antes is None:  # el viejo sigue vivo: su foto es la de antes (myturn ya es pasarela, así que se lee el archivo)
+            st = json.loads((CACHE_VIEJO / "despertador.json").read_text())
+            antes = {"pos": st.get("pos"), "esperas": [{"id": i} for i in ids_espera(lineas(TASKS / "events.jsonl"))
+                                                        if i in _abiertas_events()]}
+            CACHE_NUEVO.mkdir(parents=True, exist_ok=True)
+            (CACHE_NUEVO / "estado-antes.json").write_text(json.dumps(antes))
+        subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}/{LABEL_VIEJO}"], capture_output=True, timeout=20)
+        if PLIST_VIEJO.is_file():
+            RESPALDO.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(PLIST_VIEJO, RESPALDO)
+            print(f"plist viejo → {RESPALDO}")
+    print(f"esperas copiadas: {copiar_esperas(TASKS / 'events.jsonl', TASKS / 'esperas.jsonl')} eventos")
+    copiar_estado(CACHE_VIEJO / "despertador.json", CACHE_NUEVO / "despertador.json")
+    if MAC:
+        p = ses("despertador", "prender")
+        print(p.stdout.strip() or p.stderr.strip())
+        if p.returncode:
+            return p.returncode
+        inst = subprocess.run(["uv", "run", "--quiet", "--script",
+                               str(toolkit("herdr-app/mods-src/clientes/instalar.py"))], capture_output=True, text=True)
+        print(inst.stdout.strip() or inst.stderr.strip())
+    despues = json.loads(ses("estado").stdout)
+    fallas = comparar(antes, despues) if antes else []
+    print(json.dumps({"antes": len(abiertas(antes or {})), "despues": len(abiertas(despues)), "vivo": despues.get("vivo"),
+                      "fallas": fallas}, ensure_ascii=False))
+    return 1 if fallas else 0
+
+
+def _abiertas_events() -> set[str]:
+    st: dict[str, str] = {}
+    for e in sorted(lineas(TASKS / "events.jsonl"), key=lambda e: e["ts"]):
+        if e["op"] == "add":
+            st[e["id"]] = "open"
+        elif e["op"] in ("done", "archive"):
+            st[e["id"]] = "closed"
+        elif e["op"] == "restore":
+            st[e["id"]] = "open"
+    return {i for i, v in st.items() if v == "open"}
+
+
+def deshacer() -> int:
+    print(ses("despertador", "apagar").stdout.strip())
+    if MAC and RESPALDO.is_file():
+        shutil.move(RESPALDO, PLIST_VIEJO)
+        subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", str(PLIST_VIEJO)], timeout=20)
+        print(f"{LABEL_VIEJO} de vuelta. Revierte también el PR de dotfiles (myturn pasarela) para que `dormir` escriba "
+              "donde lo lee el viejo.")
+    return 0
+
+
+if __name__ == "__main__":
+    accion = (sys.argv[1:] or [""])[0]
+    acciones = {"ensayo": ensayo, "preparar": lambda: print("\n".join(preparar()) or "ya estaba") or 0,
+                "aplicar": aplicar, "deshacer": deshacer}
+    if accion not in acciones:
+        sys.exit(__doc__)
+    sys.exit(acciones[accion]())
