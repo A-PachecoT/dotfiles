@@ -25,8 +25,34 @@ def test_copia_solo_esperas_y_es_idempotente(tmp_path):
     assert {e["id"] for e in corte.lineas(dst)} == {"e1"}
 
 
-def test_comparar_detecta_espera_perdida_y_pos_que_retrocede():
-    antes = {"esperas": [{"id": "a"}, {"id": "b"}], "pos": {"inode": 1, "offset": 10}}
-    assert corte.comparar(antes, {"esperas": [{"id": "a"}, {"id": "b"}, {"id": "c"}], "pos": {"inode": 1, "offset": 12}}) == []
-    f = corte.comparar(antes, {"esperas": [{"id": "a"}], "pos": {"inode": 1, "offset": 9}})
-    assert len(f) == 2 and "b" in f[0]
+def test_comparar_detecta_espera_perdida():
+    f = corte.comparar({"a", "b"}, {"esperas": [{"id": "a"}], "vivo": True, "pos": {"inode": 1, "offset": 9}},
+                       {"inode": 1, "offset": 10})
+    assert len(f) == 1 and "b" in f[0]
+    assert corte.comparar({"a"}, {"esperas": [{"id": "a"}, {"id": "c"}], "vivo": True}, None) == []
+
+
+def test_espera_nacida_en_el_hueco_rebobina_wacli(tmp_path, monkeypatch):
+    """Crítica H7 ronda 2: un `dormir` del módulo antes de prender el nuevo; el viejo ya pasó por esos mensajes."""
+    wacli = tmp_path / "wacli.jsonl"
+    lineas = [{"Timestamp": f"2026-11-16T20:0{m}:00Z", "Text": str(m)} for m in range(6)]
+    wacli.write_text("".join(json.dumps(x) + "\n" for x in lineas))
+    monkeypatch.setattr(corte, "WACLI", wacli)
+    viejo = tmp_path / "viejo"
+    viejo.mkdir()
+    (viejo / "despertador.json").write_text(json.dumps({"pos": {"inode": 7, "offset": wacli.stat().st_size}}))
+    monkeypatch.setattr(corte, "CACHE_VIEJO", viejo)
+    st = corte.estado_para_el_modulo(tmp_path / "nuevo/despertador.json", ["2026-11-16T15:04:00-05:00"])
+    esperado = sum(len(json.dumps(x)) + 1 for x in lineas[:1])  # 20:04Z − 3 min = 20:01Z: desde la 2.ª línea
+    assert st["pos"]["offset"] == esperado
+
+
+def test_si_el_modulo_ya_corrio_gana_el_pos_menor(tmp_path, monkeypatch):
+    viejo = tmp_path / "viejo"
+    viejo.mkdir()
+    (viejo / "despertador.json").write_text(json.dumps({"pos": {"inode": 7, "offset": 500}}))
+    monkeypatch.setattr(corte, "CACHE_VIEJO", viejo)
+    dst = tmp_path / "nuevo/despertador.json"
+    dst.parent.mkdir()
+    dst.write_text(json.dumps({"pos": {"inode": 7, "offset": 900}}))
+    assert corte.estado_para_el_modulo(dst, [])["pos"]["offset"] == 500

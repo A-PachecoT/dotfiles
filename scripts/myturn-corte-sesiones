@@ -2,20 +2,26 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Corte de las sesiones por cliente de myturn al cofoundy-toolkit (cofoundy-toolkit#188), sin perder esperas.
+"""Corte de las sesiones por cliente de myturn al cofoundy-toolkit (cofoundy-toolkit#188), sin perder esperas ni mensajes.
 
 Las esperas (`source: espera` en ~/tasks/events.jsonl) pasan a ~/tasks/esperas.jsonl, que escribe el módulo
 `herdr-app/sesiones/sesiones.py` del toolkit; el despertador `dev.andre.myturn-despertador` se apaga y se prende el del
-toolkit. events.jsonl NO se toca (myturn nuevo ignora sus esperas): deshacer = volver al plist viejo.
+toolkit. events.jsonl nunca se reescribe.
 
-    myturn-corte-sesiones ensayo        en seco sobre COPIAS (~/tasks y el estado del despertador): mismas esperas antes y después
-    myturn-corte-sesiones preparar      config ~/.config/cofoundy/sesiones.json + merge=union de esperas.jsonl + marca H10
-    myturn-corte-sesiones aplicar       preparar + apagar el viejo + copiar esperas y estado + prender el nuevo + comparar
-                                        + reinstalar el panel Clientes (Mac)
-    myturn-corte-sesiones deshacer      apaga el del toolkit y vuelve a cargar el plist viejo (respaldado al aplicar)
+    myturn-corte-sesiones ensayo     en seco sobre COPIAS: mismas esperas antes y después, pos de wacli que no retrocede
+    myturn-corte-sesiones preparar   ANTES de mergear nada, en la Mac y en el Arch: config ~/.config/cofoundy/sesiones.json
+                                     (home=~/tasks), `esperas.jsonl merge=union` commiteado, marca H10. Desde aquí un
+                                     `dormir` del módulo escribe donde lo verá el corte, nunca en un almacén huérfano.
+    myturn-corte-sesiones aplicar    en la Mac, de un tirón, con el toolkit y dotfiles ya mergeados: guarda el myturn y
+                                     el plist viejos, pull de dotfiles (pasarela), apaga el viejo, copia esperas (también
+                                     las del almacén por defecto) y estado, rebobina wacli hasta la espera más vieja que
+                                     nació en el hueco, update-plugin, prende el nuevo, espera su latido, reinstala el
+                                     panel Clientes y compara. Si el nuevo no late, deshace solo.
+    myturn-corte-sesiones copiar     repite la copia de esperas (idempotente; myturn `_sync` la corre tras cada pull)
+    myturn-corte-sesiones deshacer   apaga el del toolkit, devuelve a events.jsonl las esperas nacidas tras el corte,
+                                     el estado del módulo al del viejo, y carga el plist viejo apuntando al myturn guardado
 
-Orden (diseño H7 §4): toolkit mergeado y `update-plugin.sh` → `preparar` en la Mac y en el Arch → merge del PR de
-dotfiles (myturn pasarela) → `aplicar` en la Mac. En el Arch no hay despertador: `preparar` basta.
+Orden (diseño H7 §4): `preparar` (Mac y Arch) → André mergea el toolkit y dotfiles en GitHub → `aplicar` en la Mac.
 """
 
 from __future__ import annotations
@@ -27,19 +33,28 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 HOME = Path.home()
 TASKS = Path(os.environ.get("MYTURN_HOME", HOME / "tasks"))
 CACHE_VIEJO = HOME / ".cache/myturn"
-CONFIG = HOME / ".config/cofoundy/sesiones.json"
+CFG_DIR = HOME / ".config/cofoundy"
+CONFIG = CFG_DIR / "sesiones.json"
 CACHE_NUEVO = HOME / ".cache/cofoundy/sesiones"
+DEFAULT_STORE = HOME / ".local/share/cofoundy/sesiones/esperas.jsonl"
+WACLI = Path(os.environ.get("MYTURN_WACLI_EVENTS", HOME / ".wacli/events.jsonl"))
 LABEL_VIEJO = "dev.andre.myturn-despertador"
 PLIST_VIEJO = HOME / "Library/LaunchAgents" / f"{LABEL_VIEJO}.plist"
-RESPALDO = HOME / ".config/cofoundy" / f"{LABEL_VIEJO}.plist.antes-del-corte"
-MYTURN = HOME / "dotfiles/scripts/myturn"
+RESPALDO = CFG_DIR / f"{LABEL_VIEJO}.plist.antes-del-corte"
+MYTURN_GUARDADO = CFG_DIR / "myturn.antes-del-corte"
+DOTFILES = HOME / "dotfiles"
+MYTURN = DOTFILES / "scripts/myturn"
+UPDATE = HOME / "cofoundy/plugins/cofoundy-marketplace/scripts/update-plugin.sh"
 MAC = platform.system() == "Darwin"
 HOST = "mac" if MAC else "arch"
+ANTES_S = 180  # sesiones.py: una espera nueva despierta con lo que llegó hasta 3 min antes de `dormir`
 
 
 def toolkit(rel: str) -> Path:
@@ -54,7 +69,7 @@ def toolkit(rel: str) -> Path:
     src = HOME / "cofoundy/plugins/cofoundy-toolkit" / rel
     if src.is_file():
         return src
-    sys.exit(f"corte: no encuentro {rel} del cofoundy-toolkit (¿mergeado y update-plugin.sh?)")
+    sys.exit(f"corte: no encuentro {rel} del cofoundy-toolkit (¿mergeado y pulleado?)")
 
 
 def ses(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
@@ -70,43 +85,96 @@ def ids_espera(eventos: list[dict]) -> set[str]:
     return {e["id"] for e in eventos if e.get("op") == "add" and e.get("source") == "espera"}
 
 
-def copiar_esperas(origen: Path, destino: Path) -> int:
-    """Los eventos de cada espera de events.jsonl a esperas.jsonl, una vez (idempotente por línea)."""
+def abiertas_de(eventos: list[dict]) -> set[str]:
+    st: dict[str, bool] = {}
+    for e in sorted(eventos, key=lambda e: e["ts"]):
+        if e["op"] in ("add", "restore"):
+            st[e["id"]] = True
+        elif e["op"] in ("done", "archive"):
+            st[e["id"]] = False
+    return {i for i, v in st.items() if v} & ids_espera(eventos)
+
+
+def copiar_esperas(origen: Path, destino: Path, ids: set[str] | None = None) -> int:
+    """Los eventos de cada espera de `origen` a `destino`, una vez (idempotente por línea)."""
     ev = lineas(origen)
-    ids = ids_espera(ev)
+    ids = ids_espera(ev) if ids is None else ids
     ya = {json.dumps(e, sort_keys=True) for e in lineas(destino)}
     nuevos = [e for e in ev if e.get("id") in ids and json.dumps(e, sort_keys=True) not in ya]
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    with open(destino, "a") as f:
-        for e in nuevos:
-            f.write(json.dumps(e, ensure_ascii=False) + "\n")
+    if nuevos:
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        with open(destino, "a") as f:
+            for e in nuevos:
+                f.write(json.dumps(e, ensure_ascii=False) + "\n")
     return len(nuevos)
 
 
-def copiar_estado(origen: Path, destino: Path) -> None:
-    """El estado del despertador viejo (offset de wacli, pendientes, idle, nombres…): mismo formato en el módulo."""
-    if origen.is_file() and not destino.is_file():
-        destino.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(origen, destino)
+def copiar() -> int:
+    """Todas las fuentes de esperas al almacén del módulo: events.jsonl (myturn viejo, también el del Arch hasta que
+    pullee dotfiles) y el almacén por defecto (un `dormir` del módulo antes de `preparar`)."""
+    destino = TASKS / "esperas.jsonl"
+    return copiar_esperas(TASKS / "events.jsonl", destino) + copiar_esperas(DEFAULT_STORE, destino)
 
 
-def abiertas(estado: dict) -> set[str]:
-    return {e["id"] for e in estado.get("esperas", [])}
+def offset_desde(cuando: datetime) -> int | None:
+    """El byte de ~/.wacli/events.jsonl donde empiezan los mensajes de `cuando` en adelante."""
+    if not WACLI.is_file():
+        return None
+    off = 0
+    with open(WACLI, "rb") as f:
+        for ln in f:
+            try:
+                ts = datetime.fromisoformat(json.loads(ln).get("Timestamp", "").replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                ts = None
+            if ts and ts >= cuando:
+                return off
+            off += len(ln)
+    return off
 
 
-def estado_viejo() -> dict:
-    p = subprocess.run([str(MYTURN), "despertador", "estado"], capture_output=True, text=True, timeout=60)
-    return json.loads(p.stdout)
+def estado_para_el_modulo(destino: Path, nacidas_en_el_hueco: list[str]) -> dict:
+    """El estado del viejo pasa al módulo. Si el módulo ya corrió (el plist viejo se relanzó por la pasarela) gana el
+    de pos MENOR: releer es seguro (una sesión viva no se reabre), saltarse mensajes no. Y si nacieron esperas en el
+    hueco (un `dormir` del módulo antes de prender), el pos se rebobina hasta 3 min antes de la más vieja."""
+    viejo = json.loads((CACHE_VIEJO / "despertador.json").read_text()) if (CACHE_VIEJO / "despertador.json").is_file() \
+        else {}
+    actual = json.loads(destino.read_text()) if destino.is_file() else None
+    st = viejo
+    if actual and (actual.get("pos") or {}).get("inode") == (viejo.get("pos") or {}).get("inode") and \
+            (actual.get("pos") or {}).get("offset", 0) < (viejo.get("pos") or {}).get("offset", 0):
+        st = actual
+    if nacidas_en_el_hueco and st.get("pos"):
+        mas_vieja = min(datetime.fromisoformat(t) for t in nacidas_en_el_hueco) - timedelta(seconds=ANTES_S)
+        off = offset_desde(mas_vieja)
+        if off is not None and off < st["pos"].get("offset", 0):
+            st["pos"] = {**st["pos"], "offset": off}
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(json.dumps(st, ensure_ascii=False))
+    return st
 
 
-def comparar(antes: dict, despues: dict) -> list[str]:
+def nacidas_en_el_hueco() -> list[str]:
+    """Las esperas que escribió el módulo (no vienen de events.jsonl): su escucha no la tenía el despertador viejo."""
+    viejas = ids_espera(lineas(TASKS / "events.jsonl"))
+    return [e["ts"] for e in lineas(TASKS / "esperas.jsonl") + lineas(DEFAULT_STORE)
+            if e.get("op") == "add" and e.get("source") == "espera" and e["id"] not in viejas]
+
+
+def comparar(antes: set[str], despues: dict, pos_antes: dict | None) -> list[str]:
     fallas = []
-    if abiertas(antes) - abiertas(despues):
-        fallas.append(f"faltan esperas: {sorted(abiertas(antes) - abiertas(despues))}")
-    pa, pd = antes.get("pos") or {}, despues.get("pos") or {}
-    if pa and (pd.get("inode") != pa.get("inode") or pd.get("offset", 0) < pa.get("offset", 0)):
-        fallas.append(f"pos de wacli retrocedió: {pa} → {pd}")
+    actuales = {e["id"] for e in despues.get("esperas", [])}
+    if antes - actuales:
+        fallas.append(f"faltan esperas: {sorted(antes - actuales)}")
+    pd = despues.get("pos") or {}
+    if pos_antes and pd.get("inode") == pos_antes.get("inode") and pd.get("offset", 0) > pos_antes.get("offset", 0) \
+            and not despues.get("vivo"):
+        fallas.append(f"pos avanzó sin despertador vivo: {pos_antes} → {pd}")
     return fallas
+
+
+def git_tasks(*a: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(TASKS), *a], capture_output=True, text=True, timeout=60)
 
 
 def preparar() -> list[str]:
@@ -122,92 +190,123 @@ def preparar() -> list[str]:
     if "esperas.jsonl merge=union" not in (ga.read_text() if ga.is_file() else ""):
         with open(ga, "a") as f:
             f.write("esperas.jsonl merge=union\n")
-        hecho.append(f"{ga}: esperas.jsonl merge=union")
+        if (TASKS / ".git").exists():  # commiteado: un .gitattributes sucio rompe el `pull --rebase` de `_sync`
+            git_tasks("add", ".gitattributes")
+            git_tasks("commit", "-qm", f"sesiones: esperas.jsonl merge=union ({HOST})", "--", ".gitattributes")
+        hecho.append(f"{ga}: esperas.jsonl merge=union (commiteado)")
     marca = CACHE_NUEVO / "h10-avisado"
     if not marca.exists():  # esta máquina ya escuchaba el negocio con myturn: no es la «primera vez» de H10
         marca.parent.mkdir(parents=True, exist_ok=True)
         marca.write_text("migrado de myturn\n")
         hecho.append("marca H10")
+    n = copiar()
+    if n:
+        hecho.append(f"esperas copiadas: {n} eventos")
     return hecho
 
 
 def ensayo() -> int:
-    antes = estado_viejo()
+    p = subprocess.run([str(MYTURN), "despertador", "estado"], capture_output=True, text=True, timeout=60)
+    antes = json.loads(p.stdout)
     with tempfile.TemporaryDirectory(prefix="corte-") as d:
         t, c = Path(d) / "tasks", Path(d) / "cache"
         n = copiar_esperas(TASKS / "events.jsonl", t / "esperas.jsonl")
-        copiar_estado(CACHE_VIEJO / "despertador.json", c / "despertador.json")
+        c.mkdir(parents=True)
+        if (CACHE_VIEJO / "despertador.json").is_file():
+            shutil.copy2(CACHE_VIEJO / "despertador.json", c / "despertador.json")
         p = ses("estado", env={"SESIONES_HOME": str(t), "SESIONES_CACHE": str(c), "SESIONES_HOST": HOST,
                                 "SESIONES_NO_SYNC": "1", "SESIONES_CONFIG": str(Path(d) / "no.json")})
         despues = json.loads(p.stdout)
-    fallas = comparar(antes, despues)
-    print(json.dumps({"eventos_copiados": n, "antes": len(abiertas(antes)), "despues": len(abiertas(despues)),
-                      "pos_antes": antes.get("pos"), "pos_despues": despues.get("pos"), "fallas": fallas},
-                     ensure_ascii=False, indent=1))
+    fallas = comparar({e["id"] for e in antes.get("esperas", [])}, {**despues, "vivo": True}, antes.get("pos"))
+    print(json.dumps({"eventos_copiados": n, "antes": len(antes.get("esperas", [])),
+                      "despues": len(despues.get("esperas", [])), "pos_antes": antes.get("pos"),
+                      "pos_despues": despues.get("pos"), "fallas": fallas}, ensure_ascii=False, indent=1))
     return 1 if fallas else 0
+
+
+def latido(segundos: int = 90) -> dict:
+    fin = time.time() + segundos
+    while True:
+        st = json.loads(ses("estado").stdout or "{}")
+        if st.get("vivo") or time.time() > fin:
+            return st
+        time.sleep(5)
 
 
 def aplicar() -> int:
-    if MYTURN.is_file() and "pasarela" not in MYTURN.read_text():
-        sys.exit("corte: ~/dotfiles/scripts/myturn todavía es el viejo: mergea y pullea el PR de dotfiles primero")
-    antes = json.loads((CACHE_NUEVO / "estado-antes.json").read_text()) if (CACHE_NUEVO / "estado-antes.json").is_file() \
-        else None
+    if not MAC:
+        sys.exit("corte: `aplicar` es para la Mac (el Arch no tiene despertador; ahí basta `preparar`)")
+    if not CONFIG.is_file():
+        sys.exit("corte: corre `preparar` primero (antes de mergear), en la Mac y en el Arch")
     print("\n".join(preparar()) or "preparado")
-    if MAC:
-        if antes is None:  # el viejo sigue vivo: su foto es la de antes (myturn ya es pasarela, así que se lee el archivo)
-            st = json.loads((CACHE_VIEJO / "despertador.json").read_text())
-            antes = {"pos": st.get("pos"), "esperas": [{"id": i} for i in ids_espera(lineas(TASKS / "events.jsonl"))
-                                                        if i in _abiertas_events()]}
-            CACHE_NUEVO.mkdir(parents=True, exist_ok=True)
-            (CACHE_NUEVO / "estado-antes.json").write_text(json.dumps(antes))
-        subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}/{LABEL_VIEJO}"], capture_output=True, timeout=20)
-        if PLIST_VIEJO.is_file():
-            RESPALDO.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(PLIST_VIEJO, RESPALDO)
-            print(f"plist viejo → {RESPALDO}")
-    print(f"esperas copiadas: {copiar_esperas(TASKS / 'events.jsonl', TASKS / 'esperas.jsonl')} eventos")
-    copiar_estado(CACHE_VIEJO / "despertador.json", CACHE_NUEVO / "despertador.json")
-    if MAC:
-        p = ses("despertador", "prender")
-        print(p.stdout.strip() or p.stderr.strip())
-        if p.returncode:
-            return p.returncode
-        inst = subprocess.run(["uv", "run", "--quiet", "--script",
-                               str(toolkit("herdr-app/mods-src/clientes/instalar.py"))], capture_output=True, text=True)
-        print(inst.stdout.strip() or inst.stderr.strip())
-    despues = json.loads(ses("estado").stdout)
-    fallas = comparar(antes, despues) if antes else []
-    print(json.dumps({"antes": len(abiertas(antes or {})), "despues": len(abiertas(despues)), "vivo": despues.get("vivo"),
-                      "fallas": fallas}, ensure_ascii=False))
+    # 1. lo viejo, guardado antes de tocar nada (para `deshacer`)
+    if MYTURN.is_file() and "pasarela" not in MYTURN.read_text() and not MYTURN_GUARDADO.is_file():
+        shutil.copy2(MYTURN, MYTURN_GUARDADO)
+    antes = abiertas_de(lineas(TASKS / "events.jsonl"))
+    pos_antes = json.loads((CACHE_VIEJO / "despertador.json").read_text()).get("pos") \
+        if (CACHE_VIEJO / "despertador.json").is_file() else None
+    # 2. apagar el viejo (y que RunAtLoad no lo resucite)
+    subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}/{LABEL_VIEJO}"], capture_output=True, timeout=20)
+    if PLIST_VIEJO.is_file():
+        shutil.move(PLIST_VIEJO, RESPALDO)
+    # 3. dotfiles (myturn pasarela) y el toolkit con el módulo
+    pull = subprocess.run(["git", "-C", str(DOTFILES), "pull", "-q", "--ff-only"], capture_output=True, text=True)
+    if "pasarela" not in MYTURN.read_text():
+        print(f"corte: dotfiles sin la pasarela ({pull.stderr.strip()[:200]}): deshago", file=sys.stderr)
+        return deshacer() or 1
+    if UPDATE.is_file() and not os.environ.get("CORTE_TOOLKIT"):
+        subprocess.run(["git", "-C", str(HOME / "cofoundy/plugins/cofoundy-toolkit"), "pull", "-q", "--ff-only"],
+                       capture_output=True, timeout=120)
+        subprocess.run(["bash", str(UPDATE), "cofoundy-toolkit", "--bump", "none"], capture_output=True, timeout=600)
+    # 4. esperas y estado
+    print(f"esperas copiadas: {copiar()} eventos")
+    hueco = nacidas_en_el_hueco()
+    st = estado_para_el_modulo(CACHE_NUEVO / "despertador.json", hueco)
+    if hueco:
+        print(f"{len(hueco)} espera(s) nacieron en el hueco: wacli rebobinado a {st.get('pos')}")
+    # 5. prender, esperar el latido, panel
+    p = ses("despertador", "prender")
+    print(p.stdout.strip() or p.stderr.strip())
+    despues = latido() if p.returncode == 0 else {}
+    if not despues.get("vivo"):
+        print("corte: el despertador del toolkit no late: deshago", file=sys.stderr)
+        return deshacer() or 1
+    inst = subprocess.run(["uv", "run", "--quiet", "--script", str(toolkit("herdr-app/mods-src/clientes/instalar.py"))],
+                          capture_output=True, text=True)
+    print(inst.stdout.strip() or inst.stderr.strip())
+    fallas = comparar(antes, despues, pos_antes)
+    print(json.dumps({"antes": len(antes), "despues": len(despues.get("esperas", [])), "vivo": despues.get("vivo"),
+                      "pos_antes": pos_antes, "pos_despues": despues.get("pos"), "fallas": fallas}, ensure_ascii=False))
     return 1 if fallas else 0
 
 
-def _abiertas_events() -> set[str]:
-    st: dict[str, str] = {}
-    for e in sorted(lineas(TASKS / "events.jsonl"), key=lambda e: e["ts"]):
-        if e["op"] == "add":
-            st[e["id"]] = "open"
-        elif e["op"] in ("done", "archive"):
-            st[e["id"]] = "closed"
-        elif e["op"] == "restore":
-            st[e["id"]] = "open"
-    return {i for i, v in st.items() if v == "open"}
-
-
 def deshacer() -> int:
+    """Vuelve de verdad al despertador viejo: el módulo apagado, sus esperas nuevas y su pos de vuelta en myturn, y el
+    plist viejo corriendo el myturn guardado (el de ~/dotfiles ya es la pasarela)."""
     print(ses("despertador", "apagar").stdout.strip())
+    viejas = ids_espera(lineas(TASKS / "events.jsonl"))
+    nuevas = ids_espera(lineas(TASKS / "esperas.jsonl")) - viejas
+    print(f"esperas devueltas a events.jsonl: "
+          f"{copiar_esperas(TASKS / 'esperas.jsonl', TASKS / 'events.jsonl', nuevas)} eventos")
+    if (CACHE_NUEVO / "despertador.json").is_file():
+        CACHE_VIEJO.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(CACHE_NUEVO / "despertador.json", CACHE_VIEJO / "despertador.json")
     if MAC and RESPALDO.is_file():
-        shutil.move(RESPALDO, PLIST_VIEJO)
+        texto = RESPALDO.read_text()
+        if MYTURN_GUARDADO.is_file():
+            texto = texto.replace(str(MYTURN), str(MYTURN_GUARDADO))
+        PLIST_VIEJO.write_text(texto)
+        RESPALDO.unlink()
         subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", str(PLIST_VIEJO)], timeout=20)
-        print(f"{LABEL_VIEJO} de vuelta. Revierte también el PR de dotfiles (myturn pasarela) para que `dormir` escriba "
-              "donde lo lee el viejo.")
+        print(f"{LABEL_VIEJO} de vuelta, corriendo {MYTURN_GUARDADO if MYTURN_GUARDADO.is_file() else MYTURN}. "
+              "Revierte el PR de dotfiles para que `myturn dormir` vuelva a escribir donde lo lee.")
     return 0
 
 
 if __name__ == "__main__":
     accion = (sys.argv[1:] or [""])[0]
     acciones = {"ensayo": ensayo, "preparar": lambda: print("\n".join(preparar()) or "ya estaba") or 0,
-                "aplicar": aplicar, "deshacer": deshacer}
+                "aplicar": aplicar, "deshacer": deshacer, "copiar": lambda: print(f"{copiar()} eventos") or 0}
     if accion not in acciones:
         sys.exit(__doc__)
     sys.exit(acciones[accion]())

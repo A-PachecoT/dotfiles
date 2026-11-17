@@ -588,3 +588,10 @@ def test_go_de_una_espera_lo_retoma_el_toolkit(mt, monkeypatch, tmp_path):
     except SystemExit:
         pass
     assert llamadas and llamadas[0][-2:] == ["go", "tb2d9cf"]
+
+
+def test_sync_copia_las_esperas_de_un_myturn_viejo(mt):
+    mt.emit("add", "e1", title="espera: X", source=mt.ESPERA, wake={"wsp": "1@g.us"})
+    mt.emit("add", "c1", title="pan", source="capture")
+    assert mt.copiar_esperas_viejas() == 1 and mt.copiar_esperas_viejas() == 0
+    assert '"e1"' in (mt.DATA / "esperas.jsonl").read_text() and '"c1"' not in (mt.DATA / "esperas.jsonl").read_text()

@@ -211,6 +211,7 @@ def do_sync() -> None:
         g("add", "events.jsonl", "esperas.jsonl")  # esperas.jsonl lo escribe el toolkit con home=~/tasks (#188)
         g("commit", "-qm", f"myturn: {LOCAL} {iso(now())}")
         g("pull", "-q", "--rebase")
+        copiar_esperas_viejas()  # un myturn viejo (el Arch antes de pullear) aún escribe esperas en events.jsonl
         g("push", "-q")
 
 
@@ -1607,6 +1608,25 @@ def sesiones(*args: str, capture: bool = False):
     if capture:
         return run(cmd, timeout=30)
     os.execv(uv, cmd)
+
+
+def copiar_esperas_viejas() -> int:
+    """Las esperas que un myturn viejo dejó en events.jsonl pasan a esperas.jsonl (idempotente por línea): el módulo es
+    el único que las lee (#188). Corre tras cada pull de `_sync`."""
+    if not EVENTS.exists():
+        return 0
+    ev = [json.loads(x) for x in EVENTS.read_text().splitlines() if x.strip()]
+    ids = {e["id"] for e in ev if e.get("op") == "add" and e.get("source") == ESPERA}
+    if not ids:
+        return 0
+    dst = DATA / "esperas.jsonl"
+    ya = {json.dumps(json.loads(x), sort_keys=True) for x in dst.read_text().splitlines() if x.strip()} \
+        if dst.exists() else set()
+    nuevos = [e for e in ev if e["id"] in ids and json.dumps(e, sort_keys=True) not in ya]
+    with open(dst, "a") as f:
+        for e in nuevos:
+            f.write(json.dumps(e, ensure_ascii=False) + "\n")
+    return len(nuevos)
 
 
 def dormidas_toolkit() -> list[dict]:
