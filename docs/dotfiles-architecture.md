@@ -120,7 +120,6 @@ secrets from a private GitHub repo into `~/.zshrc.local`).
 | `hard-reset-all.sh` | macOS | `killall`, `open -a`, AppKit apps |
 | `open-floating-terminal.sh` | macOS | AeroSpace + Ghostty |
 | `open-in-yazi.sh` | any | yazi + bash |
-| `quicklook.sh` | macOS | `qlmanage` |
 | `reload-all.sh` | macOS | sketchybar, AeroSpace, Hammerspoon |
 | `resume-project.sh` | any | tmux |
 | `sketchybar-workspace-trigger.sh` | macOS | sketchybar |

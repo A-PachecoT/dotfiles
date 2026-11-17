@@ -1,12 +1,12 @@
 [[mgr.prepend_keymap]]
 on   = "<Space>"
-run  = 'shell "$HOME/dotfiles/scripts/quicklook.sh %h" --block'
-desc = "Quick Look preview"
+run  = "plugin remote-quicklook preview"
+desc = "Quick Look (on the Mac)"
 
 [[mgr.prepend_keymap]]
 on   = "<C-r>"
-run  = 'shell -- "$HOME/dotfiles/scripts/reveal.sh" "$@"'
-desc = "Reveal in file manager"
+run  = "plugin remote-quicklook reveal"
+desc = "Reveal in Finder (on the Mac)"
 
 [[mgr.prepend_keymap]]
 on   = "i"
