@@ -157,8 +157,9 @@ def estado_para_el_modulo(destino: Path, nacidas_en_el_hueco: list[str]) -> dict
 def nacidas_en_el_hueco() -> list[str]:
     """Las esperas que escribió el módulo (no vienen de events.jsonl): su escucha no la tenía el despertador viejo."""
     viejas = ids_espera(lineas(TASKS / "events.jsonl"))
-    return [e["ts"] for e in lineas(TASKS / "esperas.jsonl") + lineas(DEFAULT_STORE)
-            if e.get("op") == "add" and e.get("source") == "espera" and e["id"] not in viejas]
+    return [e["ts"] for e in lineas(TASKS / "esperas.jsonl") + lineas(DEFAULT_STORE)  # solo las de esta máquina
+            if e.get("op") == "add" and e.get("source") == "espera" and e["id"] not in viejas
+            and e.get("host") in (None, HOST)]
 
 
 def comparar(antes: set[str], despues: dict, pos_antes: dict | None) -> list[str]:
@@ -179,6 +180,10 @@ def git_tasks(*a: str) -> subprocess.CompletedProcess:
 
 def preparar() -> list[str]:
     hecho = []
+    if MYTURN.is_file() and "pasarela" not in MYTURN.read_text() and not MYTURN_GUARDADO.is_file():
+        CFG_DIR.mkdir(parents=True, exist_ok=True)  # antes del merge: ssot-sync pullea la pasarela al abrir sesión
+        shutil.copy2(MYTURN, MYTURN_GUARDADO)
+        hecho.append(f"myturn viejo guardado en {MYTURN_GUARDADO} (para deshacer)")
     cfg = {"home": str(TASKS), "host": HOST, "sync": [str(MYTURN), "_sync"]}
     if MAC:
         cfg["reemplaza"] = LABEL_VIEJO
@@ -186,14 +191,20 @@ def preparar() -> list[str]:
         CONFIG.parent.mkdir(parents=True, exist_ok=True)
         CONFIG.write_text(json.dumps(cfg, indent=1) + "\n")
         hecho.append(f"config {CONFIG}")
-    ga = TASKS / ".gitattributes"
+    ga, es = TASKS / ".gitattributes", TASKS / "esperas.jsonl"
     if "esperas.jsonl merge=union" not in (ga.read_text() if ga.is_file() else ""):
         with open(ga, "a") as f:
             f.write("esperas.jsonl merge=union\n")
-        if (TASKS / ".git").exists():  # commiteado: un .gitattributes sucio rompe el `pull --rebase` de `_sync`
-            git_tasks("add", ".gitattributes")
-            git_tasks("commit", "-qm", f"sesiones: esperas.jsonl merge=union ({HOST})", "--", ".gitattributes")
-        hecho.append(f"{ga}: esperas.jsonl merge=union (commiteado)")
+        hecho.append(f"{ga}: esperas.jsonl merge=union")
+    es.touch()
+    if (TASKS / ".git").exists():  # ambos trackeados: un archivo sucio o sin trackear rompe el `pull --rebase` de `_sync`
+        git_tasks("add", ".gitattributes", "esperas.jsonl")
+        if git_tasks("diff", "--cached", "--quiet", "--", ".gitattributes", "esperas.jsonl").returncode:
+            c = git_tasks("commit", "-qm", f"sesiones: esperas.jsonl con merge=union ({HOST})",
+                          "--", ".gitattributes", "esperas.jsonl")
+            if c.returncode:
+                sys.exit(f"corte: no pude commitear en {TASKS}: {(c.stderr or c.stdout).strip()[:200]}")
+            hecho.append("commiteado en ~/tasks")
     marca = CACHE_NUEVO / "h10-avisado"
     if not marca.exists():  # esta máquina ya escuchaba el negocio con myturn: no es la «primera vez» de H10
         marca.parent.mkdir(parents=True, exist_ok=True)
@@ -224,7 +235,7 @@ def ensayo() -> int:
     return 1 if fallas else 0
 
 
-def latido(segundos: int = 90) -> dict:
+def latido(segundos: int = 45) -> dict:
     fin = time.time() + segundos
     while True:
         st = json.loads(ses("estado").stdout or "{}")

@@ -595,3 +595,10 @@ def test_sync_copia_las_esperas_de_un_myturn_viejo(mt):
     mt.emit("add", "c1", title="pan", source="capture")
     assert mt.copiar_esperas_viejas() == 1 and mt.copiar_esperas_viejas() == 0
     assert '"e1"' in (mt.DATA / "esperas.jsonl").read_text() and '"c1"' not in (mt.DATA / "esperas.jsonl").read_text()
+
+
+def test_sin_toolkit_la_lista_personal_sigue(mt, monkeypatch):
+    """Crítica H7 ronda 3: `myturn ls`/panel/barra no dependen del toolkit."""
+    monkeypatch.delenv("MYTURN_SESIONES", raising=False)
+    monkeypatch.setattr(mt, "_toolkit_file", lambda rel: None)
+    assert mt.dormidas_toolkit() == []

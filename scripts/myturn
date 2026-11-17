@@ -1602,6 +1602,9 @@ def sesiones(*args: str, capture: bool = False):
     env = os.environ.get("MYTURN_SESIONES")
     ses = (Path(env) if env else None) if env is not None else _toolkit_file("herdr-app/sesiones/sesiones.py")
     if not ses:
+        if capture:  # la lista personal sigue sin el toolkit (ls, panel, barra): sin dormidas, con aviso
+            print("myturn: sin cofoundy-toolkit, no muestro sesiones dormidas", file=sys.stderr)
+            return None
         sys.exit("myturn: no encuentro el cofoundy-toolkit (herdr-app/sesiones/sesiones.py)")
     uv = shutil.which("uv") or str(HOME / ".local/bin/uv")
     cmd = [uv, "run", "--quiet", "--script", str(ses), *args]
