@@ -58,6 +58,7 @@ Un gate (`pytest`, `make check`, `gh pr checks`, build) se corre solo y se lee s
 
 ## Web Interaction
 - Preferí MCP/skills sobre WebFetch/WebSearch; el ruteo lo declaran ellos, no lo hardcodees acá.
+- [macOS] Chrome MCP «not connected» → `open -a Comet` y reintenta: Comet es el único con la extensión (Zen, el principal, es Firefox).
 - Un MCP **stdio** en `~/.mcp.json` se paga POR INSTANCIA de agente (~250 MB c/u; HTTP remoto no): antes de agregar uno, RSS × paneles; para ráfagas un CLI (`agent-browser`, `agent-reach`). → `dotfiles/bitacora/2026-09-14-oomd-mato-herdr.md`
 
 ## PDF Handling
