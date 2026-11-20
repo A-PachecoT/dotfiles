@@ -320,6 +320,8 @@ def hc_agente(g: dict) -> dict:
             "agent_session": {"value": s} if s else None, "cwd": fg.get("cwd") or g.get("cwd"),
             "terminal_title": g.get("title"), "state_change_seq": f"{g.get('turn')}:{g.get('status_ms')}",
             "space": lab.get("herdr.space"), "tab": lab.get("herdr.tab"), "focused": False,
+            "visto": g.get("turn") is not None and str(lab.get("herdr.seen")) == str(g.get("turn")),
+            "status_ms": g.get("status_ms") or 0, "turn": g.get("turn") or 0,
             "tab_name": (lab.get("where") or "").partition(" / ")[2] or None}
 
 
@@ -335,6 +337,20 @@ def hc_agents() -> list[dict] | None:
             if g:
                 out.append(hc_agente(g))
     return out
+
+
+def hc_esperan() -> list[dict]:
+    """Los Claude de la app (esta caja y sus máquinas) que terminaron o preguntan y no has visto, con o sin tarea:
+    el más reciente primero. «Visto» es el de la app (`herdr.seen` = el turno que ya miraste); uno que nunca
+    trabajó (turno 0) no espera a nadie."""
+    out = []
+    for t in (hc_json(["ls"]) or {}).get("terminals", []):
+        if t.get("agent") == "claude-code" and t.get("state") == "live" and t.get("status") in WAITING:
+            g = hc_json(["get", t["address"]])
+            a = hc_agente(g) if g else None
+            if a and a["agent_status"] in WAITING and a["turn"] and not a["visto"]:
+                out.append(a)
+    return sorted(out, key=lambda a: -a["status_ms"])
 
 
 RT_OK: dict[str, bool] = {}  # qué runtime respondió en la última lectura local (el despertador reabre en hc si sí)
@@ -853,7 +869,8 @@ def observe(lists: dict[str, list | None], front: str | None, t0: datetime) -> d
             rec = seen.get(s)
             if not rec or rec.get("status") != st:
                 rec = {"status": st, "since": iso(t0), "seen_at": None, "notified": False}
-            if st in WAITING and a.get("focused") and front == host and not rec.get("seen_at"):
+            visto = a.get("visto") or (a.get("focused") and front == host)  # la app ya sabe qué turno miraste
+            if st in WAITING and visto and not rec.get("seen_at"):
                 rec["seen_at"] = iso(t0)
             seen[s] = rec
             info[s] = rec | {"pane": a.get("pane_id"), "host": host, "title": clean_title(a.get("terminal_title"))}
@@ -1009,6 +1026,19 @@ def go(t: dict) -> str:
 
 
 def jump() -> str:
+    """⌥G: al último agente que terminó o pregunta y no has visto. Primero los de la app, tengan tarea o no (casi
+    ninguna sesión está enlazada); si no hay, las tareas que esperan en el TUI viejo."""
+    if os.environ.get("COFOUNDY_DESPERTADA"):
+        return "Una sesión despertada no abre otras sesiones: déjale la tarea a André"
+    esperan = hc_esperan()
+    if esperan:
+        a = esperan[0]
+        app_json(["do", "agent.focus", "--terminal", a["pane_id"]])
+        focus_app()
+        if session_of(a):
+            mark_seen(session_of(a))
+        refresh()
+        return f"→ {clean_title(a.get('terminal_title')) or a.get('tab_name') or a['pane_id']}"
     st = compute()
     if not st["waiting"]:
         return "nadie te espera"

@@ -148,6 +148,18 @@ a claude y no me mandó, creo que era algo que me enviaba a arch pero no estaba 
 - Riesgo conocido: las teclas solo se envían si la ventana enfocada se llama `herdr…`. Si la ventana muestra otra
   máquina y tú tecleas en herdr al mismo tiempo, tus letras se mezclan con la búsqueda.
 
+### ⌥G va a cualquier agente de la app (desde 2026-11-20)
+
+André: «desde que hice la migración a Herdr hay un solo shortcut que no me funciona, el de saltar al último agente
+que terminó o que está bloqueado». La tecla corría, pero `jump` solo miraba tareas enlazadas y casi ninguna sesión lo
+está (27 agentes vivos, 0 tareas esperando).
+
+- `jump` va primero al Claude de la app que terminó o pregunta y no has visto (`hc_esperan`), tenga tarea o no, de
+  esta caja o de sus máquinas; el más reciente primero. Otra pulsación va al siguiente. Sin ninguno, cae a las
+  tareas que esperan en el TUI viejo.
+- «Visto» es el de la app: el label `herdr.seen` de `hc get` = el turno que ya miraste. La lista y la barra lo
+  respetan también (antes myturn llevaba su propio «visto» y dejaba esperando lo que ya habías mirado en la app).
+
 ### Estados de una tarea
 
 ```
@@ -162,7 +174,7 @@ a claude y no me mandó, creo que era algo que me enviaba a arch pero no estaba 
 ```
 
 - **Visto** = después de la última transición, el pane estuvo enfocado en herdr *y* la ventana de herdr al frente
-  (muestreo cada 20 s), o llegaste por ⌥G / «Ir al agente» (inmediato).
+  (muestreo cada 20 s), o llegaste por ⌥G / «Ir al agente» (inmediato). En la app, además, lo que ella marcó visto (`herdr.seen`).
 - **Orden**: primero las que te esperan (la que espera hace más tiempo arriba), luego por prioridad, fecha y
   antigüedad.
 

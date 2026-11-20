@@ -602,3 +602,55 @@ def test_sin_toolkit_la_lista_personal_sigue(mt, monkeypatch):
     monkeypatch.delenv("MYTURN_SESIONES", raising=False)
     monkeypatch.setattr(mt, "_toolkit_file", lambda rel: None)
     assert mt.dormidas_toolkit() == []
+
+
+def app_falsa(mt, monkeypatch, terminales):
+    """Una app con esos terminales: `hc ls`/`hc get` los devuelven y cada `herdr-app …` queda anotado."""
+    hechas = []
+    mt.STATE.parent.mkdir(parents=True, exist_ok=True)
+
+    def hc(args, timeout=4):
+        if args[0] == "ls":
+            return {"terminals": [{"address": t["address"], "agent": "claude-code", "state": "live",
+                                   "status": t["status"]["state"]} for t in terminales]}
+        return next((t for t in terminales if t["address"] == args[1]), None)
+
+    monkeypatch.setattr(mt, "hc_json", hc)
+    monkeypatch.setattr(mt, "app_json", lambda args, timeout=4: hechas.append(args) or {})
+    monkeypatch.setattr(mt, "focus_app", lambda: True)
+    monkeypatch.setattr(mt, "tui_agents", lambda host: [])
+    monkeypatch.setattr(mt, "ventana_al_frente", lambda: None)
+    monkeypatch.setattr(mt, "sketchybar", lambda st: None)
+    return hechas
+
+
+def terminal(address, estado, turn, seen, ms, title="t"):
+    return {"address": address, "state": "live", "turn": turn, "status_ms": ms, "title": title,
+            "status": {"state": estado}, "labels": {} if seen is None else {"herdr.seen": str(seen)}}
+
+
+def test_jump_va_al_ultimo_agente_de_la_app_que_no_has_visto_aunque_no_tenga_tarea(mt, monkeypatch):
+    hechas = app_falsa(mt, monkeypatch, [
+        terminal("t1", "done", 5, 5, 900, "ya visto"),
+        terminal("t2", "done", 3, 2, 100, "terminó antes"),
+        terminal("arch/t3", "blocked", 8, 7, 500, "pregunta en el arch"),
+        terminal("t4", "working", 2, 1, 999, "trabajando"),
+        terminal("t5", "idle", 0, None, 999, "nunca trabajó"),
+    ])
+    assert [a["pane_id"] for a in mt.hc_esperan()] == ["arch/t3", "t2"]
+    assert mt.jump() == "→ pregunta en el arch"
+    assert ["do", "agent.focus", "--terminal", "arch/t3"] in hechas
+
+
+def test_jump_sin_nadie_esperando_lo_dice_y_no_enfoca(mt, monkeypatch):
+    hechas = app_falsa(mt, monkeypatch, [terminal("t1", "done", 5, 5, 900)])
+    assert mt.jump() == "nadie te espera"
+    assert not [h for h in hechas if h[:2] == ["do", "agent.focus"]]
+
+
+def test_lo_que_la_app_ya_marco_visto_no_te_espera_en_la_lista(mt, monkeypatch):
+    app_falsa(mt, monkeypatch, [terminal("t1", "done", 5, 5, 900) | {"argv": ["claude", "--resume", "s-vista"]},
+                                terminal("t2", "done", 5, 4, 900) | {"argv": ["claude", "--resume", "s-nueva"]}])
+    mt.emit("add", "ta", title="A", link=link(mt, "s-vista"))
+    mt.emit("add", "tb", title="B", link=link(mt, "s-nueva"))
+    assert ids(mt.compute()["waiting"]) == ["tb"]
