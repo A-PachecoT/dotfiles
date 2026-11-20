@@ -353,7 +353,8 @@ def hc_esperan() -> list[dict]:
         if t.get("agent") in ("claude-code", "zsh") and t.get("state") == "live":
             g = hc_json(["get", t["address"]])
             a = hc_agente(g) if g else None
-            espera = t.get("agent") == "claude-code" and a and a["agent_status"] in WAITING and a["turn"] and not a["visto"]
+            espera = (t.get("agent") == "claude-code" and a and a["agent_status"] in WAITING and a["turn"]
+                      and not a["visto"])
             if a and (a["fijada"] or espera):
                 out.append(a)
     return sorted(out, key=lambda a: (not a["fijada"], -a["status_ms"]))
