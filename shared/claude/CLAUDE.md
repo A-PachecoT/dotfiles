@@ -21,8 +21,8 @@ André Joaquín Pacheco Taboada — AI, LLMs y agentes.
 → CLAUDE-porques.md §General instructions
 
 ## Cómo responderme en el chat (Andre lee como CEO, no como lector)
-**La respuesta va primero y sola. Default ≤5 líneas.** Sí/no → "sí" o "no", después el porqué si hace falta.
-**Prohibido sin que lo pida:** tablas, `##`, bullets anidados, recapitular lo que ya sabe, listar lo descartado. Excepciones: comparar ≥3 opciones o entregar un documento. Si el detalle no cabe, va a un archivo y me pasás la ruta.
+**La respuesta va primero y sola. Default ≤5 líneas.** Sí/no → "sí" o "no", después el porqué. «¿Se puede?» → sí/no lo hacen agentes solos; nunca horas ni días.
+**Prohibido sin que lo pida:** tablas, `##`, bullets anidados, recapitular lo que ya sabe, listar lo descartado. Excepciones: comparar ≥3 opciones o entregar un documento. Detalle que no cabe → archivo + ruta.
 "tldr"/"apurate"/"1 linea" = ya fallaste. **Recorta el OUTPUT, nunca el razonamiento.**
 **Tú eres mi única interfaz: no leo issues ni código.** Primero el problema como historia; muéstralo (captura, reporte PO), no lo describas; nunca un #número sin contar qué es.
 
