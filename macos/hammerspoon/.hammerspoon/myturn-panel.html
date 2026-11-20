@@ -32,12 +32,14 @@
   .dot { width: 14px; text-align: center; font-size: 12px; color: var(--dim); }
   .waiting .dot, .waiting .say { color: var(--green); }
   .main { flex: 1; min-width: 0; }
-  .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
+  /* el título se lee entero: hasta 3 líneas (André, 2026-11-20: «no puedo leer ninguna tarea») */
+  .title { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    line-height: 1.3; cursor: text; }
   .title input { width: 100%; background: var(--row); border: 1px solid var(--accent); border-radius: 6px;
     color: var(--text); font: inherit; padding: 2px 6px; outline: none; -webkit-user-select: text; }
   .say { font-size: 11px; color: var(--dim); margin-top: 2px; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis; }
-  .act { min-width: 132px; }
+  .act { min-width: 74px; }
   .waiting .act { border-color: var(--green); color: var(--green); }
   .icon { padding: 6px 8px; color: var(--dim); }
   /* cargando: barra fina arriba mientras el CLI responde; skeleton si todavía no hay nada que mostrar */
@@ -127,7 +129,7 @@
   function actionFor(r) {
     if (r.can_go) return ["go", r.state === "waiting" ? "Ir · te espera" : "Ir al agente"];
     if (r.can_resume) return ["go", "Reabrir agente"];
-    return ["copy", "Copiar para Claude"];
+    return ["copy", "Copiar"];
   }
 
   function rowHtml(r) {
@@ -136,9 +138,9 @@
     return `<div class="row ${r.state} ${r.urgency || ""}" data-id="${r.id}">
       <span class="dot">${r.state === "later" ? CLOCK(11) : r.dot}</span>
       <div class="main"><div class="title" title="Doble clic para editar">${esc(r.title)}</div>
-        <div class="say">${esc(r.say)}</div></div>
+        <div class="say">${esc(r.say.replace(" · sin agente · cópiala a un Claude", ""))}</div></div>
       <button class="prio ${pcls}" data-do="prio" title="Cambiar prioridad">${ptxt}</button>
-      <button class="act" data-do="${act}">${label}</button>
+      <button class="act" data-do="${act}"${act === "copy" ? ' title="Copiar para pegársela a un Claude"' : ""}>${label}</button>
       <button class="icon" data-do="when" title="Cuándo: «el 30» la pospone, «antes del vie» le pone plazo, «ya» la trae">${CLOCK(14)}</button>
       <button class="icon" data-do="done" title="Hecha">✓</button>
       <button class="icon" data-do="archive" title="Archivar (se puede deshacer)">✕</button>

@@ -13,7 +13,7 @@ local HOME = os.getenv("HOME")
 local BIN = HOME .. "/.local/bin/myturn"
 local HTML = HOME .. "/.hammerspoon/myturn-panel.html"
 local ENV = { PATH = HOME .. "/.local/bin:/opt/homebrew/bin:/usr/bin:/bin", HOME = HOME, USER = os.getenv("USER") }
-local W = 640
+local W = 760
 
 local panel, hiddenAt, maxH = nil, 0, 2000
 local ticker -- abierto, el panel se refresca solo: una programada que llega sube sin cerrarlo y abrirlo
