@@ -18,6 +18,17 @@ local sleepWake = require("sleep-wake")
 local keyremap = require("keyremap") -- Caps↔Esc + ⌘↔⌥ del 2.4G vía hidutil (reemplaza Karabiner)
 local myturn = require("myturn") -- ⌥T marcar prioridad · ⌥G ir al que te espera (docs/myturn.md)
 
+-- ⌘0 dentro de la Herdr app = ⌥G (era «agente 1 = el más urgente» en el TUI). Solo con la app al frente: en el
+-- resto ⌘0 sigue siendo «tamaño real». Un mod propio no: los de la app van sellados por el paquete del toolkit.
+HerdrJump = hs.hotkey.new({ "cmd" }, "0", myturn.jump)
+HerdrJumpWatcher = hs.application.watcher.new(function(name, event)
+    if name ~= "Herdr" then return end
+    if event == hs.application.watcher.activated then HerdrJump:enable()
+    elseif event == hs.application.watcher.deactivated then HerdrJump:disable() end
+end)
+HerdrJumpWatcher:start()
+if (hs.application.frontmostApplication():name() or "") == "Herdr" then HerdrJump:enable() end
+
 -- ============================================================
 -- MODULE INITIALIZATION
 -- ============================================================

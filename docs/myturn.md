@@ -157,6 +157,8 @@ está (27 agentes vivos, 0 tareas esperando).
 - `jump` va primero al Claude de la app que terminó o pregunta y no has visto (`hc_esperan`), tenga tarea o no, de
   esta caja o de sus máquinas; el más reciente primero. Otra pulsación va al siguiente. Sin ninguno, cae a las
   tareas que esperan en el TUI viejo.
+- ⌘0 con la Herdr app al frente hace lo mismo (en el TUI era «agente 1 = el más urgente»): un hotkey de
+  Hammerspoon en `init.lua` que solo se activa con la app enfocada; fuera de ella ⌘0 sigue siendo «tamaño real».
 - «Visto» es el de la app: el label `herdr.seen` de `hc get` = el turno que ya miraste. La lista y la barra lo
   respetan también (antes myturn llevaba su propio «visto» y dejaba esperando lo que ya habías mirado en la app).
 
