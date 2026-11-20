@@ -88,7 +88,7 @@
   <div id="list"></div>
   <div id="toast"></div>
   <div class="foot"><kbd>n</kbd> nueva · <kbd>f</kbd>/<kbd>/</kbd> buscar · <kbd>hjkl</kbd> <kbd>gg</kbd> <kbd>G</kbd> moverse · <kbd>Enter</kbd>/<kbd>Espacio</kbd> elegir ·
-    <kbd>p</kbd> programadas · <span id="clockfoot"></span> fecha · <kbd>Esc</kbd> vuelve a tu ventana · <kbd>⌥G</kbd> va al que te espera</div>
+    <kbd>t</kbd> todo · <kbd>p</kbd> programadas · <span id="clockfoot"></span> fecha · <kbd>Esc</kbd> vuelve a tu ventana · <kbd>⌥G</kbd> va al que te espera</div>
 </div>
 <script>
   const send = (m) => window.webkit.messageHandlers.myturn.postMessage(m);
@@ -100,7 +100,8 @@
     stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
   const PRIO = { null: ["—", "p0"], 1: ["!1", "p1"], 2: ["!2", "p2"] };
   const nextPrio = (p) => (p == null ? 1 : p === 1 ? 2 : 0);
-  let data = null, newPrio = null, editing = null, showLater = false;
+  let data = null, newPrio = null, editing = null, showLater = false, showRest = false;
+  const TOP = 7, isToday = (r) => r.state === "waiting" || r.urgency === "today" || r.prio === 1 || r.state === "pending";
   // teclado: fila elegida (por id, sobrevive a cada render) y columna: 0 título, 1 prioridad, 2 acción, 3 ◷, 4 ✓, 5 ✕
   let sel = null, selIdx = 0, col = 2, query = "", lastG = 0;
   const rowById = (id) => [...data.rows, ...(data.later || [])].find((x) => x.id === id);
@@ -151,14 +152,19 @@
     const q = norm(query), match = (r) => !q || norm(r.title).includes(q);
     const rows = d.rows.filter(match), later = (d.later || []).filter(match);
     const sec = (label, rs) => (rs.length ? `<div class="label">${label}</div>` + rs.map(rowHtml).join("") : "");
-    let h = sec("TE ESPERAN", rows.filter((r) => r.state === "waiting"))
-      + sec("HOY", rows.filter((r) => r.state !== "waiting" && r.urgency))
-      + sec("MIS TAREAS", rows.filter((r) => r.state !== "waiting" && !r.urgency));
+    // modo Hoy: arriba solo lo de hoy (te esperan, toca o vence hoy, !1), con tope; lo demás, plegado (t o clic)
+    const top = rows.filter(isToday).slice(0, TOP), rest = rows.filter((r) => !top.includes(r));
+    const open = showRest || !!q;
+    let h = sec("TE ESPERAN", top.filter((r) => r.state === "waiting"))
+      + sec("HOY", top.filter((r) => r.state !== "waiting"));
+    if (!top.length && rest.length && !q) h = `<div class="empty">Nada para hoy.</div>`;
+    if (rest.length) h += `<div class="label fold" data-fold="rest">TODO LO DEMÁS · ${rest.length} ${open ? "▾" : "▸"}</div>`
+      + (open ? rest.map(rowHtml).join("") : "");
     if (!d.rows.length) h = `<div class="empty">${(d.later || []).length ? "Nada pendiente por ahora."
       : "No tienes tareas. Escribe arriba la primera."}</div>`;
     else if (!rows.length && !later.length) h = `<div class="empty">Nada coincide con «${esc(query)}».</div>`;
     // programadas: abajo y plegadas (p o clic); buscando, se ven las que coinciden
-    if (later.length) h += `<div class="label fold" data-fold>PROGRAMADAS · ${later.length} ${showLater || q ? "▾" : "▸"}</div>`
+    if (later.length) h += `<div class="label fold" data-fold="later">PROGRAMADAS · ${later.length} ${showLater || q ? "▾" : "▸"}</div>`
       + (showLater || q ? later.map(rowHtml).join("") : "");
     if (!d.herdr_ok) h += `<div class="empty">herdr no responde: no veo a tus agentes.</div>`;
     $("#list").innerHTML = h; paintSel(); resize();
@@ -166,7 +172,7 @@
   window.focusInput = () => { $("#new").focus(); };
   // ⌥T abre aquí: sin campo enfocado, las teclas son de la lista
   window.focusList = () => {
-    query = ""; $("#find").value = ""; $("#findbox").classList.remove("on"); showLater = false;
+    query = ""; $("#find").value = ""; $("#findbox").classList.remove("on"); showLater = false; showRest = false;
     sel = null; selIdx = 0; col = 2; document.activeElement?.blur(); window.render(data);
   };
 
@@ -224,7 +230,8 @@
   });
 
   $("#list").addEventListener("click", (e) => {
-    if (e.target.closest("[data-fold]")) { showLater = !showLater; window.render(data); return; }
+    const fold = e.target.closest("[data-fold]");
+    if (fold) { if (fold.dataset.fold === "rest") showRest = !showRest; else showLater = !showLater; window.render(data); return; }
     const b = e.target.closest("button[data-do]"); if (!b) return;
     const id = b.closest(".row").dataset.id, r = rowById(id), act = b.dataset.do;
     if (act === "prio") { const level = nextPrio(r.prio); send({ action: "prio", id, level });
@@ -291,7 +298,7 @@
     if (e.target.closest("button")) e.preventDefault();
   });
 
-  // modo lista (ningún campo enfocado): n nueva, f o / buscar, p programadas, hjkl / flechas, gg inicio, G final,
+  // modo lista (ningún campo enfocado): n nueva, f o / buscar, t todo lo demás, p programadas, hjkl / flechas, gg inicio, G final,
   // Enter / Espacio, Esc sale
   document.addEventListener("keydown", (e) => {
     if (editing || e.metaKey || e.ctrlKey || e.altKey || e.target.tagName === "INPUT") return;
@@ -300,6 +307,7 @@
     if (k === "Escape") send({ action: "close" });
     else if (k === "n") $("#new").focus();
     else if (k === "p") { showLater = !showLater; window.render(data); }
+    else if (k === "t") { showRest = !showRest; window.render(data); }
     else if (k === "f" || k === "/") { $("#findbox").classList.add("on"); resize(); $("#find").focus(); $("#find").select(); }
     else if (go) move(...go);
     else if (k === "G") move(Infinity, 0);

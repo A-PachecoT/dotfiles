@@ -96,12 +96,24 @@ aerospace panel donde me quedé»*.
 - ⌥T abre en **modo lista** (ningún campo enfocado), con la primera fila elegida en su botón de acción.
 - `j`/`k` (o flechas) cambian de fila, `gg` va a la primera y `G` a la última; `h`/`l` de columna: título · prioridad · acción · ✓ · ✕. `Enter`/`Espacio`
   la ejecuta (en el título, edita). Lo mismo que hace el clic, sin atajos ocultos.
+- `t` despliega o pliega «todo lo demás»; `p`, las programadas.
 - `n` enfoca «Nueva tarea»; `f` o `/` abre «Buscar» (filtra por título, sin tildes ni mayúsculas; `Enter` vuelve a la
   lista con el filtro, `Esc` lo limpia). En un campo, `Esc` vuelve a la lista.
 - En la lista, `Esc` (o ⌥T otra vez) cierra y te devuelve a la ventana donde estabas (tomada con
   `hs.window.frontmostWindow()` antes de mostrar el panel): se activa su app y luego `aerospace focus --window-id`.
   Solo AeroSpace no basta: no ve el panel, cree que tu ventana sigue enfocada y su `focus` no hace nada (el foco se
   quedaba en Hammerspoon). Perder el foco por un clic afuera solo cierra.
+
+### Modo Hoy: el panel abre con lo de hoy (desde 2026-11-20)
+
+André: «lo abro y son 100 tareas que no sé y no sé dónde empezar». Medido: 92 visibles, 59 vencidas, 58 sin agente.
+
+- ⌥T muestra solo lo de hoy: **TE ESPERAN** y **HOY** (toca o vence hoy, o es `!1`), con tope de 7 filas (`TOP` en
+  `myturn-panel.html`). Lo demás (sin fecha, vencidas viejas, `!1` que no cupieron) queda plegado en
+  «TODO LO DEMÁS · N ▸»: `t` o clic lo despliega; al reabrir el panel vuelve a plegarse. La búsqueda encuentra todo.
+- Una tarea recién anotada sin fecha ni prioridad cae en «todo lo demás» (el aviso «Agregada» lo confirma).
+- Barrido del 2026-11-20: 22 tareas vencidas hace más de 7 días archivadas con razón «barrido 2026-11-20…»
+  (reversible: `myturn restore <id>`); las que tenían un agente vivo no se tocaron.
 
 ### Tiempo: fechas, programadas y HOY (desde 2026-10-16)
 
