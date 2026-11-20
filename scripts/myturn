@@ -322,7 +322,8 @@ def hc_agente(g: dict) -> dict:
             "space": lab.get("herdr.space"), "tab": lab.get("herdr.tab"), "focused": False,
             "visto": g.get("turn") is not None and str(lab.get("herdr.seen")) == str(g.get("turn")),
             "status_ms": g.get("status_ms") or 0, "turn": g.get("turn") or 0,
-            "tab_name": (lab.get("where") or "").partition(" / ")[2] or None}
+            "tab_name": (lab.get("where") or "").partition(" / ")[2] or None,
+            "fijada": str(lab.get("herdr.pinned", "")).lower() in ("1", "true")}
 
 
 def hc_agents() -> list[dict] | None:
@@ -340,17 +341,22 @@ def hc_agents() -> list[dict] | None:
 
 
 def hc_esperan() -> list[dict]:
-    """Los Claude de la app (esta caja y sus máquinas) que terminaron o preguntan y no has visto, con o sin tarea:
-    el más reciente primero. «Visto» es el de la app (`herdr.seen` = el turno que ya miraste); uno que nunca
-    trabajó (turno 0) no espera a nadie."""
+    """Los Claude de la app (esta caja y sus máquinas) que te esperan, con o sin tarea. Primero los que el despertador
+    del toolkit fijó (`herdr.pinned`: te toca contestar, o un mensaje del cliente que no le llegó): esos esperan
+    aunque ya los hayas visto o la sesión no responda. Después, los que terminaron o preguntan y no has visto, el más
+    reciente primero. «Visto» es el de la app (`herdr.seen` = el turno que ya miraste); uno que nunca trabajó
+    (turno 0) no espera a nadie. Solo lee la etiqueta de la app: no depende del toolkit."""
     out = []
     for t in (hc_json(["ls"]) or {}).get("terminals", []):
-        if t.get("agent") == "claude-code" and t.get("state") == "live" and t.get("status") in WAITING:
+        # una sesión retomada dentro de una consola (`claude --resume` en zsh) la lista hc como «zsh»: solo cuenta si
+        # está fijada, como las tres de clientes del 20-nov que nunca salían en ⌥G
+        if t.get("agent") in ("claude-code", "zsh") and t.get("state") == "live":
             g = hc_json(["get", t["address"]])
             a = hc_agente(g) if g else None
-            if a and a["agent_status"] in WAITING and a["turn"] and not a["visto"]:
+            espera = t.get("agent") == "claude-code" and a and a["agent_status"] in WAITING and a["turn"] and not a["visto"]
+            if a and (a["fijada"] or espera):
                 out.append(a)
-    return sorted(out, key=lambda a: -a["status_ms"])
+    return sorted(out, key=lambda a: (not a["fijada"], -a["status_ms"]))
 
 
 RT_OK: dict[str, bool] = {}  # qué runtime respondió en la última lectura local (el despertador reabre en hc si sí)

@@ -611,7 +611,7 @@ def app_falsa(mt, monkeypatch, terminales):
 
     def hc(args, timeout=4):
         if args[0] == "ls":
-            return {"terminals": [{"address": t["address"], "agent": "claude-code", "state": "live",
+            return {"terminals": [{"address": t["address"], "agent": t.get("agent", "claude-code"), "state": "live",
                                    "status": t["status"]["state"]} for t in terminales]}
         return next((t for t in terminales if t["address"] == args[1]), None)
 
@@ -640,6 +640,20 @@ def test_jump_va_al_ultimo_agente_de_la_app_que_no_has_visto_aunque_no_tenga_tar
     assert [a["pane_id"] for a in mt.hc_esperan()] == ["arch/t3", "t2"]
     assert mt.jump() == "→ pregunta en el arch"
     assert ["do", "agent.focus", "--terminal", "arch/t3"] in hechas
+
+
+def test_jump_va_primero_a_la_sesion_fijada_aunque_la_hayas_visto_o_no_responda(mt, monkeypatch):
+    """La fijada del despertador (te toca, o mensajes del cliente sin entregar) gana a la más reciente."""
+    fijada = terminal("t7z", "working", 4, 4, 100, "EXIA · ❓ 3 sin entregar")
+    fijada["labels"]["herdr.pinned"] = "1"
+    en_consola = terminal("t7y", "done", 0, None, 50, "ProtoLab · ❓ 7 sin entregar") | {"agent": "zsh"}
+    en_consola["labels"]["herdr.pinned"] = "1"
+    hechas = app_falsa(mt, monkeypatch, [terminal("t2", "done", 3, 2, 900, "terminó recién"), fijada, en_consola,
+                                         terminal("t9", "working", 2, 1, 999, "trabajando"),
+                                         terminal("t8", "done", 0, None, 999, "consola vacía") | {"agent": "zsh"}])
+    assert [a["pane_id"] for a in mt.hc_esperan()] == ["t7z", "t7y", "t2"]
+    assert mt.jump() == "→ EXIA · ❓ 3 sin entregar"
+    assert ["do", "agent.focus", "--terminal", "t7z"] in hechas
 
 
 def test_jump_sin_nadie_esperando_lo_dice_y_no_enfoca(mt, monkeypatch):
