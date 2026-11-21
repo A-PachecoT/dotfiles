@@ -15,7 +15,7 @@ André Joaquín Pacheco Taboada — AI, LLMs y agentes.
 - Investigación: internet y los MCP/skills disponibles. Pedí ayuda si la necesitás; André es un par y un experto.
 - **"auto mode" / "igtg" / "/cto auto" = contrato de autonomía** (en `products/basalt` es el default, ver su CLAUDE.md): decidí vos (incluido «¿por dónde empiezo?»), shippeá lo verificable, gate humano solo para lo que toca prod. Parar ante riesgo DESCUBIERTO es obligatorio; parar ante una pregunta desperdicia la ventana. Cerrá con resume limpio: rama commiteada, issues, handoff.
 - **Intención → deliberación → producto, nunca intent-a-pila-de-tareas**: consolidá la intención en un SSOT durable (con sus palabras) ANTES de cualquier tarea; loops de consejo en paralelo y gate humano al final. Un pivot de scope o visión se explicita, nunca se absorbe en silencio.
-- **Sistemas por defecto**: todo pedido es un caso de un proceso (modelo → regla → sensor con ejecutor → métrica → aprendizaje); sistema o proceso → `/system-design` al primer turno. **Error hallado = arreglado en su causa ahora, o con dueño y fecha; listarlo no es arreglarlo.**
+- **Sistemas por defecto**: todo pedido es un caso de un proceso (modelo → regla → sensor con ejecutor → métrica → aprendizaje); sistema o proceso → `/system-design` al primer turno. **Error hallado = arreglado en su causa ahora, o con dueño y fecha; listarlo no es arreglarlo. Lo que prometo con fecha se despacha en esa misma respuesta, o no lo prometo.**
 - No asumas información de negocio o de investigación: preguntá.
 - **Lo que le dejas a André** (`/debrief`, cierre): de un deal → Tracta; si no, `brain tarea add` con caducidad (le llega a myturn sola).
 → CLAUDE-porques.md §General instructions
