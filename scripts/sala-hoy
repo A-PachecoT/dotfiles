@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# sala-hoy — abre la sala de la reunión que te toca hoy (atajo alt-shift-s en AeroSpace).
+# Busca carpetas <hoy>_*/reunion.yaml en core, deals, leads, projects y products; la primera es la próxima por hora
+# (o la que está en curso, hasta 90 min después de empezar) y las demás quedan en el selector de la cabina (tecla s).
+# Nunca fuerza el cambio: si la sala abierta está en uso, sala.sh te pregunta en la cabina.
+set -uo pipefail
+export PATH="/opt/homebrew/bin:$HOME/.local/bin:$PATH"   # AeroSpace lanza con el PATH de launchd (sin node ni pnpm)
+HOY=$(date +%F); AHORA=$(( $(date +%H) * 60 + 10#$(date +%M) ))
+avisa() { local t=${1//\"/«}; osascript -e "display notification \"$t\" with title \"Sala\"" >/dev/null 2>&1; echo "$1"; }
+SALA_SH=$(command ls -d ~/.claude/plugins/cache/cofoundy/cofoundy-toolkit/*/skills/sala/scripts/sala.sh 2>/dev/null | sort -V | tail -1)
+[ -n "$SALA_SH" ] || { avisa "No encuentro sala.sh (plugin cofoundy-toolkit)."; exit 2; }
+C=~/cofoundy
+LISTA=()
+while IFS= read -r y; do
+  d=$(dirname "$y")
+  h=$(grep -m1 -E '^[[:space:]]+hora:' "$y" | grep -oE '[0-9]{1,2}:[0-9]{2}' | head -1)
+  [ -z "$h" ] && h=$(grep -m1 -E '^[[:space:]]+fecha:' "$y" | grep -oE '[0-9]{1,2}:[0-9]{2}' | head -1)
+  m=9999; [ -n "$h" ] && m=$(( 10#${h%%:*} * 60 + 10#${h##*:} ))
+  LISTA+=("$m $d")
+done < <(command ls -d $C/core/log/meetings/${HOY}_*/reunion.yaml $C/deals/clients/*/reuniones/${HOY}_*/reunion.yaml \
+  $C/deals/clients/*/*/reuniones/${HOY}_*/reunion.yaml $C/leads/*/*/${HOY}_*/reunion.yaml \
+  $C/projects/*/pm/reuniones/${HOY}_*/reunion.yaml $C/products/*/pm/reuniones/${HOY}_*/reunion.yaml 2>/dev/null)
+[ ${#LISTA[@]} -gt 0 ] || { avisa "Hoy no hay ninguna sala armada."; exit 1; }
+ORD=$(printf '%s\n' "${LISTA[@]}" | sort -n)
+PRIMERA=$(printf '%s\n' "$ORD" | awk -v a="$AHORA" '$1+90 > a {print $2; exit}')
+[ -z "$PRIMERA" ] && PRIMERA=$(printf '%s\n' "$ORD" | tail -1 | cut -d' ' -f2-)
+DIRS=("$PRIMERA"); while read -r _ d; do [ "$d" != "$PRIMERA" ] && DIRS+=("$d"); done <<< "$ORD"
+[ "${1:-}" = "--ver" ] && { printf '%s\n' "${DIRS[@]}"; exit 0; }
+OUT=$(bash "$SALA_SH" "${DIRS[@]}" 2>&1); RC=$?
+avisa "$(printf '%s\n' "$OUT" | grep -v '^\s*$' | grep -vE 'pasos ·|^(sala|cabina|log) ' | head -1)"
+exit $RC

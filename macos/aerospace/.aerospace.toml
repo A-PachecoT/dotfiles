@@ -194,8 +194,8 @@ run = 'layout floating'
     alt-shift-r = 'reload-config'
     cmd-ctrl-shift-r = 'exec-and-forget $HOME/dotfiles/scripts/hard-reset-all.sh'  # Hard reset: force quit and reopen SketchyBar + HammerSpoon (not AeroSpace)
 
-    # Terminal launch (using Ghostty)
-    alt-enter = 'exec-and-forget open -a "Ghostty"'
+    # Herdr (agentes); ctrl-alt-enter sigue abriendo una terminal Ghostty nueva
+    alt-enter = 'exec-and-forget open -a "Herdr"'
     ctrl-alt-enter = 'exec-and-forget open -na "Ghostty"'
 
     # Quick app launches
@@ -206,7 +206,7 @@ run = 'layout floating'
     alt-shift-t = 'exec-and-forget open -a "Telegram"'
     alt-f = 'exec-and-forget open -a "Finder"'
     alt-s = 'exec-and-forget open -a "Ghostty"'
-    alt-shift-s = 'exec-and-forget open -na "Ghostty"'
+    alt-shift-s = 'exec-and-forget /bin/bash $HOME/dotfiles/scripts/sala-hoy'  # sala de la reunión de hoy (cofoundy-toolkit:sala)
     cmd-alt-s = 'exec-and-forget $HOME/dotfiles/scripts/open-floating-terminal.sh'
 
     # Claude pending navigation (Ctrl+Alt avoids app conflicts)
