@@ -22,6 +22,7 @@ La Mac ya tiene **auto-resume de Claude tras reboot** (2026-07-04, `tmux-assista
 **cofoundy-hq es el tercer worker** (2026-09-29): herdr 0.7.3 + ET (`et.service` :2022), Claude Code con login, 43 repos de `~/cofoundy`, 18 plugins, dotfiles en perfil `server`; alias `hq` en `shared/zsh/mesh.zsh` (commit `20af2ce`). Faltan secretos (sin `bw`) y autorizar MCP. Runbook: `~/cofoundy/handbook/infrastructure/cofoundy-hq.md` §Host de agentes.
 Siguiente foco: cerrar el trial de Herdr, mantener fixes cross-platform en `shared/` y empaquetar health checks/setup replicable para el dev sandbox.
 
+**Presupuesto de caja para tests en Arch** (2026-11-26): `linux/agent-heavy` — slice de 14G para todas las corridas pesadas juntas, turnos de 2 (`agent-heavy run`, usado por el guard) y barredor cada 10 s que mete al slice lo que se escapa. → `bitacora/2026-11-26-arch-presupuesto-tests.md`
 ---
 
 ## Reglas Extraidas
