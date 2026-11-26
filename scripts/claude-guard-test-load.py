@@ -11,6 +11,8 @@ Qué hace (solo Linux con systemd de usuario; en macOS es no-op):
   2. Envuelve el comando en un scope de systemd con techo propio
      (MemoryHigh/MemoryMax/MemorySwapMax) y CPUWeight/IOWeight bajos: si se pasa,
      el OOM killer mata SOLO esa corrida, y herdr/los demás agentes siguen fluidos.
+  3. (2026-11-26) El scope vive en agent-heavy.slice (techo de la caja para TODAS las corridas
+     juntas) y, si está `agent-heavy` (linux/agent-heavy), espera turno: máx. 2 a la vez.
 No bloquea nunca: reescribe el comando vía `updatedInput` y deja una nota en stderr.
 Escape: TEST_LOAD_GUARD=off en el entorno del agente.
 → bitacora/2026-11-14-pytest-colgo-arch.md
@@ -121,13 +123,23 @@ def systemd_ok():
     return os.path.exists(f"/run/user/{os.getuid()}/bus")
 
 
-def wrap(cmd):
+def heavy_runner():
+    """`agent-heavy` (linux/agent-heavy): turnos + slice con techo para toda la caja."""
+    p = os.path.expanduser("~/.local/bin/agent-heavy")
+    return p if os.access(p, os.X_OK) else None
+
+
+def wrap(cmd, runner=None):
     shell = os.environ.get("SHELL") or "/bin/sh"
     uid = os.getuid()
     inner = shlex.quote(cmd)
+    env = f"XDG_RUNTIME_DIR=${{XDG_RUNTIME_DIR:-/run/user/{uid}}} "
+    if runner:
+        # Espera turno (máx. 2 corridas pesadas en la caja) y corre en un scope de agent-heavy.slice.
+        return f"{env}{shlex.quote(runner)} run -- {shlex.quote(shell)} -c {inner}"
     return (
-        f"XDG_RUNTIME_DIR=${{XDG_RUNTIME_DIR:-/run/user/{uid}}} "
-        f"systemd-run --user --scope --quiet --collect --unit={MARK}-$$-$RANDOM "
+        f"{env}systemd-run --user --scope --quiet --collect --unit={MARK}-$$-$RANDOM "
+        f"--slice=agent-heavy.slice "
         f"-p MemoryHigh={MEM_HIGH} -p MemoryMax={MEM_MAX} -p MemorySwapMax={SWAP_MAX} "
         f"-p CPUWeight=20 -p IOWeight=20 -- {shlex.quote(shell)} -c {inner}; "
         f"__rc=$?; [ $__rc -eq 137 ] && echo '⚠ {MARK}: la corrida pasó {MEM_MAX} y la mató su techo "
@@ -136,16 +148,17 @@ def wrap(cmd):
     )
 
 
-def rewrite(cmd, use_scope):
+def rewrite(cmd, use_scope, runner=None):
     """Devuelve (nuevo_cmd, notas) o (None, []) si no hay nada que hacer."""
-    if not cmd or MARK in cmd or "systemd-run" in cmd:
+    if not cmd or MARK in cmd or "systemd-run" in cmd or "agent-heavy" in cmd:
         return None, []
     if not any(is_heavy(head(s)) for s in segments(cmd)):
         return None, []
     new, notes = cap_workers(cmd, worker_cap())
     if use_scope:
-        new = wrap(new)
-        notes.append(f"corre en un scope con techo {MEM_MAX} y CPU de baja prioridad")
+        new = wrap(new, runner)
+        notes.append(f"corre en un scope con techo {MEM_MAX} dentro del presupuesto de la caja"
+                     + (" (espera turno si ya hay 2 corridas pesadas)" if runner else ""))
     if new == cmd:
         return None, []
     return new, notes
@@ -164,7 +177,7 @@ def main():
     use_scope = systemd_ok()
     if not sys.platform.startswith("linux"):
         return 0
-    new, notes = rewrite(ti.get("command") or "", use_scope)
+    new, notes = rewrite(ti.get("command") or "", use_scope, heavy_runner() if use_scope else None)
     if not new:
         return 0
     print(json.dumps({

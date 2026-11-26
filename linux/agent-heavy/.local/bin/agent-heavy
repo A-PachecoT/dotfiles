@@ -1,0 +1,276 @@
+#!/usr/bin/env python3
+"""agent-heavy — presupuesto de la caja para los tests y builds de los agentes (Arch).
+
+Casi a diario la caja se ahogaba (load 291, swap 19/19G): 3 sitios /cto corrían vitest +
+pytest-xdist a la vez. El guard del 14-nov capeaba CADA corrida a 8G, pero nada capeaba
+cuántas corrían juntas, y algunas se escapaban del guard. Tres piezas:
+
+  A. agent-heavy.slice: todas las corridas pesadas juntas viven bajo un techo (14G). Lo pone
+     el kernel; si se pasan, muere la corrida más grande del slice, no la caja.
+  B. `run`: turnos. Máximo AGENT_HEAVY_SLOTS (2) corridas a la vez; las demás esperan.
+  C. `sweep`: cada 10 s (timer) mete al slice todo pytest/vitest/jest/next build/tsc que
+     corra fuera de él, venga del guard o no (background, hc run, subagentes).
+
+    agent-heavy run [--] CMD...       espera turno y corre CMD en un scope dentro del slice
+    agent-heavy sweep [--dry-run]     barrido (lo llama agent-heavy-sweep.timer)
+    agent-heavy status                quién tiene los turnos
+
+Overrides: AGENT_HEAVY_SLOTS, AGENT_HEAVY_LOCKDIR, AGENT_HEAVY_PROC, AGENT_HEAVY_MAX_SEC.
+Stdlib only. → bitacora/2026-11-26-arch-presupuesto-tests.md
+"""
+
+import fcntl
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+
+SLICE = "agent-heavy.slice"
+RUN_HIGH, RUN_MAX, RUN_SWAP = "6G", "8G", "1G"
+GIB = 1024 ** 3
+
+HEAVY = {"pytest", "py.test", "vitest", "jest", "tsc", "mypy", "pyright"}
+NEEDS_SUB = {"next": {"build"}, "playwright": {"test"}}
+# Lo que se salta para llegar al programa real: intérpretes y lanzadores.
+LAUNCHERS = {"python", "node", "uv", "uvx", "npx", "bunx", "pnpm", "yarn", "bun", "npm",
+             "poetry", "env", "nice", "time", "exec", "run", "-m", "-u", "--", "dlx"}
+
+
+def slots():
+    v = os.environ.get("AGENT_HEAVY_SLOTS", "")
+    return int(v) if v.isdigit() and int(v) > 0 else 2
+
+
+def lockdir():
+    d = os.environ.get("AGENT_HEAVY_LOCKDIR") or os.path.join(
+        os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}", "agent-heavy")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+# ── B. turnos ───────────────────────────────────────────────────────────────────────
+
+def try_slot(d, n, who):
+    for i in range(n):
+        fd = os.open(os.path.join(d, f"slot{i}.lock"), os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
+            continue
+        os.ftruncate(fd, 0)
+        os.write(fd, who.encode())
+        return fd
+    return None
+
+
+def holders(d, n):
+    out = []
+    for i in range(n):
+        p = os.path.join(d, f"slot{i}.lock")
+        try:
+            fd = os.open(p, os.O_RDONLY)
+        except FileNotFoundError:
+            continue
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            fcntl.flock(fd, fcntl.LOCK_UN)  # libre: nadie lo tiene
+        except BlockingIOError:
+            with open(p) as f:
+                out.append(f.read().strip() or "?")
+        finally:
+            os.close(fd)
+    return out
+
+
+def acquire(who):
+    d, n = lockdir(), slots()
+    fd = try_slot(d, n, who)
+    t0, last = time.time(), -1
+    while fd is None:
+        waited = int(time.time() - t0)
+        if waited // 60 != last:
+            last = waited // 60
+            busy = "; ".join(holders(d, n)) or "?"
+            print(f"⏳ agent-heavy: esperando turno ({n} corridas pesadas en curso: {busy}). "
+                  f"Llevas {waited}s.", file=sys.stderr, flush=True)
+        time.sleep(2)
+        fd = try_slot(d, n, who)
+    return fd
+
+
+def scope_cmd(cmd):
+    uid = os.getuid()
+    return ["systemd-run", "--user", "--scope", "--quiet", "--collect",
+            f"--unit=agent-heavy-run-{os.getpid()}-{int(time.time())}", f"--slice={SLICE}",
+            "-p", f"MemoryHigh={RUN_HIGH}", "-p", f"MemoryMax={RUN_MAX}",
+            "-p", f"MemorySwapMax={RUN_SWAP}", "-p", "CPUWeight=20", "-p", "IOWeight=20",
+            "-p", f"RuntimeMaxSec={os.environ.get('AGENT_HEAVY_MAX_SEC', '3600')}",
+            "--", *cmd], {**os.environ, "XDG_RUNTIME_DIR": os.environ.get(
+                "XDG_RUNTIME_DIR") or f"/run/user/{uid}"}
+
+
+def cmd_run(cmd):
+    if not cmd:
+        print("uso: agent-heavy run -- CMD...", file=sys.stderr)
+        return 2
+    who = f"pid {os.getpid()} en {os.getcwd()}: {' '.join(cmd)[-140:]}"
+    fd = acquire(who)
+    argv, env = scope_cmd(cmd)
+    p = subprocess.Popen(argv, env=env, close_fds=True)
+    for s in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(s, lambda sig, _f: p.send_signal(sig))
+    rc = p.wait()
+    os.close(fd)
+    if rc == 137 or rc == -9:
+        print(f"⚠ agent-heavy: la corrida pasó {RUN_MAX} (o el slice de la caja, 14G) y la mató su "
+              "techo. Corre solo tus tests (pytest tests/<tu área>, vitest run <archivos>) o con "
+              "menos workers.", file=sys.stderr)
+    return 128 - rc if rc < 0 else rc
+
+
+def cmd_status():
+    d, n = lockdir(), slots()
+    h = holders(d, n)
+    print(f"turnos: {len(h)}/{n} ocupados")
+    for x in h:
+        print(f"  {x}")
+    return 0
+
+
+# ── C. barrido ──────────────────────────────────────────────────────────────────────
+
+def is_heavy(argv):
+    if not argv:
+        return False
+    if argv[0].startswith("node (vitest") or argv[0].startswith("node (jest"):
+        return True
+    toks = argv[:6]
+    i = 0
+    while i < len(toks):
+        b = toks[i].rsplit("/", 1)[-1]
+        if re.match(r"^python\d*(\.\d+)?$", b) or b in LAUNCHERS or re.match(r"^\w+=", toks[i]):
+            i += 1
+            continue
+        break
+    if i >= len(toks):
+        return False
+    b = re.sub(r"\.(m|c)?js$", "", toks[i].rsplit("/", 1)[-1])
+    if b in HEAVY:
+        return True
+    sub = toks[i + 1] if i + 1 < len(toks) else ""
+    return sub in NEEDS_SUB.get(b, ())
+
+
+def read_procs(root):
+    procs = {}
+    for name in os.listdir(root):
+        if not name.isdigit():
+            continue
+        base = os.path.join(root, name)
+        try:
+            with open(os.path.join(base, "cmdline"), "rb") as f:
+                argv = [a.decode(errors="replace") for a in f.read().split(b"\0") if a]
+            with open(os.path.join(base, "cgroup")) as f:
+                cg = next((ln.split("::", 1)[1].strip() for ln in f if ln.startswith("0::")), "")
+            uid = ppid = None
+            with open(os.path.join(base, "status")) as f:
+                for ln in f:
+                    if ln.startswith("PPid:"):
+                        ppid = int(ln.split()[1])
+                    elif ln.startswith("Uid:"):
+                        uid = int(ln.split()[1])
+        except (OSError, StopIteration, ValueError):
+            continue
+        procs[int(name)] = {"argv": argv, "cg": cg, "ppid": ppid, "uid": uid}
+    return procs
+
+
+def plan(procs, uid, me=None):
+    """Grupos a mover: [(raíz, [pids del árbol])]. Solo procesos del user manager, fuera del slice."""
+    mgr = f"/user.slice/user-{uid}.slice/user@{uid}.service/"
+
+    def movable(p):
+        return p["uid"] == uid and p["cg"].startswith(mgr) and f"/{SLICE}/" not in p["cg"] + "/"
+
+    kids = {}
+    for pid, p in procs.items():
+        kids.setdefault(p["ppid"], []).append(pid)
+    heavy = {pid for pid, p in procs.items() if movable(p) and is_heavy(p["argv"]) and pid != me}
+    groups, taken = [], set()
+    for root in sorted(heavy):
+        a, anc_heavy = procs[root]["ppid"], False
+        while a in procs and a not in (0, 1):
+            if a in heavy:
+                anc_heavy = True
+                break
+            a = procs[a]["ppid"]
+        if anc_heavy or root in taken:
+            continue
+        tree, stack = [], [root]
+        while stack:
+            x = stack.pop()
+            if x in taken or x not in procs or not movable(procs[x]):
+                continue
+            taken.add(x)
+            tree.append(x)
+            stack.extend(kids.get(x, []))
+        groups.append((root, sorted(tree)))
+    return groups
+
+
+def move(root, pids):
+    name = f"agent-heavy-sweep-{root}-{int(time.time())}.scope"
+    props = [("PIDs", "au", [str(len(pids)), *map(str, pids)]),
+             ("Slice", "s", [SLICE]),
+             ("MemoryHigh", "t", [str(6 * GIB)]), ("MemoryMax", "t", [str(8 * GIB)]),
+             ("MemorySwapMax", "t", [str(1 * GIB)]),
+             ("CPUWeight", "t", ["20"]), ("IOWeight", "t", ["20"]),
+             ("CollectMode", "s", ["inactive-or-failed"])]
+    args = ["busctl", "--user", "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+            "org.freedesktop.systemd1.Manager", "StartTransientUnit", "ssa(sv)a(sa(sv))",
+            name, "fail", str(len(props))]
+    for k, sig, vals in props:
+        args += [k, sig, *vals]
+    args.append("0")
+    r = subprocess.run(args, capture_output=True, text=True)
+    return r.returncode == 0, (r.stderr or r.stdout).strip()
+
+
+def cmd_sweep(dry):
+    root = os.environ.get("AGENT_HEAVY_PROC", "/proc")
+    procs = read_procs(root)
+    groups = plan(procs, os.getuid(), me=os.getpid())
+    for r, pids in groups:
+        what = " ".join(procs[r]["argv"])[:160]
+        if dry:
+            print(f"movería {r} (+{len(pids) - 1}) {what}")
+            continue
+        ok, err = move(r, pids)
+        if not ok:  # algún pid murió entre la lectura y el movimiento: reintenta con los vivos
+            alive = [p for p in pids if os.path.exists(f"{root}/{p}")]
+            ok, err = move(r, alive) if alive else (False, "ya terminó")
+        print(f"{'movido' if ok else 'FALLÓ'} {r} (+{len(pids) - 1}) → {SLICE}: {what}"
+              + ("" if ok else f" · {err}"), flush=True)
+    return 0
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help"):
+        print(__doc__)
+        return 0
+    sub, rest = argv[0], argv[1:]
+    if sub == "run":
+        return cmd_run(rest[1:] if rest[:1] == ["--"] else rest)
+    if sub == "sweep":
+        return cmd_sweep("--dry-run" in rest)
+    if sub == "status":
+        return cmd_status()
+    print(f"subcomando desconocido: {sub}", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -59,3 +59,15 @@ def test_heavy_detection():
         assert g.rewrite(c, use_scope=True)[0], c
     for c in ("pnpm install", "npm ci", "make deploy", "git push"):
         assert g.rewrite(c, use_scope=True) == (None, []), c
+
+
+def test_scope_lives_in_box_budget_slice():
+    new, _ = g.rewrite("uv run pytest -n 10", use_scope=True)
+    assert "--slice=agent-heavy.slice" in new
+
+
+def test_uses_agent_heavy_runner_when_present():
+    new, notes = g.rewrite("cd fe && npx vitest run", use_scope=True, runner="/home/a/.local/bin/agent-heavy")
+    assert "/home/a/.local/bin/agent-heavy run -- /usr/bin/zsh -c 'cd fe && npx vitest run'" in new
+    assert "systemd-run" not in new and "turno" in notes[-1]
+    assert g.rewrite(new, use_scope=True, runner="/home/a/.local/bin/agent-heavy") == (None, [])

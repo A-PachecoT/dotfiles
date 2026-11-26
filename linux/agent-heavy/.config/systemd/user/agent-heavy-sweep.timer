@@ -1,0 +1,10 @@
+[Unit]
+Description=Barrido de corridas pesadas fuera del presupuesto, cada 10 s
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=10s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

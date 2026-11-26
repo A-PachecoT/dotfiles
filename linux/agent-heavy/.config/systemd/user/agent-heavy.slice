@@ -1,0 +1,13 @@
+[Unit]
+Description=Presupuesto de la caja para tests y builds de agentes (todas las corridas juntas) — bitacora/2026-11-26-arch-presupuesto-tests.md
+Before=slices.target
+
+[Slice]
+# 31G de RAM en Arch: ~10G son los paneles de herdr (claudes), el resto del sistema ~5G.
+# Todas las corridas pesadas juntas no pasan de aquí; si se pasan, el kernel mata la más
+# grande DENTRO del slice y la caja sigue fluida.
+MemoryHigh=12G
+MemoryMax=14G
+MemorySwapMax=2G
+CPUWeight=20
+IOWeight=20
