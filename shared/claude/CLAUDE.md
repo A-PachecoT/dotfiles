@@ -88,5 +88,5 @@ CLIP_REMOTE="styreep@100.73.150.52" /home/andre/dotfiles/scripts/mac-clipboard c
 
 ## Cofoundy Identity
 - Name: André Joaquín Pacheco Taboada · GitHub: A-PachecoT · Partner · CEO · Functions: [strategy, lead-closer, pmgineer, agentic-coder]
-- Cofoundy email: andre@cofoundy.dev · Personal: apachecotaboada@gmail.com · WhatsApp: +51947633203
+- Cofoundy email: andre@cofoundy.dev · Personal: apachecotaboada@gmail.com · WhatsApp corp: +51987679452 (personal +51947633203)
 - Vikunja user ID: 2 · Cal.com username: andre
